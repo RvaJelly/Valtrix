@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Valtrix Coach",
+    "slug": "valtrix-coach",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "valtrixcoach",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0E0E0F",
+    "ios": {
+      "bundleIdentifier": "com.valtrix.coach",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.valtrix.coach",
+      "adaptiveIcon": {
+        "backgroundColor": "#FF5B14",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0E0E0F",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

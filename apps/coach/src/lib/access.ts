@@ -3,6 +3,8 @@ import type { Profile } from '@/lib/auth';
 export const PRICE_LABEL = '$50';
 
 type Access =
+  | { kind: 'owner' }
+  | { kind: 'free' }
   | { kind: 'subscribed' }
   | { kind: 'trial'; endsAt: Date; daysLeft: number }
   | { kind: 'none' };
@@ -10,6 +12,8 @@ type Access =
 // Mirrors public.has_coach_access() in the database.
 export function coachAccess(profile: Profile | null, now = new Date()): Access {
   if (!profile) return { kind: 'none' };
+  if (profile.is_admin) return { kind: 'owner' };
+  if (profile.free_access) return { kind: 'free' };
   const expires = profile.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
   if (['active', 'past_due', 'cancelled'].includes(profile.subscription_status) && expires && expires > now) {
     return { kind: 'subscribed' };

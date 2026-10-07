@@ -11,6 +11,8 @@ export type Profile = {
   trial_ends_at: string | null;
   subscription_status: 'none' | 'active' | 'past_due' | 'cancelled' | 'expired';
   subscription_expires_at: string | null;
+  is_admin: boolean;
+  free_access: boolean;
 };
 
 type AuthState = {
@@ -27,7 +29,7 @@ const AuthContext = createContext<AuthState | null>(null);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at')
+    .select('id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;

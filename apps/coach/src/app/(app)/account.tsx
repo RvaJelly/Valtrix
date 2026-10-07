@@ -10,11 +10,16 @@ export default function Account() {
   const { session, profile, signOut } = useAuth();
   const access = coachAccess(profile);
   const plan =
-    access.kind === 'subscribed'
-      ? `Valtrix Coach, ${PRICE_LABEL} / month`
-      : access.kind === 'trial'
-        ? `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left`
-        : 'No active plan';
+    access.kind === 'owner'
+      ? 'Owner, full access'
+      : access.kind === 'free'
+        ? 'Free access'
+        : access.kind === 'subscribed'
+          ? `Valtrix Coach, ${PRICE_LABEL} / month`
+          : access.kind === 'trial'
+            ? `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left`
+            : 'No active plan';
+  const canSubscribe = access.kind === 'trial' || access.kind === 'none';
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -24,7 +29,8 @@ export default function Account() {
         <Row label="Email" value={session?.user.email ?? '–'} />
         <Row label="Plan" value={plan} />
       </Card>
-      {access.kind !== 'subscribed' ? <Button title="Subscribe" onPress={() => router.push('/subscribe')} /> : null}
+      {profile?.is_admin ? <Button title="All trainers" onPress={() => router.push('/admin')} /> : null}
+      {canSubscribe ? <Button title="Subscribe" onPress={() => router.push('/subscribe')} /> : null}
       <Button title="Sign out" variant="secondary" onPress={signOut} />
     </ScrollView>
   );

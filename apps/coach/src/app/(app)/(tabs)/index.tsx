@@ -91,6 +91,21 @@ export default function Home() {
         </Pressable>
       ) : null}
 
+      {profile?.is_admin ? (
+        <Pressable
+          onPress={() => router.push('/admin')}
+          style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+          <Ionicons name="shield-checkmark" size={22} color={Colors.orange} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.clientName}>All trainers</Text>
+            <Body secondary style={{ fontSize: 14 }}>
+              See every trainer and give free access
+            </Body>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+        </Pressable>
+      ) : null}
+
       <View style={styles.statsRow}>
         <Stat label="Active clients" value={stats?.activeClients} onPress={() => router.navigate('/clients')} />
         <Stat label="Workouts" value={stats?.workouts} onPress={() => router.navigate('/programs')} />

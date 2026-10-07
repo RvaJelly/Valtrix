@@ -17,6 +17,7 @@ export default function AppLayout() {
       <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
       <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
       <Stack.Screen name="account" options={{ title: 'Account' }} />
+      <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
       <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
       <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />
       <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />

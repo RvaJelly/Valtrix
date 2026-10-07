@@ -2,7 +2,7 @@
 -- App Store require this). Profiles, clients, exercises and workouts cascade
 -- from auth.users; workouts go first because workout_exercises restricts
 -- deleting an exercise that a workout still uses.
-create function public.delete_my_account()
+create or replace function public.delete_my_account()
 returns void
 language plpgsql
 security definer

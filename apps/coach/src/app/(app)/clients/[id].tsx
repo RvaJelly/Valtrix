@@ -1,22 +1,13 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { ClientForm } from '@/components/client-form';
 import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
+import { confirm } from '@/lib/confirm';
 import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
 import { supabase } from '@/lib/supabase';
-
-function confirm(title: string, message: string, action: string): Promise<boolean> {
-  if (Platform.OS === 'web') return Promise.resolve(window.confirm(`${title}\n\n${message}`));
-  return new Promise((resolve) =>
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-      { text: action, style: 'destructive', onPress: () => resolve(true) },
-    ]),
-  );
-}
 
 export default function ClientDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();

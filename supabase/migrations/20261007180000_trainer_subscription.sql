@@ -53,6 +53,3 @@ $$;
 
 revoke execute on function public.has_coach_access() from public, anon;
 grant execute on function public.has_coach_access() to authenticated;
-
--- Remove the temporary end-to-end test account.
-delete from auth.users where email = 'e2e-trainer@valtrix.test';

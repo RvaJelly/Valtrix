@@ -6,6 +6,7 @@ import { SessionForm } from '@/components/session-form';
 import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { refreshReminders } from '@/lib/reminders';
 import { SESSION_COLUMNS, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -30,6 +31,7 @@ export default function SessionDetail() {
   async function setStatus(status: SessionStatus) {
     const { error } = await supabase.from('sessions').update({ status }).eq('id', id);
     if (error) return setError(error.message);
+    refreshReminders();
     router.back();
   }
 
@@ -37,6 +39,7 @@ export default function SessionDetail() {
     if (!(await confirm('Delete session?', 'It will be removed from your calendar.', 'Delete'))) return;
     const { error } = await supabase.from('sessions').delete().eq('id', id);
     if (error) return setError(error.message);
+    refreshReminders();
     router.back();
   }
 
@@ -61,6 +64,7 @@ export default function SessionDetail() {
         onSubmit={async (input) => {
           const { error } = await supabase.from('sessions').update(input).eq('id', id);
           if (error) return error.message;
+          refreshReminders();
           router.back();
           return null;
         }}>
@@ -75,7 +79,9 @@ export default function SessionDetail() {
           ) : (
             <>
               <Button title="Mark as done" variant="secondary" onPress={() => setStatus('completed')} />
-              {isPast ? <Button title="Client didn’t show" variant="secondary" onPress={() => setStatus('no_show')} /> : null}
+              {isPast ? (
+                <Button title="Client didn’t show" variant="secondary" onPress={() => setStatus('no_show')} />
+              ) : null}
               <Button title="Cancel session" variant="secondary" onPress={() => setStatus('cancelled')} />
             </>
           )}

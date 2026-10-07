@@ -4,12 +4,15 @@ import { router } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { Chips } from '@/components/chips';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
+import { askPermission } from '@/lib/notify';
+import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
@@ -47,7 +50,11 @@ export default function Settings() {
             <Body secondary style={styles.small}>
               Appearance
             </Body>
-            <Segmented options={APPEARANCE} value={settings.appearance} onChange={(appearance) => update({ appearance })} />
+            <Segmented
+              options={APPEARANCE}
+              value={settings.appearance}
+              onChange={(appearance) => update({ appearance })}
+            />
             <Body secondary style={styles.small}>
               Colour
             </Body>
@@ -61,7 +68,11 @@ export default function Settings() {
                     accessibilityLabel={ACCENTS[name].label}
                     accessibilityState={{ selected }}
                     onPress={() => update({ accent: name })}
-                    style={[styles.swatch, { backgroundColor: ACCENTS[name].color }, selected && styles.swatchSelected]}>
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: ACCENTS[name].color },
+                      selected && styles.swatchSelected,
+                    ]}>
                     {selected ? <Ionicons name="checkmark" size={22} color={ACCENTS[name].on} /> : null}
                   </Pressable>
                 );
@@ -71,6 +82,10 @@ export default function Settings() {
               {ACCENTS[settings.accent].label}
             </Body>
           </Card>
+        </Section>
+
+        <Section title="Reminders">
+          <ReminderPicker />
         </Section>
 
         <Section title="Workouts">
@@ -101,7 +116,12 @@ export default function Settings() {
 
         {profile?.is_admin ? (
           <Section title="Owner">
-            <LinkRow icon="shield-checkmark" label="All trainers" detail="See every trainer and give free access" onPress={() => router.push('/admin')} />
+            <LinkRow
+              icon="shield-checkmark"
+              label="All trainers"
+              detail="See every trainer and give free access"
+              onPress={() => router.push('/admin')}
+            />
           </Section>
         ) : null}
 
@@ -151,7 +171,10 @@ function ProfileForm({
     setBusy(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: name.trim() || null, business_name: business.trim() })
+      .update({
+        full_name: name.trim() || null,
+        business_name: business.trim(),
+      })
       .eq('id', userId);
     setBusy(false);
     if (error) return setError(error.message);
@@ -231,6 +254,39 @@ function DeleteAccount({ onDeleted }: { onDeleted: () => Promise<void> }) {
         <Text style={styles.deleteText}>{busy ? 'Deleting…' : 'Delete account'}</Text>
       </Pressable>
     </View>
+  );
+}
+
+function ReminderPicker() {
+  const { settings, update } = useSettings();
+  const [blocked, setBlocked] = useState(false);
+
+  async function choose(key: string | null) {
+    const minutes = Number(key ?? 0);
+    update({ reminder: minutes });
+    setBlocked(minutes > 0 && !(await askPermission()));
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <Body secondary style={styles.small}>
+        Remind me before each session
+      </Body>
+      <Chips options={REMINDER_OPTIONS} value={String(settings.reminder)} onChange={choose} wrap />
+      <Body secondary style={styles.small}>
+        {settings.reminder
+          ? `You'll get a notification ${leadLabel(settings.reminder)} before every booked session.`
+          : 'Session reminders are off.'}
+        {Platform.OS === 'web' && settings.reminder ? ' On a computer they only show while Valtrix Coach is open.' : ''}
+      </Body>
+      {blocked ? (
+        <ErrorText>
+          {Platform.OS === 'web'
+            ? 'Notifications are blocked in this browser. Allow them for this site, then pick a time again.'
+            : 'Notifications are turned off for Valtrix Coach. Turn them on in your phone settings, then pick a time again.'}
+        </ErrorText>
+      ) : null}
+    </Card>
   );
 }
 

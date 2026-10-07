@@ -4,15 +4,23 @@ import { createContext, use, useCallback, useEffect, useLayoutEffect, useState, 
 import { Appearance, useColorScheme, type ColorSchemeName } from 'react-native';
 
 import { ACCENTS, applyTheme, Colors, type AccentName, type Scheme } from '@/constants/theme';
+import { DEFAULT_REMINDER, REMINDER_OPTIONS } from '@/lib/reminders';
 
 export type Settings = {
   // 'system' follows the phone's light or dark mode.
   appearance: 'dark' | 'light' | 'system';
   accent: AccentName;
   units: 'kg' | 'lb';
+  // Minutes before a booked session to send a reminder. 0 turns reminders off.
+  reminder: number;
 };
 
-const DEFAULTS: Settings = { appearance: 'dark', accent: 'orange', units: 'kg' };
+const DEFAULTS: Settings = {
+  appearance: 'dark',
+  accent: 'orange',
+  units: 'kg',
+  reminder: DEFAULT_REMINDER,
+};
 const STORAGE_KEY = 'valtrix.settings';
 
 type SettingsState = {
@@ -38,7 +46,10 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   const themeKey = `${scheme}-${settings.accent}`;
   const navigation = useNavigationContainerRef();
   // The theme the screens are drawn with, and the screens that were open when it changed.
-  const [applied, setApplied] = useState<{ key: string; navState: ReturnType<typeof navigation.getRootState> | null }>({
+  const [applied, setApplied] = useState<{
+    key: string;
+    navState: ReturnType<typeof navigation.getRootState> | null;
+  }>({
     key: themeKey,
     navState: null,
   });
@@ -52,6 +63,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
           ...DEFAULTS,
           ...saved,
           accent: saved.accent && saved.accent in ACCENTS ? saved.accent : DEFAULTS.accent,
+          reminder: String(saved.reminder) in REMINDER_OPTIONS ? Number(saved.reminder) : DEFAULTS.reminder,
         };
         // Apply the saved theme before any screen is drawn, so there is nothing to redraw or put back.
         const nextScheme = schemeFor(next, Appearance.getColorScheme());
@@ -66,7 +78,10 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   // Swap the palette before the redraw, remembering which screens were open.
   if (themeKey !== applied.key) {
     applyTheme(scheme, settings.accent);
-    setApplied({ key: themeKey, navState: navigation.isReady() ? navigation.getRootState() : null });
+    setApplied({
+      key: themeKey,
+      navState: navigation.isReady() ? navigation.getRootState() : null,
+    });
   }
 
   useLayoutEffect(() => {

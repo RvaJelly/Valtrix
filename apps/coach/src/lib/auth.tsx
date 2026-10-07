@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 
+import { replaceReminders } from '@/lib/notify';
 import { supabase } from '@/lib/supabase';
 
 export type Profile = {
@@ -84,6 +85,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const finishRecovery = useCallback(() => setRecovering(false), []);
 
   const signOut = useCallback(async () => {
+    // Stop this device reminding the trainer about sessions once they sign out.
+    await replaceReminders([]).catch(() => {});
     await supabase.auth.signOut();
   }, []);
 

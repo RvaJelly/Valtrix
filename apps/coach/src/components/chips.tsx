@@ -1,6 +1,6 @@
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, Text } from 'react-native';
 
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 
 type Props<T extends string> = {
   options: Record<T, string>;
@@ -22,7 +22,7 @@ export function Chips<T extends string>({ options, value, onChange, allowClear }
             accessibilityState={{ selected }}
             onPress={() => onChange(selected && allowClear ? null : key)}
             style={[styles.chip, selected && styles.selected]}>
-            <Text style={[styles.text, selected && { color: Colors.black }]}>{options[key]}</Text>
+            <Text style={[styles.text, selected && { color: Colors.onAccent }]}>{options[key]}</Text>
           </Pressable>
         );
       })}
@@ -30,7 +30,7 @@ export function Chips<T extends string>({ options, value, onChange, allowClear }
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   row: {
     gap: Spacing.two,
   },
@@ -43,12 +43,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   selected: {
-    backgroundColor: Colors.orange,
-    borderColor: Colors.orange,
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
   },
   text: {
     color: Colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
-});
+}));

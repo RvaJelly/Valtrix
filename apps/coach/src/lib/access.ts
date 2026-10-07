@@ -1,6 +1,7 @@
 import type { Profile } from '@/lib/auth';
 
 export const PRICE_LABEL = '$50';
+export const TRIAL_DAYS = 3;
 
 type Access =
   | { kind: 'owner' }

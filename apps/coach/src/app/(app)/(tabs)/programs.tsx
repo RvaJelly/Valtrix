@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useLayoutEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
 import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { Workout } from '@/lib/workouts';
 
@@ -24,7 +24,7 @@ export default function Programs() {
           hitSlop={12}
           onPress={() => router.push('/workouts/new')}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.orange} />
+          <Ionicons name="add-circle" size={28} color={Colors.accent} />
         </Pressable>
       ),
     });
@@ -60,7 +60,7 @@ export default function Programs() {
       onPress={() => router.push('/exercises')}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
       <View style={[styles.icon, { backgroundColor: Colors.surfaceRaised }]}>
-        <Ionicons name="library" size={22} color={Colors.orange} />
+        <Ionicons name="library" size={22} color={Colors.accent} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>Exercise library</Text>
@@ -77,7 +77,7 @@ export default function Programs() {
       data={workouts ?? []}
       keyExtractor={(w) => w.id}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.orange} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}
       ListHeaderComponent={
         <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
           {libraryLink}
@@ -103,7 +103,7 @@ export default function Programs() {
             onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.id } })}
             style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
             <View style={styles.icon}>
-              <Ionicons name="barbell" size={22} color={Colors.black} />
+              <Ionicons name="barbell" size={22} color={Colors.onAccent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
@@ -119,7 +119,7 @@ export default function Programs() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   list: {
     padding: Spacing.three,
   },
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.orange,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -151,4 +151,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-});
+}));

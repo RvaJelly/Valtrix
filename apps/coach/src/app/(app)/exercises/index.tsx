@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { Body, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '@/lib/workouts';
 
@@ -74,7 +74,7 @@ export default function ExerciseLibrary() {
           title: picking ? 'Add exercise' : 'Exercise library',
           headerRight: () => (
             <Pressable accessibilityLabel="New exercise" hitSlop={12} onPress={() => router.push('/exercises/new')}>
-              <Ionicons name="add-circle" size={28} color={Colors.orange} />
+              <Ionicons name="add-circle" size={28} color={Colors.accent} />
             </Pressable>
           ),
         }}
@@ -91,7 +91,7 @@ export default function ExerciseLibrary() {
               onChangeText={setSearch}
               placeholder="Search exercises"
               placeholderTextColor={Colors.textSecondary}
-              selectionColor={Colors.orange}
+              selectionColor={Colors.accent}
               style={styles.search}
               autoCorrect={false}
             />
@@ -105,7 +105,7 @@ export default function ExerciseLibrary() {
               No exercises match. Tap + to add your own.
             </Body>
           ) : (
-            <ActivityIndicator color={Colors.orange} style={{ marginTop: Spacing.five }} />
+            <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.five }} />
           )
         }
         ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
@@ -121,9 +121,9 @@ export default function ExerciseLibrary() {
               </Body>
             </View>
             {adding === item.id ? (
-              <ActivityIndicator color={Colors.orange} />
+              <ActivityIndicator color={Colors.accent} />
             ) : picking ? (
-              <Ionicons name="add" size={22} color={Colors.orange} />
+              <Ionicons name="add" size={22} color={Colors.accent} />
             ) : item.trainer_id ? (
               <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
             ) : null}
@@ -134,7 +134,7 @@ export default function ExerciseLibrary() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   list: {
     padding: Spacing.three,
   },
@@ -159,4 +159,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-});
+}));

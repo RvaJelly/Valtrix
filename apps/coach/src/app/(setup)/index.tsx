@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
@@ -60,10 +60,10 @@ export default function BusinessSetup() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.four,
     paddingTop: Spacing.six,
     gap: Spacing.three,
   },
-});
+}));

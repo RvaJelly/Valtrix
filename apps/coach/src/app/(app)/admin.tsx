@@ -1,9 +1,9 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Switch, Text, TextInput, View } from 'react-native';
 
 import { Body, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import type { Profile } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -89,7 +89,7 @@ export default function AllTrainers() {
             onChangeText={setSearch}
             placeholder="Search by name, business or email"
             placeholderTextColor={Colors.textSecondary}
-            selectionColor={Colors.orange}
+            selectionColor={Colors.accent}
             style={styles.search}
             autoCapitalize="none"
             autoCorrect={false}
@@ -103,7 +103,7 @@ export default function AllTrainers() {
             No trainers match.
           </Body>
         ) : error ? null : (
-          <ActivityIndicator color={Colors.orange} style={{ marginTop: Spacing.five }} />
+          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.five }} />
         )
       }
       ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
@@ -124,8 +124,10 @@ export default function AllTrainers() {
                 accessibilityLabel={`Free access for ${item.full_name ?? item.email}`}
                 value={item.free_access}
                 onValueChange={(v) => setFree(item, v)}
-                trackColor={{ true: Colors.orange, false: Colors.border }}
+                trackColor={{ true: Colors.accent, false: Colors.border }}
                 thumbColor={Colors.text}
+                // The web Switch tints the thumb teal unless told otherwise.
+                {...(Platform.OS === 'web' ? { activeThumbColor: Colors.text } : {})}
               />
               <Text style={styles.toggleLabel}>Free</Text>
             </View>
@@ -147,7 +149,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   list: {
     padding: Spacing.three,
   },
@@ -162,7 +164,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   statNumber: {
-    color: Colors.orange,
+    color: Colors.accent,
     fontSize: 28,
     fontWeight: '800',
   },
@@ -199,4 +201,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-});
+}));

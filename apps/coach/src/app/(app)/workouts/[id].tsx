@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
 import { MUSCLE_GROUPS, WORKOUT_EXERCISE_COLUMNS, type Workout, type WorkoutExercise } from '@/lib/workouts';
 
@@ -17,6 +18,7 @@ export default function WorkoutEditor() {
   const [name, setName] = useState('');
   const [items, setItems] = useState<WorkoutExercise[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { settings } = useSettings();
 
   const load = useCallback(async () => {
     const [w, rows] = await Promise.all([
@@ -87,7 +89,7 @@ export default function WorkoutEditor() {
         <Body secondary>{error}</Body>
       </View>
     ) : (
-      <ActivityIndicator color={Colors.orange} style={{ marginTop: Spacing.six }} />
+      <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />
     );
   }
 
@@ -152,7 +154,7 @@ export default function WorkoutEditor() {
                   }}
                 />
                 <SmallField
-                  label="Weight"
+                  label={`Weight (${settings.units})`}
                   initial={item.weight ?? ''}
                   placeholder="–"
                   onSave={(v) => {
@@ -237,7 +239,7 @@ function SmallField({
         onSubmitEditing={commit}
         placeholder={placeholder}
         placeholderTextColor={Colors.textSecondary}
-        selectionColor={Colors.orange}
+        selectionColor={Colors.accent}
         keyboardType={keyboardType}
         style={styles.smallInput}
       />
@@ -245,7 +247,7 @@ function SmallField({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.three,
     gap: Spacing.three,
@@ -259,8 +261,8 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.orange,
-    color: Colors.black,
+    backgroundColor: Colors.accent,
+    color: Colors.onAccent,
     fontWeight: '800',
     textAlign: 'center',
     lineHeight: 28,
@@ -297,10 +299,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.small,
     borderWidth: 1,
     borderColor: Colors.border,
-    backgroundColor: Colors.black,
+    backgroundColor: Colors.background,
     color: Colors.text,
     fontSize: 15,
     textAlign: 'center',
     paddingHorizontal: Spacing.one,
   },
-});
+}));

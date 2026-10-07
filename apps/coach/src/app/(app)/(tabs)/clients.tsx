@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { CLIENT_COLUMNS, fullName, initials, STATUS_LABELS, type Client } from '@/lib/clients';
 import { supabase } from '@/lib/supabase';
 
@@ -23,7 +23,7 @@ export default function Clients() {
           hitSlop={12}
           onPress={() => router.push('/clients/new')}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.orange} />
+          <Ionicons name="add-circle" size={28} color={Colors.accent} />
         </Pressable>
       ),
     });
@@ -77,7 +77,7 @@ export default function Clients() {
       data={visible ?? []}
       keyExtractor={(c) => c.id}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.orange} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}
       ListHeaderComponent={
         <View style={{ gap: Spacing.two }}>
           <TextInput
@@ -85,7 +85,7 @@ export default function Clients() {
             onChangeText={setSearch}
             placeholder="Search clients"
             placeholderTextColor={Colors.textSecondary}
-            selectionColor={Colors.orange}
+            selectionColor={Colors.accent}
             style={styles.search}
             autoCorrect={false}
           />
@@ -114,7 +114,7 @@ export default function Clients() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   list: {
     padding: Spacing.three,
     gap: Spacing.two,
@@ -140,12 +140,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.orange,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: Colors.black,
+    color: Colors.onAccent,
     fontWeight: '800',
     fontSize: 16,
   },
@@ -160,4 +160,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
-});
+}));

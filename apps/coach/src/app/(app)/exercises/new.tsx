@@ -1,10 +1,10 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { Button, ErrorText, TextField } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { supabase } from '@/lib/supabase';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Equipment, type Exercise, type MuscleGroup } from '@/lib/workouts';
@@ -66,7 +66,7 @@ export default function ExerciseForm() {
   }
 
   if (!loaded) {
-    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.orange} style={{ marginTop: Spacing.six }} />;
+    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />;
   }
 
   return (
@@ -98,7 +98,7 @@ export default function ExerciseForm() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.four,
     gap: Spacing.three,
@@ -108,4 +108,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-});
+}));

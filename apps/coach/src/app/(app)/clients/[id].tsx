@@ -47,7 +47,7 @@ export default function ClientDetail() {
       </View>
     );
   }
-  if (!client) return <ActivityIndicator color={Colors.orange} style={{ marginTop: Spacing.six }} />;
+  if (!client) return <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />;
 
   return (
     <>

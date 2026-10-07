@@ -1,0 +1,390 @@
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import { useState, type ComponentProps, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+
+import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
+import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
+import { coachAccess, PRICE_LABEL } from '@/lib/access';
+import { useAuth } from '@/lib/auth';
+import { confirm } from '@/lib/confirm';
+import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
+import { supabase } from '@/lib/supabase';
+
+const APPEARANCE: Record<SettingsValues['appearance'], string> = {
+  dark: 'Dark',
+  light: 'Light',
+  system: 'Auto',
+};
+
+const UNITS: Record<SettingsValues['units'], string> = {
+  kg: 'Kilograms (kg)',
+  lb: 'Pounds (lb)',
+};
+
+export default function Settings() {
+  const { session, profile, refreshProfile, signOut } = useAuth();
+  const { settings, update } = useSettings();
+  const access = coachAccess(profile);
+  const plan =
+    access.kind === 'owner'
+      ? 'Owner, full access'
+      : access.kind === 'free'
+        ? 'Free access'
+        : access.kind === 'subscribed'
+          ? `Valtrix Coach, ${PRICE_LABEL} / month`
+          : access.kind === 'trial'
+            ? `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left, then ${PRICE_LABEL} / month`
+            : 'No active plan';
+  const canSubscribe = access.kind === 'none';
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Section title="Theme">
+          <Card style={{ gap: Spacing.three }}>
+            <Body secondary style={styles.small}>
+              Appearance
+            </Body>
+            <Segmented options={APPEARANCE} value={settings.appearance} onChange={(appearance) => update({ appearance })} />
+            <Body secondary style={styles.small}>
+              Colour
+            </Body>
+            <View style={styles.swatches}>
+              {(Object.keys(ACCENTS) as AccentName[]).map((name) => {
+                const selected = settings.accent === name;
+                return (
+                  <Pressable
+                    key={name}
+                    accessibilityRole="button"
+                    accessibilityLabel={ACCENTS[name].label}
+                    accessibilityState={{ selected }}
+                    onPress={() => update({ accent: name })}
+                    style={[styles.swatch, { backgroundColor: ACCENTS[name].color }, selected && styles.swatchSelected]}>
+                    {selected ? <Ionicons name="checkmark" size={22} color={ACCENTS[name].on} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Body secondary style={styles.small}>
+              {ACCENTS[settings.accent].label}
+            </Body>
+          </Card>
+        </Section>
+
+        <Section title="Workouts">
+          <Card style={{ gap: Spacing.three }}>
+            <Body secondary style={styles.small}>
+              Weight units
+            </Body>
+            <Segmented options={UNITS} value={settings.units} onChange={(units) => update({ units })} />
+          </Card>
+        </Section>
+
+        <Section title="Profile">
+          <ProfileForm
+            key={profile?.id}
+            initialName={profile?.full_name ?? ''}
+            initialBusiness={profile?.business_name ?? ''}
+            userId={session?.user.id}
+            onSaved={refreshProfile}
+          />
+        </Section>
+
+        <Section title="Subscription">
+          <Card style={{ gap: Spacing.three }}>
+            <Row label="Plan" value={plan} />
+            {canSubscribe ? <Button title="Subscribe" onPress={() => router.push('/subscribe')} /> : null}
+          </Card>
+        </Section>
+
+        {profile?.is_admin ? (
+          <Section title="Owner">
+            <LinkRow icon="shield-checkmark" label="All trainers" detail="See every trainer and give free access" onPress={() => router.push('/admin')} />
+          </Section>
+        ) : null}
+
+        <Section title="Account">
+          <Card style={{ gap: Spacing.three }}>
+            <Row label="Email" value={session?.user.email ?? '–'} />
+          </Card>
+          <PasswordForm />
+        </Section>
+
+        <Section title="Help">
+          <Card style={{ gap: Spacing.three }}>
+            <Row label="App version" value={Constants.expoConfig?.version ?? '–'} />
+          </Card>
+        </Section>
+
+        <Button title="Sign out" variant="secondary" onPress={signOut} />
+        <DeleteAccount onDeleted={signOut} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function ProfileForm({
+  initialName,
+  initialBusiness,
+  userId,
+  onSaved,
+}: {
+  initialName: string;
+  initialBusiness: string;
+  userId?: string;
+  onSaved: () => Promise<void>;
+}) {
+  const [name, setName] = useState(initialName);
+  const [business, setBusiness] = useState(initialBusiness);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const changed = name.trim() !== initialName || business.trim() !== initialBusiness;
+
+  async function save() {
+    if (!userId) return;
+    setError(null);
+    setSaved(false);
+    if (!business.trim()) return setError('Enter a name for your business.');
+    setBusy(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: name.trim() || null, business_name: business.trim() })
+      .eq('id', userId);
+    setBusy(false);
+    if (error) return setError(error.message);
+    setSaved(true);
+    await onSaved();
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
+      <TextField label="Business name" value={business} onChangeText={setBusiness} autoCapitalize="words" />
+      <ErrorText>{error}</ErrorText>
+      {saved && !changed ? <Body style={{ color: Colors.accent }}>Saved</Body> : null}
+      <Button title="Save profile" onPress={save} loading={busy} disabled={!changed} />
+    </Card>
+  );
+}
+
+function PasswordForm() {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setError(null);
+    setSaved(false);
+    if (password.length < 8) return setError('Use at least 8 characters.');
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) return setError(error.message);
+    setPassword('');
+    setSaved(true);
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <TextField
+        label="New password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoCapitalize="none"
+        autoComplete="new-password"
+        onSubmitEditing={save}
+      />
+      <ErrorText>{error}</ErrorText>
+      {saved ? <Body style={{ color: Colors.accent }}>Password changed</Body> : null}
+      <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
+    </Card>
+  );
+}
+
+function DeleteAccount({ onDeleted }: { onDeleted: () => Promise<void> }) {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    const sure = await confirm(
+      'Delete your account?',
+      'This permanently deletes your account, your clients, workouts and exercises. It cannot be undone.',
+      'Delete account',
+    );
+    if (!sure) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('delete_my_account');
+    setBusy(false);
+    if (error) return setError(error.message);
+    await onDeleted();
+  }
+
+  return (
+    <View style={{ gap: Spacing.two }}>
+      <ErrorText>{error}</ErrorText>
+      <Pressable accessibilityRole="button" onPress={remove} disabled={busy} style={styles.delete}>
+        <Text style={styles.deleteText}>{busy ? 'Deleting…' : 'Delete account'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: Spacing.two }}>
+      <Text style={styles.section}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: Record<T, string>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.segmented}>
+      {(Object.keys(options) as T[]).map((key) => {
+        const selected = key === value;
+        return (
+          <Pressable
+            key={key}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(key)}
+            style={[styles.segment, selected && { backgroundColor: Colors.accent }]}>
+            <Text style={[styles.segmentText, selected && { color: Colors.onAccent }]} numberOfLines={1}>
+              {options[key]}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ gap: Spacing.one }}>
+      <Body secondary style={styles.small}>
+        {label}
+      </Body>
+      <Body>{value}</Body>
+    </View>
+  );
+}
+
+function LinkRow({
+  icon,
+  label,
+  detail,
+  onPress,
+}: {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  detail: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+      <Ionicons name={icon} size={22} color={Colors.accent} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.linkLabel}>{label}</Text>
+        <Body secondary style={styles.small}>
+          {detail}
+        </Body>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+    </Pressable>
+  );
+}
+
+const styles = themed(() => ({
+  content: {
+    padding: Spacing.four,
+    gap: Spacing.four,
+  },
+  section: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  small: {
+    fontSize: 14,
+  },
+  swatches: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+  },
+  swatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchSelected: {
+    borderWidth: 3,
+    borderColor: Colors.text,
+  },
+  segmented: {
+    flexDirection: 'row',
+    padding: Spacing.one,
+    gap: Spacing.one,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.surfaceRaised,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: Radius.small,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+  },
+  segmentText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.large,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  linkLabel: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  delete: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteText: {
+    color: Colors.danger,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+}));

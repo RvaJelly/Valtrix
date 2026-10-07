@@ -17,13 +17,13 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.black },
+        headerStyle: { backgroundColor: Colors.background },
         headerTintColor: Colors.text,
         headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
-        sceneStyle: { backgroundColor: Colors.black },
-        tabBarStyle: { backgroundColor: Colors.black, borderTopColor: Colors.border },
-        tabBarActiveTintColor: Colors.orange,
+        sceneStyle: { backgroundColor: Colors.background },
+        tabBarStyle: { backgroundColor: Colors.background, borderTopColor: Colors.border },
+        tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: Colors.textSecondary,
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />

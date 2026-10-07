@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { Button, ErrorText, TextField } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Spacing, themed } from '@/constants/theme';
 import type { Client } from '@/lib/clients';
 
 export type ClientInput = Pick<Client, 'first_name' | 'last_name' | 'email' | 'phone' | 'goal' | 'notes'>;
@@ -85,9 +85,9 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.four,
     gap: Spacing.three,
   },
-});
+}));

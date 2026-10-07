@@ -6,11 +6,14 @@ import { useEffect } from 'react';
 import { Colors } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { SettingsProvider, useSettings } from '@/lib/settings';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { loading, session, profile } = useAuth();
+  const { loading: authLoading, session, profile } = useAuth();
+  const { ready } = useSettings();
+  const loading = authLoading || !ready;
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -25,7 +28,7 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: Colors.black },
+        contentStyle: { backgroundColor: Colors.background },
       }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="(auth)" />
@@ -46,8 +49,14 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="light" />
-      <RootNavigator />
+      <SettingsProvider>
+        <ThemedStatusBar />
+        <RootNavigator />
+      </SettingsProvider>
     </AuthProvider>
   );
+}
+
+function ThemedStatusBar() {
+  return <StatusBar style={Colors.scheme === 'light' ? 'dark' : 'light'} />;
 }

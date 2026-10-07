@@ -1,55 +1,105 @@
-import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import type { ComponentProps } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Logo } from '@/components/logo';
 import { Body, Button } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+
+const HIGHLIGHTS: { icon: ComponentProps<typeof Ionicons>['name']; title: string; text: string }[] = [
+  { icon: 'people', title: 'All your clients', text: 'Goals, notes and progress for every client in one place.' },
+  { icon: 'barbell', title: 'Programs in minutes', text: 'Build workouts from a ready-made exercise library.' },
+  { icon: 'calendar', title: 'Bookings and chat', text: 'Fill your calendar and keep in touch without the WhatsApp chaos.' },
+];
 
 export default function Welcome() {
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.hero}>
-        <Image
-          source={require('@/assets/images/logo-coach-white.png')}
-          style={styles.logo}
-          contentFit="contain"
-          accessibilityLabel="Valtrix Coach"
-        />
-        <Body secondary style={styles.tagline}>
-          Run your training business from your phone. Clients, programs, bookings and chat in one place.
-        </Body>
-      </View>
-      <View style={styles.actions}>
-        <Button title="Create trainer account" onPress={() => router.push('/sign-up')} />
-        <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
-      </View>
+    <SafeAreaView style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.hero}>
+          <Logo style={styles.logo} />
+          <Text style={styles.headline}>Coach more.{'\n'}Admin less.</Text>
+          <Body secondary style={styles.tagline}>
+            The app that runs your personal training business, so you can focus on your clients.
+          </Body>
+        </View>
+
+        <View style={{ gap: Spacing.three }}>
+          {HIGHLIGHTS.map((h) => (
+            <View key={h.title} style={styles.highlight}>
+              <View style={styles.highlightIcon}>
+                <Ionicons name={h.icon} size={22} color={Colors.onAccent} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.highlightTitle}>{h.title}</Text>
+                <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
+                  {h.text}
+                </Body>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.actions}>
+          <Button title="Start your 3-day free trial" onPress={() => router.push('/sign-up')} />
+          <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   container: {
-    flex: 1,
+    flexGrow: 1,
     padding: Spacing.four,
+    gap: Spacing.five,
     justifyContent: 'space-between',
   },
   hero: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing.four,
+    gap: Spacing.three,
+    paddingTop: Spacing.four,
   },
   logo: {
-    width: '100%',
-    maxWidth: 360,
-    aspectRatio: 2400 / 1052,
+    width: '70%',
+    maxWidth: 280,
+  },
+  headline: {
+    color: Colors.text,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   tagline: {
     textAlign: 'center',
-    maxWidth: 320,
+    maxWidth: 340,
+  },
+  highlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.large,
+    backgroundColor: Colors.surface,
+  },
+  highlightIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  highlightTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   actions: {
     gap: Spacing.three,
   },
-});
+}));

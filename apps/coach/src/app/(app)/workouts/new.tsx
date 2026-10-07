@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView } from 'react-native';
 
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 
 export default function NewWorkout() {
@@ -42,9 +42,9 @@ export default function NewWorkout() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.four,
     gap: Spacing.three,
   },
-});
+}));

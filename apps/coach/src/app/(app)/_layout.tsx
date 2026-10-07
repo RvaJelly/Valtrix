@@ -6,17 +6,17 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.black },
+        headerStyle: { backgroundColor: Colors.background },
         headerTintColor: Colors.text,
         headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',
-        contentStyle: { backgroundColor: Colors.black },
+        contentStyle: { backgroundColor: Colors.background },
       }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
       <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
-      <Stack.Screen name="account" options={{ title: 'Account' }} />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
       <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
       <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />

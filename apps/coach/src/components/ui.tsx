@@ -2,7 +2,6 @@ import type { ComponentProps, PropsWithChildren, ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 
 type ButtonProps = {
   title: string;
@@ -30,15 +29,20 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled 
       disabled={inactive}
       style={({ pressed }) => [
         styles.button,
-        variant === 'primary' && { backgroundColor: pressed ? Colors.orangePressed : Colors.orange },
+        variant === 'primary' && { backgroundColor: pressed ? Colors.accentPressed : Colors.accent },
         variant === 'secondary' && [styles.secondary, pressed && { backgroundColor: Colors.surfaceRaised }],
         variant === 'ghost' && pressed && { opacity: 0.6 },
         inactive && { opacity: 0.5 },
       ]}>
       {loading ? (
-        <ActivityIndicator color={Colors.text} />
+        <ActivityIndicator color={variant === 'primary' ? Colors.onAccent : Colors.text} />
       ) : (
-        <Text style={[styles.buttonText, variant === 'ghost' && { color: Colors.orange }]}>{title}</Text>
+        <Text
+          style={[
+            styles.buttonText,
+            variant === 'primary' && { color: Colors.onAccent },
+            variant === 'ghost' && { color: Colors.accent },
+          ]}>{title}</Text>
       )}
     </Pressable>
   );
@@ -52,7 +56,7 @@ export function TextField({ label, error, style, ...rest }: FieldProps) {
       <Text style={styles.label}>{label}</Text>
       <TextInput
         placeholderTextColor={Colors.textSecondary}
-        selectionColor={Colors.orange}
+        selectionColor={Colors.accent}
         style={[styles.input, error ? { borderColor: Colors.danger } : null, style]}
         {...rest}
       />
@@ -89,7 +93,7 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={32} color={Colors.orange} />
+        <Ionicons name={icon} size={32} color={Colors.accent} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Body secondary style={{ textAlign: 'center' }}>
@@ -100,7 +104,7 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   button: {
     minHeight: 52,
     borderRadius: Radius.medium,
@@ -172,4 +176,4 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-});
+}));

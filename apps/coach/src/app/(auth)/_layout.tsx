@@ -10,7 +10,7 @@ export default function AuthLayout() {
         headerTitle: '',
         headerTintColor: Colors.text,
         headerBackButtonDisplayMode: 'minimal',
-        contentStyle: { backgroundColor: Colors.black },
+        contentStyle: { backgroundColor: Colors.background },
       }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
     </Stack>

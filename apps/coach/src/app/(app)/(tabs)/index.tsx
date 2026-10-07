@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation, type Href } from 'expo-router';
 import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Body, Card, Title } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
-import { coachAccess } from '@/lib/access';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { fullName, initials, type Client } from '@/lib/clients';
 import { supabase } from '@/lib/supabase';
@@ -36,11 +36,11 @@ export default function Home() {
     navigation.setOptions({
       headerRight: () => (
         <Pressable
-          accessibilityLabel="Account"
+          accessibilityLabel="Settings"
           hitSlop={12}
-          onPress={() => router.push('/account')}
+          onPress={() => router.push('/settings')}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="person-circle-outline" size={28} color={Colors.text} />
+          <Ionicons name="settings-outline" size={26} color={Colors.text} />
         </Pressable>
       ),
     });
@@ -79,15 +79,18 @@ export default function Home() {
       </View>
 
       {access.kind === 'trial' ? (
-        <Pressable onPress={() => router.push('/subscribe')} style={styles.trial}>
-          <Ionicons name="time-outline" size={22} color={Colors.black} />
+        <Pressable onPress={() => router.push('/settings')} style={styles.trial}>
+          <Ionicons name="time-outline" size={22} color={Colors.onAccent} />
           <View style={{ flex: 1 }}>
             <Text style={styles.trialTitle}>
               {access.daysLeft === 1 ? 'Last day of your free trial' : `${access.daysLeft} days left in your free trial`}
             </Text>
-            <Text style={styles.trialBody}>Subscribe to keep going after it ends</Text>
+            <Text style={styles.trialBody}>
+              Your {PRICE_LABEL} monthly plan starts{' '}
+              {access.endsAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.black} />
+          <Ionicons name="chevron-forward" size={18} color={Colors.onAccent} />
         </Pressable>
       ) : null}
 
@@ -95,7 +98,7 @@ export default function Home() {
         <Pressable
           onPress={() => router.push('/admin')}
           style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="shield-checkmark" size={22} color={Colors.orange} />
+          <Ionicons name="shield-checkmark" size={22} color={Colors.accent} />
           <View style={{ flex: 1 }}>
             <Text style={styles.clientName}>All trainers</Text>
             <Body secondary style={{ fontSize: 14 }}>
@@ -123,7 +126,7 @@ export default function Home() {
 
       <Card style={{ gap: Spacing.two }}>
         <View style={styles.cardHeader}>
-          <Ionicons name="calendar-outline" size={20} color={Colors.orange} />
+          <Ionicons name="calendar-outline" size={20} color={Colors.accent} />
           <Text style={styles.cardTitle}>Today’s sessions</Text>
         </View>
         <Body secondary>Bookings are coming soon. Your sessions for the day will show up here.</Body>
@@ -183,14 +186,14 @@ function Action({ icon, label, href }: { icon: IconName; label: string; href: Hr
       onPress={() => router.push(href)}
       style={({ pressed }) => [styles.action, pressed && { backgroundColor: Colors.surfaceRaised }]}>
       <View style={styles.actionIcon}>
-        <Ionicons name={icon} size={22} color={Colors.black} />
+        <Ionicons name={icon} size={22} color={Colors.onAccent} />
       </View>
       <Text style={styles.actionLabel}>{label}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => ({
   content: {
     padding: Spacing.four,
     gap: Spacing.four,
@@ -201,15 +204,15 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     padding: Spacing.three,
     borderRadius: Radius.large,
-    backgroundColor: Colors.orange,
+    backgroundColor: Colors.accent,
   },
   trialTitle: {
-    color: Colors.black,
+    color: Colors.onAccent,
     fontSize: 16,
     fontWeight: '800',
   },
   trialBody: {
-    color: Colors.black,
+    color: Colors.onAccent,
     fontSize: 14,
   },
   statsRow: {
@@ -226,7 +229,7 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   statNumber: {
-    color: Colors.orange,
+    color: Colors.accent,
     fontSize: 36,
     fontWeight: '800',
   },
@@ -256,7 +259,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.orange,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -277,7 +280,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   link: {
-    color: Colors.orange,
+    color: Colors.accent,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -293,12 +296,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.orange,
+    backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: Colors.black,
+    color: Colors.onAccent,
     fontWeight: '800',
   },
   clientName: {
@@ -306,4 +309,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-});
+}));

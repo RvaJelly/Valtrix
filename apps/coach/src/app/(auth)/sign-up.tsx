@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Body, Button, Card, ErrorText, TextField, Title } from '@/components/ui';
 import { Spacing, themed } from '@/constants/theme';
+import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
 export default function SignUp() {
@@ -28,7 +30,7 @@ export default function SignUp() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: { data: { full_name: fullName.trim() }, emailRedirectTo: emailRedirect() },
     });
     setBusy(false);
     if (error) {
@@ -46,9 +48,10 @@ export default function SignUp() {
           <Title>Check your email</Title>
           <Card>
             <Body>
-              We sent a confirmation link to {email.trim()}. Open it, then come back and sign in.
+              We sent a confirmation link to {email.trim()}. Open it to confirm your account, then sign in.
             </Body>
           </Card>
+          <Button title="Go to sign in" onPress={() => router.replace('/sign-in')} />
         </ScrollView>
       </SafeAreaView>
     );
@@ -89,6 +92,7 @@ export default function SignUp() {
           />
           <ErrorText>{error}</ErrorText>
           <Button title="Create account" onPress={signUp} loading={busy} />
+          <Button title="Already have an account? Sign in" variant="ghost" onPress={() => router.replace('/sign-in')} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

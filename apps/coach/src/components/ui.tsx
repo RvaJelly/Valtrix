@@ -55,6 +55,7 @@ export function TextField({ label, error, style, ...rest }: FieldProps) {
     <View style={{ gap: Spacing.two }}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         placeholderTextColor={Colors.textSecondary}
         selectionColor={Colors.accent}
         style={[styles.input, error ? { borderColor: Colors.danger } : null, style]}

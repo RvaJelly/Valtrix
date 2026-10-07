@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,6 +53,8 @@ export default function SignIn() {
           />
           <ErrorText>{error}</ErrorText>
           <Button title="Sign in" onPress={signIn} loading={busy} />
+          <Button title="Forgot password?" variant="ghost" onPress={() => router.push('/forgot-password')} />
+          <Button title="New here? Create an account" variant="ghost" onPress={() => router.replace('/sign-up')} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

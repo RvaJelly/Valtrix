@@ -12,7 +12,9 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     storage: Platform.OS === 'web' && typeof window === 'undefined' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // On the web, links in sign-up and password emails come back to the app
+    // with the session in the address, so the trainer is signed in straight away.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 

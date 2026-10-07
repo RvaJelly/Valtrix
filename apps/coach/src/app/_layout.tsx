@@ -11,7 +11,7 @@ import { SettingsProvider, useSettings } from '@/lib/settings';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { loading: authLoading, session, profile } = useAuth();
+  const { loading: authLoading, session, profile, recovering } = useAuth();
   const { ready } = useSettings();
   const loading = authLoading || !ready;
 
@@ -21,7 +21,7 @@ function RootNavigator() {
 
   if (loading) return null;
 
-  const signedIn = !!session;
+  const signedIn = !!session && !recovering;
   const setUp = !!profile?.business_name;
   const hasAccess = coachAccess(profile).kind !== 'none';
   return (
@@ -30,8 +30,11 @@ function RootNavigator() {
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
       }}>
-      <Stack.Protected guard={!signedIn}>
+      <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!!session && recovering}>
+        <Stack.Screen name="new-password" />
       </Stack.Protected>
       <Stack.Protected guard={signedIn && !setUp}>
         <Stack.Screen name="(setup)" />

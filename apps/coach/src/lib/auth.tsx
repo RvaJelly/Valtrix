@@ -20,6 +20,9 @@ type AuthState = {
   loading: boolean;
   session: Session | null;
   profile: Profile | null;
+  // True after the trainer opens a reset-password link, until they set a new password.
+  recovering: boolean;
+  finishRecovery: () => void;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -40,6 +43,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recovering, setRecovering] = useState(false);
   const loadedUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (next: Session | null) => {
@@ -57,7 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, next) => {
       // SIGNED_IN also fires when a web tab regains focus; only reload for a new user.
-      if (event === 'SIGNED_IN' && next && next.user.id !== loadedUserId.current) {
+      if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && next && next.user.id !== loadedUserId.current) {
         setLoading(true);
         // Supabase advises against awaiting other calls inside this callback.
         setTimeout(async () => {
@@ -67,7 +71,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } else if (event === 'SIGNED_OUT') {
         loadedUserId.current = null;
         setProfile(null);
+        setRecovering(false);
       }
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
       setSession(next);
     });
     return () => listener.subscription.unsubscribe();
@@ -75,12 +81,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const refreshProfile = useCallback(() => loadProfile(session), [loadProfile, session]);
 
+  const finishRecovery = useCallback(() => setRecovering(false), []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
   return (
-    <AuthContext value={{ loading, session, profile, refreshProfile, signOut }}>{children}</AuthContext>
+    <AuthContext value={{ loading, session, profile, recovering, finishRecovery, refreshProfile, signOut }}>{children}</AuthContext>
   );
 }
 

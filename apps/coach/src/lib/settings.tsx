@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider, useNavigationContainerRef } from 'expo-router';
 import { createContext, use, useCallback, useEffect, useLayoutEffect, useState, type PropsWithChildren } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme, type ColorSchemeName } from 'react-native';
 
-import { ACCENTS, applyTheme, Colors, type AccentName } from '@/constants/theme';
+import { ACCENTS, applyTheme, Colors, type AccentName, type Scheme } from '@/constants/theme';
 
 export type Settings = {
   // 'system' follows the phone's light or dark mode.
@@ -23,13 +23,18 @@ type SettingsState = {
 
 const SettingsContext = createContext<SettingsState | null>(null);
 
+function schemeFor(settings: Settings, phoneScheme: ColorSchemeName | null | undefined): Scheme {
+  if (settings.appearance === 'system') return phoneScheme === 'light' ? 'light' : 'dark';
+  return settings.appearance;
+}
+
 // Settings are kept on this device. Changing the theme redraws every screen,
 // and the open screens are put back so the trainer stays where they were.
 export function SettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [ready, setReady] = useState(false);
   const phoneScheme = useColorScheme();
-  const scheme = settings.appearance === 'system' ? (phoneScheme === 'light' ? 'light' : 'dark') : settings.appearance;
+  const scheme = schemeFor(settings, phoneScheme);
   const themeKey = `${scheme}-${settings.accent}`;
   const navigation = useNavigationContainerRef();
   // The theme the screens are drawn with, and the screens that were open when it changed.
@@ -43,11 +48,16 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       .then((raw) => {
         if (!raw) return;
         const saved = JSON.parse(raw) as Partial<Settings>;
-        setSettings({
+        const next: Settings = {
           ...DEFAULTS,
           ...saved,
           accent: saved.accent && saved.accent in ACCENTS ? saved.accent : DEFAULTS.accent,
-        });
+        };
+        // Apply the saved theme before any screen is drawn, so there is nothing to redraw or put back.
+        const nextScheme = schemeFor(next, Appearance.getColorScheme());
+        applyTheme(nextScheme, next.accent);
+        setSettings(next);
+        setApplied({ key: `${nextScheme}-${next.accent}`, navState: null });
       })
       .catch(() => {})
       .finally(() => setReady(true));

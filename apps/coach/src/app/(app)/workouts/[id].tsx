@@ -233,6 +233,7 @@ function SmallField({
     <View style={styles.smallField}>
       <Text style={styles.smallLabel}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         value={value}
         onChangeText={setValue}
         onBlur={commit}

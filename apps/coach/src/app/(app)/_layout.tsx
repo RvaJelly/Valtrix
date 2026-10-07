@@ -16,6 +16,8 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
       <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
+      <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />
+      <Stack.Screen name="sessions/[id]" options={{ title: 'Session' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
       <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />

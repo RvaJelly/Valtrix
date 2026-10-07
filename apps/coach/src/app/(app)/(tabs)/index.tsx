@@ -3,11 +3,13 @@ import { router, useFocusEffect, useNavigation, type Href } from 'expo-router';
 import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Body, Card, Title } from '@/components/ui';
+import { SessionRow } from '@/components/session-row';
+import { Body, Button, Card, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { fullName, initials, type Client } from '@/lib/clients';
+import { addDays, dayKey, SESSION_COLUMNS, startOfDay, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -23,6 +25,7 @@ type Stats = {
   activeClients: number;
   workouts: number;
   recent: Pick<Client, 'id' | 'first_name' | 'last_name' | 'goal'>[];
+  today: Session[];
 };
 
 export default function Home() {
@@ -58,11 +61,19 @@ export default function Home() {
           .neq('status', 'archived')
           .order('created_at', { ascending: false })
           .limit(3),
-      ]).then(([active, workouts, recent]) =>
+        supabase
+          .from('sessions')
+          .select(SESSION_COLUMNS)
+          .neq('status', 'cancelled')
+          .gte('starts_at', startOfDay(new Date()).toISOString())
+          .lt('starts_at', addDays(startOfDay(new Date()), 1).toISOString())
+          .order('starts_at'),
+      ]).then(([active, workouts, recent, today]) =>
         setStats({
           activeClients: active.count ?? 0,
           workouts: workouts.count ?? 0,
           recent: (recent.data as Stats['recent']) ?? [],
+          today: (today.data as unknown as Session[]) ?? [],
         }),
       );
     }, []),
@@ -120,17 +131,30 @@ export default function Home() {
           <Action icon="person-add" label="Add client" href="/clients/new" />
           <Action icon="barbell" label="Build workout" href="/workouts/new" />
           <Action icon="library" label="Exercises" href="/exercises" />
-          <Action icon="calendar" label="Calendar" href="/calendar" />
+          <Action icon="calendar" label="Book session" href="/sessions/new" />
         </View>
       </View>
 
-      <Card style={{ gap: Spacing.two }}>
+      <View style={{ gap: Spacing.three }}>
         <View style={styles.cardHeader}>
-          <Ionicons name="calendar-outline" size={20} color={Colors.accent} />
-          <Text style={styles.cardTitle}>Today’s sessions</Text>
+          <Text style={[styles.section, { flex: 1 }]}>Today’s sessions</Text>
+          <Pressable onPress={() => router.navigate('/calendar')} hitSlop={8}>
+            <Text style={styles.link}>Calendar</Text>
+          </Pressable>
         </View>
-        <Body secondary>Bookings are coming soon. Your sessions for the day will show up here.</Body>
-      </Card>
+        {stats && stats.today.length === 0 ? (
+          <Card style={{ gap: Spacing.three }}>
+            <Body secondary>Nothing booked today.</Body>
+            <Button
+              title="Book a session"
+              variant="secondary"
+              onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(new Date()) } })}
+            />
+          </Card>
+        ) : (
+          stats?.today.map((session) => <SessionRow key={session.id} session={session} />)
+        )}
+      </View>
 
       <View style={{ gap: Spacing.three }}>
         <View style={styles.cardHeader}>

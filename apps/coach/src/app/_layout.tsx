@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import { Colors } from '@/constants/theme';
+import { coachAccess } from '@/lib/access';
 import { AuthProvider, useAuth } from '@/lib/auth';
 
 SplashScreen.preventAutoHideAsync();
@@ -19,6 +20,7 @@ function RootNavigator() {
 
   const signedIn = !!session;
   const setUp = !!profile?.business_name;
+  const hasAccess = coachAccess(profile).kind !== 'none';
   return (
     <Stack
       screenOptions={{
@@ -31,8 +33,11 @@ function RootNavigator() {
       <Stack.Protected guard={signedIn && !setUp}>
         <Stack.Screen name="(setup)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && setUp}>
+      <Stack.Protected guard={signedIn && setUp && hasAccess}>
         <Stack.Screen name="(app)" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && setUp && !hasAccess}>
+        <Stack.Screen name="(paywall)" />
       </Stack.Protected>
     </Stack>
   );

@@ -26,7 +26,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.orange,
         tabBarInactiveTintColor: Colors.textSecondary,
       }}>
-      <Tabs.Screen name="index" options={{ title: 'Today', tabBarIcon: tabIcon('flash') }} />
+      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
       <Tabs.Screen name="clients" options={{ title: 'Clients', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="programs" options={{ title: 'Programs', tabBarIcon: tabIcon('barbell') }} />
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: tabIcon('calendar') }} />

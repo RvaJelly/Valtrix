@@ -66,7 +66,7 @@ export default function ExerciseForm() {
   }
 
   if (!loaded) {
-    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />;
+    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
   }
 
   return (

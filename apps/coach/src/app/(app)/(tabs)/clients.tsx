@@ -23,7 +23,7 @@ export default function Clients() {
           hitSlop={12}
           onPress={() => router.push('/clients/new')}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accent} />
+          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
         </Pressable>
       ),
     });
@@ -77,7 +77,7 @@ export default function Clients() {
       data={visible ?? []}
       keyExtractor={(c) => c.id}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}
       ListHeaderComponent={
         <View style={{ gap: Spacing.two }}>
           <TextInput

@@ -15,8 +15,8 @@ import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
+  light: 'White',
   dark: 'Dark',
-  light: 'Light',
   system: 'Auto',
 };
 
@@ -150,7 +150,7 @@ function ProfileForm({
     <Card style={{ gap: Spacing.three }}>
       <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
       <ErrorText>{error}</ErrorText>
-      {saved && !changed ? <Body style={{ color: Colors.accent }}>Saved</Body> : null}
+      {saved && !changed ? <Body style={{ color: Colors.accentText }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} disabled={!changed} />
     </Card>
   );
@@ -186,7 +186,7 @@ function PasswordForm() {
         onSubmitEditing={save}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.accent }}>Password changed</Body> : null}
+      {saved ? <Body style={{ color: Colors.accentText }}>Password changed</Body> : null}
       <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
     </Card>
   );

@@ -18,7 +18,7 @@ import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
-  dark: 'Dark',
+  dark: 'Dark blue',
   light: 'Light',
   system: 'Auto',
 };
@@ -176,7 +176,7 @@ function PasswordForm() {
         onSubmitEditing={save}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.accent }}>Password changed</Body> : null}
+      {saved ? <Body style={{ color: Colors.accentText }}>Password changed</Body> : null}
       <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
     </Card>
   );
@@ -349,7 +349,7 @@ function LinkRow({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={22} color={Colors.accent} />
+      <Ionicons name={icon} size={22} color={Colors.accentText} />
       <View style={{ flex: 1 }}>
         <Text style={styles.linkLabel}>{label}</Text>
         <Body secondary style={styles.small}>

@@ -24,7 +24,7 @@ export default function Programs() {
           hitSlop={12}
           onPress={() => router.push('/workouts/new')}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accent} />
+          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
         </Pressable>
       ),
     });
@@ -60,7 +60,7 @@ export default function Programs() {
       onPress={() => router.push('/exercises')}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
       <View style={[styles.icon, { backgroundColor: Colors.surfaceRaised }]}>
-        <Ionicons name="library" size={22} color={Colors.accent} />
+        <Ionicons name="library" size={22} color={Colors.accentText} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.name}>Exercise library</Text>
@@ -77,7 +77,7 @@ export default function Programs() {
       data={workouts ?? []}
       keyExtractor={(w) => w.id}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}
       ListHeaderComponent={
         <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
           {libraryLink}

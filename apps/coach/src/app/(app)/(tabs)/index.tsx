@@ -99,7 +99,7 @@ export default function Home() {
         <Pressable
           onPress={() => router.push('/settings')}
           style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="person-circle" size={26} color={Colors.accent} />
+          <Ionicons name="person-circle" size={26} color={Colors.accentText} />
           <View style={{ flex: 1 }}>
             <Text style={styles.clientName}>Finish your profile</Text>
             <Body secondary style={{ fontSize: 14 }}>
@@ -130,7 +130,7 @@ export default function Home() {
         <Pressable
           onPress={() => router.push('/admin')}
           style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="shield-checkmark" size={22} color={Colors.accent} />
+          <Ionicons name="shield-checkmark" size={22} color={Colors.accentText} />
           <View style={{ flex: 1 }}>
             <Text style={styles.clientName}>All trainers</Text>
             <Body secondary style={{ fontSize: 14 }}>
@@ -279,7 +279,7 @@ const styles = themed(() => ({
     gap: Spacing.one,
   },
   statNumber: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 36,
     fontWeight: '800',
   },
@@ -330,7 +330,7 @@ const styles = themed(() => ({
     fontWeight: '700',
   },
   link: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 14,
     fontWeight: '700',
   },

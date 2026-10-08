@@ -143,7 +143,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         style={{ minHeight: 110, paddingTop: Spacing.three, textAlignVertical: 'top' }}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.accent }}>Saved</Body> : null}
+      {saved ? <Body style={{ color: Colors.accentText }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} />
     </Card>
   );

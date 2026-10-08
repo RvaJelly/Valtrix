@@ -33,10 +33,7 @@ export async function replaceReminders(reminders: Reminder[]) {
         });
         note.onclick = () => {
           window.focus();
-          router.push({
-            pathname: '/sessions/[id]',
-            params: { id: r.sessionId },
-          });
+          router.navigate('/sessions');
         };
       }, delay),
     );

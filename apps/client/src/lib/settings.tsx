@@ -21,16 +21,19 @@ export type Settings = {
 };
 
 const DEFAULTS: Settings = {
-  appearance: 'dark',
+  appearance: 'light',
   accent: 'orange',
   units: 'kg',
   reminder: DEFAULT_REMINDER,
   biometric: false,
 };
 const STORAGE_KEY = 'valtrix.settings';
+// Version 2 made the white theme the default. A theme saved before that is not
+// reused; everything else saved is kept.
+const THEME_VERSION = 2;
 
 // The settings saved with the account, so they come back on a new phone.
-type Synced = Pick<Settings, 'appearance' | 'accent' | 'units' | 'reminder'>;
+type Synced = Pick<Settings, 'appearance' | 'accent' | 'units' | 'reminder'> & { v: number };
 
 // Keep only valid values from stored or synced settings.
 function clean(saved: Record<string, unknown> | null | undefined): Partial<Settings> {
@@ -51,6 +54,7 @@ function synced(settings: Settings): Synced {
     accent: settings.accent,
     units: settings.units,
     reminder: settings.reminder,
+    v: THEME_VERSION,
   };
 }
 
@@ -90,7 +94,10 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (!raw) return;
-        const next: Settings = { ...DEFAULTS, ...clean(JSON.parse(raw)) };
+        const parsed = JSON.parse(raw);
+        const saved = clean(parsed);
+        if (parsed?.v !== THEME_VERSION) delete saved.appearance;
+        const next: Settings = { ...DEFAULTS, ...saved };
         // Apply the saved theme before any screen is drawn, so there is nothing to redraw or put back.
         const nextScheme = schemeFor(next, Appearance.getColorScheme());
         applyTheme(nextScheme, next.accent);
@@ -101,17 +108,19 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       .finally(() => setReady(true));
   }, []);
 
-  // After sign-in, take the settings saved with the account.
-  if (ready && profile && syncedFor !== profile.id) {
+  // After sign-in, take the settings saved with the account. A trainer who signs
+  // in here by mistake keeps their Valtrix Coach settings untouched.
+  if (ready && profile?.role === 'client' && syncedFor !== profile.id) {
     setSyncedFor(profile.id);
     const fromAccount = clean(profile.preferences);
     delete fromAccount.biometric;
+    if (profile.preferences?.v !== THEME_VERSION) delete fromAccount.appearance;
     if (Object.keys(fromAccount).length) setSettings({ ...settings, ...fromAccount });
   }
 
   // Keep this phone's copy and the account's copy up to date. An account with
   // nothing saved yet gets this phone's settings.
-  const stored = JSON.stringify(settings);
+  const stored = JSON.stringify({ ...settings, v: THEME_VERSION });
   useEffect(() => {
     if (ready) AsyncStorage.setItem(STORAGE_KEY, stored).catch(() => {});
   }, [ready, stored]);
@@ -146,7 +155,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     ...base,
     colors: {
       ...base.colors,
-      primary: Colors.accent,
+      primary: Colors.accentText,
       background: Colors.background,
       card: Colors.background,
       text: Colors.text,

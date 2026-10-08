@@ -59,7 +59,7 @@ export function SubscribeView({ mode, onSignOut }: Props) {
         {BENEFITS.map((b) => (
           <View key={b.text} style={styles.benefit}>
             <View style={styles.benefitIcon}>
-              <Ionicons name={b.icon} size={18} color={Colors.accent} />
+              <Ionicons name={b.icon} size={18} color={Colors.accentText} />
             </View>
             <Body style={{ flex: 1 }}>{b.text}</Body>
           </View>
@@ -187,7 +187,7 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   planName: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 14,
     fontWeight: '800',
     textTransform: 'uppercase',

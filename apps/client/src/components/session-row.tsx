@@ -29,7 +29,7 @@ export function SessionRow({ session, showDay }: { session: Session; showDay?: b
             .join(' · ') || `${session.duration_minutes} min`}
         </Body>
       </View>
-      {session.status === 'completed' ? <Ionicons name="checkmark-circle" size={22} color={Colors.accent} /> : null}
+      {session.status === 'completed' ? <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} /> : null}
     </View>
   );
 }

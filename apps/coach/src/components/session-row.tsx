@@ -33,7 +33,7 @@ export function SessionRow({ session }: { session: Session }) {
         </Body>
       </View>
       {session.status === 'completed' ? (
-        <Ionicons name="checkmark-circle" size={22} color={Colors.accent} />
+        <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
       ) : (
         <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
       )}

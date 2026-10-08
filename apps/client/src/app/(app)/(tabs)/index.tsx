@@ -81,19 +81,19 @@ export default function Home() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
       <Title>
         {greeting()}
         {firstName ? `, ${firstName}` : ''}
       </Title>
 
       <ErrorText>{error}</ErrorText>
-      {!data && !error ? <ActivityIndicator color={Colors.accent} /> : null}
+      {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
       {data && data.trainers.length === 0 ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
-            <Ionicons name="link" size={26} color={Colors.accent} />
+            <Ionicons name="link" size={26} color={Colors.accentText} />
           </View>
           <Text style={styles.cardTitle}>Connect to your trainer</Text>
           <Body secondary>Ask your personal trainer to add you as a client in Valtrix Coach with this email:</Body>
@@ -225,7 +225,7 @@ const styles = themed(() => ({
     alignItems: 'center',
   },
   link: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 14,
     fontWeight: '700',
   },

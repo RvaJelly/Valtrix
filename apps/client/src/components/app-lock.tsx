@@ -74,7 +74,7 @@ const styles = themed(() => ({
     backgroundColor: Colors.background,
   },
   link: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',

@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "valtrix",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#0E0E0F",
+    "backgroundColor": "#FFFFFF",
     "ios": {
       "bundleIdentifier": "com.valtrix.client",
       "supportsTablet": true
@@ -15,7 +15,7 @@
     "android": {
       "package": "com.valtrix.client",
       "adaptiveIcon": {
-        "backgroundColor": "#0E0E0F",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -37,11 +37,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0E0E0F",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

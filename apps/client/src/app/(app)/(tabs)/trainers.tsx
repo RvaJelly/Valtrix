@@ -52,7 +52,7 @@ export default function Trainers() {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
       <Body secondary>Personal trainers on Valtrix. Tap a trainer to see what they do.</Body>
       <TextInput
         value={search}
@@ -81,7 +81,7 @@ export default function Trainers() {
       ) : null}
 
       <ErrorText>{error}</ErrorText>
-      {!trainers && !error ? <ActivityIndicator color={Colors.accent} /> : null}
+      {!trainers && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
       {trainers && shown.length === 0 ? (
         <Card>
           <Body secondary>{trainers.length ? 'No trainers match that search.' : 'No trainers yet.'}</Body>

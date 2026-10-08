@@ -102,7 +102,8 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   }, []);
 
   // After sign-in, take the settings saved with the account.
-  if (ready && profile && syncedFor !== profile.id) {
+  // A client who signs in here by mistake keeps their Valtrix settings untouched.
+  if (ready && profile && profile.role !== 'client' && syncedFor !== profile.id) {
     setSyncedFor(profile.id);
     const fromAccount = clean(profile.preferences);
     delete fromAccount.biometric;
@@ -146,7 +147,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     ...base,
     colors: {
       ...base.colors,
-      primary: Colors.accent,
+      primary: Colors.accentText,
       background: Colors.background,
       card: Colors.background,
       text: Colors.text,

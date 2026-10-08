@@ -23,7 +23,7 @@ export default function TabLayout() {
         headerShadowVisible: false,
         sceneStyle: { backgroundColor: Colors.background },
         tabBarStyle: { backgroundColor: Colors.background, borderTopColor: Colors.border },
-        tabBarActiveTintColor: Colors.accent,
+        tabBarActiveTintColor: Colors.accentText,
         tabBarInactiveTintColor: Colors.textSecondary,
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />

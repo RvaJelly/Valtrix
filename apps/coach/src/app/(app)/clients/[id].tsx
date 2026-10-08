@@ -65,7 +65,7 @@ export default function ClientDetail() {
       </View>
     );
   }
-  if (!client) return <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />;
+  if (!client) return <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
 
   return (
     <>
@@ -85,7 +85,7 @@ export default function ClientDetail() {
             <Ionicons
               name={client.user_id ? 'checkmark-circle' : 'phone-portrait-outline'}
               size={22}
-              color={client.user_id ? Colors.accent : Colors.textSecondary}
+              color={client.user_id ? Colors.accentText : Colors.textSecondary}
             />
             <Body style={{ flex: 1, fontSize: 14 }}>
               {client.user_id

@@ -37,7 +37,7 @@ export default function CalendarScreen() {
           hitSlop={12}
           onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(selected) } })}
           style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accent} />
+          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
         </Pressable>
       ),
     });
@@ -97,7 +97,7 @@ export default function CalendarScreen() {
               <Text
                 style={[
                   styles.date,
-                  isToday && !isSelected && { color: Colors.accent },
+                  isToday && !isSelected && { color: Colors.accentText },
                   isSelected && { color: Colors.onAccent },
                 ]}>
                 {d.getDate()}
@@ -125,7 +125,7 @@ export default function CalendarScreen() {
       </View>
 
       <ErrorText>{error}</ErrorText>
-      {!sessions && !error ? <ActivityIndicator color={Colors.accent} /> : null}
+      {!sessions && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
       {sessions && dayList.length === 0 ? (
         <View style={styles.empty}>
           <Body secondary style={{ textAlign: 'center' }}>
@@ -212,7 +212,7 @@ const styles = themed(() => ({
     fontWeight: '800',
   },
   link: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 14,
     fontWeight: '700',
   },

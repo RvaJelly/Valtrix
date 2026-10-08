@@ -41,7 +41,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled 
           style={[
             styles.buttonText,
             variant === 'primary' && { color: Colors.onAccent },
-            variant === 'ghost' && { color: Colors.accent },
+            variant === 'ghost' && { color: Colors.accentText },
           ]}>{title}</Text>
       )}
     </Pressable>
@@ -94,7 +94,7 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={32} color={Colors.accent} />
+        <Ionicons name={icon} size={32} color={Colors.accentText} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Body secondary style={{ textAlign: 'center' }}>

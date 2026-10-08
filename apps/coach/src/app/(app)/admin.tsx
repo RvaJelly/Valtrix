@@ -103,7 +103,7 @@ export default function AllTrainers() {
             No trainers match.
           </Body>
         ) : error ? null : (
-          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.five }} />
+          <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.five }} />
         )
       }
       ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
@@ -164,7 +164,7 @@ const styles = themed(() => ({
     backgroundColor: Colors.surface,
   },
   statNumber: {
-    color: Colors.accent,
+    color: Colors.accentText,
     fontSize: 28,
     fontWeight: '800',
   },

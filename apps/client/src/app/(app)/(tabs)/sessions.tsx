@@ -58,7 +58,7 @@ export default function Sessions() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accent} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
       <View style={styles.segmented}>
         {(['upcoming', 'past'] as const).map((key) => {
           const selected = key === view;
@@ -78,7 +78,7 @@ export default function Sessions() {
       </View>
 
       <ErrorText>{error}</ErrorText>
-      {!sessions && !error ? <ActivityIndicator color={Colors.accent} /> : null}
+      {!sessions && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
       {sessions && days.length === 0 ? (
         <Card>
           <Body secondary>

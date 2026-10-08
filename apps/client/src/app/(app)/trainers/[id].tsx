@@ -25,7 +25,7 @@ export default function TrainerProfile() {
       .catch(() => setTrainer(null));
   }, [id]);
 
-  if (trainer === undefined) return <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.six }} />;
+  if (trainer === undefined) return <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
   if (trainer === null) {
     return (
       <View style={{ padding: Spacing.four }}>

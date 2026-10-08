@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "valtrixcoach",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#0E0E0F",
+    "backgroundColor": "#0A1630",
     "ios": {
       "bundleIdentifier": "com.valtrix.coach",
       "supportsTablet": true
@@ -15,7 +15,7 @@
     "android": {
       "package": "com.valtrix.coach",
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
+        "backgroundColor": "#0A1630",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -45,7 +45,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0E0E0F",
+          "backgroundColor": "#0A1630",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }

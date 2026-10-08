@@ -74,7 +74,7 @@ export default function ExerciseLibrary() {
           title: picking ? 'Add exercise' : 'Exercise library',
           headerRight: () => (
             <Pressable accessibilityLabel="New exercise" hitSlop={12} onPress={() => router.push('/exercises/new')}>
-              <Ionicons name="add-circle" size={28} color={Colors.accent} />
+              <Ionicons name="add-circle" size={28} color={Colors.accentText} />
             </Pressable>
           ),
         }}
@@ -105,7 +105,7 @@ export default function ExerciseLibrary() {
               No exercises match. Tap + to add your own.
             </Body>
           ) : (
-            <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.five }} />
+            <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.five }} />
           )
         }
         ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
@@ -121,9 +121,9 @@ export default function ExerciseLibrary() {
               </Body>
             </View>
             {adding === item.id ? (
-              <ActivityIndicator color={Colors.accent} />
+              <ActivityIndicator color={Colors.accentText} />
             ) : picking ? (
-              <Ionicons name="add" size={22} color={Colors.accent} />
+              <Ionicons name="add" size={22} color={Colors.accentText} />
             ) : item.trainer_id ? (
               <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
             ) : null}

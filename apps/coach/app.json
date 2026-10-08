@@ -49,6 +49,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Voltrix Coach to use your location so clients near you can find you."
+        }
       ]
     ],
     "experiments": {

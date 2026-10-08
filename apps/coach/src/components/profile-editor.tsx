@@ -1,15 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
+import { findMe, townAt, type Coords } from '@/lib/location';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { MAX_SPECIALTIES, SPECIALTIES } from '@/lib/specialties';
 import { supabase } from '@/lib/supabase';
 
 type Props = { profile: Profile; onSaved: () => Promise<void> };
+
+const LOCATION_DENIED =
+  Platform.OS === 'web'
+    ? "Your browser didn't share your location. Allow location for this site, then try again."
+    : "Voltrix Coach can't see your location. Allow it in your phone's settings, then try again.";
 
 // The trainer's profile, as clients see it in the Voltrix app.
 export function ProfileEditor({ profile, onSaved }: Props) {
@@ -23,6 +30,13 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [location, setLocation] = useState<Coords | null>(
+    profile.latitude != null && profile.longitude != null
+      ? { latitude: Number(profile.latitude), longitude: Number(profile.longitude) }
+      : null,
+  );
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   async function changePhoto() {
     setError(null);
@@ -46,6 +60,37 @@ export function ProfileEditor({ profile, onSaved }: Props) {
     const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
     if (error) return setError(error.message);
     await removeProfilePhoto(profile.avatar_url);
+    await onSaved();
+  }
+
+  // Saves a rough location straight away, and fills in the town if it is empty.
+  async function saveMyLocation() {
+    setLocationError(null);
+    setLocating(true);
+    const found = await findMe();
+    if ('problem' in found) {
+      setLocating(false);
+      return setLocationError(
+        found.problem === 'denied' ? LOCATION_DENIED : "We couldn't find your location. Try again in a moment.",
+      );
+    }
+    const town = city.trim() ? null : await townAt(found.coords);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ...found.coords, ...(town ? { city: town } : {}) })
+      .eq('id', profile.id);
+    setLocating(false);
+    if (error) return setLocationError(error.message);
+    setLocation(found.coords);
+    if (town) setCity(town);
+    await onSaved();
+  }
+
+  async function removeLocation() {
+    setLocationError(null);
+    const { error } = await supabase.from('profiles').update({ latitude: null, longitude: null }).eq('id', profile.id);
+    if (error) return setLocationError(error.message);
+    setLocation(null);
     await onSaved();
   }
 
@@ -126,6 +171,34 @@ export function ProfileEditor({ profile, onSaved }: Props) {
       </View>
 
       <TextField label="City" value={city} onChangeText={setCity} autoCapitalize="words" placeholder="For example: Cape Town" />
+
+      <Text style={styles.label}>Location</Text>
+      <View style={styles.locationRow}>
+        <View style={styles.locationIcon}>
+          <Ionicons name={location ? 'location' : 'location-outline'} size={20} color={Colors.accentText} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.locationTitle}>{location ? 'Location set' : 'Not set'}</Text>
+          <Body secondary style={styles.small}>
+            {location
+              ? 'Clients near you can find you. They only see how far away you are.'
+              : 'Let clients near you find you. They only see how far away you are, never your address.'}
+          </Body>
+        </View>
+      </View>
+      <Button
+        title={location ? 'Update my location' : 'Use my location'}
+        variant="secondary"
+        onPress={saveMyLocation}
+        loading={locating}
+      />
+      {location ? (
+        <Pressable accessibilityRole="button" onPress={removeLocation} hitSlop={8}>
+          <Text style={styles.remove}>Remove location</Text>
+        </Pressable>
+      ) : null}
+      <ErrorText>{locationError}</ErrorText>
+
       <TextField
         label="Years of experience"
         value={years}
@@ -163,6 +236,24 @@ const styles = themed(() => ({
   },
   small: {
     fontSize: 14,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  locationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceRaised,
+  },
+  locationTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   label: {
     color: Colors.textSecondary,

@@ -50,7 +50,13 @@
           "microphonePermission": "Allow Voltrix to use your microphone so your videos have sound."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Voltrix to use your location to find trainers near you."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

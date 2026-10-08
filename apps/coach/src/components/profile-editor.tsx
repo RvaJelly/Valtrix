@@ -170,7 +170,16 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         })}
       </View>
 
-      <TextField label="City" value={city} onChangeText={setCity} autoCapitalize="words" placeholder="For example: Cape Town" />
+      {/* Locked while finding the location, which may fill it in, so nothing typed meanwhile is lost. */}
+      <TextField
+        label="City"
+        value={city}
+        onChangeText={setCity}
+        editable={!locating}
+        autoCapitalize="words"
+        placeholder="For example: Cape Town"
+        style={locating ? { opacity: 0.5 } : null}
+      />
 
       <Text style={styles.label}>Location</Text>
       <View style={styles.locationRow}>
@@ -193,7 +202,14 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         loading={locating}
       />
       {location ? (
-        <Pressable accessibilityRole="button" onPress={removeLocation} hitSlop={8}>
+        // Waits for an update in progress, which would otherwise save the location again.
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: locating }}
+          disabled={locating}
+          onPress={removeLocation}
+          hitSlop={8}
+          style={locating ? { opacity: 0.5 } : null}>
           <Text style={styles.remove}>Remove location</Text>
         </Pressable>
       ) : null}

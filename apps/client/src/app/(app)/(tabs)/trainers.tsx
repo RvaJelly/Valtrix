@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Platform,
   Pressable,
   RefreshControl,
@@ -16,7 +17,7 @@ import { PickerSheet, type PickerOption } from '@/components/picker-sheet';
 import { TrainerCircle } from '@/components/trainer-circle';
 import { Body, Card, ErrorText } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { findMe, type Coords } from '@/lib/location';
+import { findMe } from '@/lib/location';
 import {
   displayName,
   listTrainers,
@@ -43,6 +44,20 @@ const DENIED =
     : "Voltrix can't see your location, so trainers are shown A to Z. You can allow it in your phone's settings.";
 const NOT_FOUND = "We couldn't work out how far away trainers are, so they're shown A to Z. Try again in a moment.";
 
+// After this long the client may have moved, so Nearest finds them again.
+const FRESH_FOR = 10 * 60_000;
+
+// How far each trainer is from the client, by trainer id, and when that was worked out.
+type Nearby = { distances: Map<string, number>; at: number };
+
+// Finds the client and how far away each trainer is, or says what went wrong.
+async function measure(): Promise<Nearby | 'denied' | 'failed'> {
+  const found = await findMe();
+  if ('problem' in found) return found.problem;
+  const distances = await trainerDistances(found.coords).catch(() => null);
+  return distances ? { distances, at: Date.now() } : 'failed';
+}
+
 export default function Trainers() {
   const [trainers, setTrainers] = useState<PublicTrainer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +66,7 @@ export default function Trainers() {
   // '' is all towns.
   const [town, setTown] = useState('');
   const [sort, setSort] = useState<TrainerSort>('default');
-  const [here, setHere] = useState<Coords | null>(null);
-  const [distances, setDistances] = useState<Map<string, number> | null>(null);
+  const [nearby, setNearby] = useState<Nearby | null>(null);
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [picker, setPicker] = useState<'sort' | 'town' | null>(null);
@@ -74,41 +88,60 @@ export default function Trainers() {
     }, [load]),
   );
 
-  async function refresh() {
-    setRefreshing(true);
-    await Promise.all([
-      load(),
-      here
-        ? trainerDistances(here)
-            .then(setDistances)
-            .catch(() => {})
-        : null,
-    ]);
-    setRefreshing(false);
+  function fallBack(problem: 'denied' | 'failed') {
+    setSort('default');
+    setNotice(problem === 'denied' ? DENIED : NOT_FOUND);
   }
 
   // Nearest asks for the phone's location the first time. If that doesn't work,
-  // say why and go back to A to Z.
+  // say why and go back to A to Z. Distances from the last few minutes are reused,
+  // so switching back to Nearest is quick.
   async function chooseSort(next: TrainerSort) {
     const request = ++latestSort.current;
     setNotice(null);
     setLocating(false);
     setSort(next);
-    if (next !== 'nearest' || distances) return;
+    if (next !== 'nearest' || (nearby && Date.now() - nearby.at < FRESH_FOR)) return;
     setLocating(true);
-    const found = await findMe();
-    const nearby = 'coords' in found ? await trainerDistances(found.coords).catch(() => null) : null;
+    const result = await measure();
     // They may have picked another order while we were looking.
     if (request !== latestSort.current) return;
     setLocating(false);
-    if ('coords' in found && nearby) {
-      setHere(found.coords);
-      setDistances(nearby);
-    } else {
-      setSort('default');
-      setNotice('problem' in found && found.problem === 'denied' ? DENIED : NOT_FOUND);
+    if (typeof result === 'object') setNearby(result);
+    else fallBack(result);
+  }
+
+  // Finds the client again while sorted by distance, in case they have moved. If the
+  // phone can't get a fix this time the old distances stay, unless location was turned off.
+  async function remeasure() {
+    const request = latestSort.current;
+    const result = await measure();
+    if (typeof result === 'object') setNearby(result);
+    else if (result === 'denied' && request === latestSort.current) {
+      setNearby(null);
+      fallBack(result);
     }
   }
+
+  async function refresh() {
+    setRefreshing(true);
+    // Away from Nearest, forget the distances so Nearest finds the client afresh next time.
+    if (sort !== 'nearest') setNearby(null);
+    await Promise.all([load(), sort === 'nearest' && nearby && !locating ? remeasure() : null]);
+    setRefreshing(false);
+  }
+
+  // Phones keep the app open in the background for days, so coming back to an old
+  // Nearest list finds the client again.
+  const onAppActive = useEffectEvent(() => {
+    if (sort === 'nearest' && nearby && !locating && Date.now() - nearby.at >= FRESH_FOR) remeasure();
+  });
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') onAppActive();
+    });
+    return () => sub.remove();
+  }, []);
 
   // The specialties trainers actually offer, most common first.
   const counts = new Map<string, number>();
@@ -129,6 +162,7 @@ export default function Trainers() {
   const sortLabel = SORTS.find((s) => s.value === sort)!.label;
 
   const query = search.trim().toLowerCase();
+  const nearest = sort === 'nearest' && nearby && !locating ? nearby.distances : null;
   const shown = sortTrainers(
     (trainers ?? []).filter(
       (t) =>
@@ -138,9 +172,8 @@ export default function Trainers() {
           [displayName(t), t.business_name, t.city, ...t.specialties].some((v) => v?.toLowerCase().includes(query))),
     ),
     sort,
-    distances,
+    nearest,
   );
-  const nearest = sort === 'nearest' && distances && !locating ? distances : null;
   const noneNearby = nearest && shown.length > 0 && !shown.some((t) => nearest.has(t.id));
 
   return (
@@ -217,7 +250,14 @@ export default function Trainers() {
       ) : null}
       <View style={styles.grid}>
         {shown.map((t) => (
-          <TrainerCircle key={t.id} trainer={t} size={88} width={104} distanceKm={nearest?.get(t.id)} />
+          <TrainerCircle
+            key={t.id}
+            trainer={t}
+            size={88}
+            width={104}
+            distanceKm={nearest?.get(t.id)}
+            years={sort === 'experience' ? (t.years_experience ?? undefined) : undefined}
+          />
         ))}
       </View>
 

@@ -7,7 +7,7 @@ import { Avatar } from '@/components/avatar';
 import { Body, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { displayName, distanceLabel, listTrainers, loadTrainers, type PublicTrainer } from '@/lib/trainers';
+import { displayName, distanceLabel, listTrainers, loadTrainers, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer's public profile.
 export default function TrainerProfile() {
@@ -40,9 +40,7 @@ export default function TrainerProfile() {
   const firstName = trainer.full_name?.split(' ')[0] ?? name;
   const facts = [
     trainer.city,
-    trainer.years_experience != null
-      ? `${trainer.years_experience} ${trainer.years_experience === 1 ? 'year' : 'years'} experience`
-      : null,
+    trainer.years_experience != null ? `${yearsLabel(trainer.years_experience)} experience` : null,
     km && Number.isFinite(Number(km)) ? distanceLabel(Number(km)) : null,
   ].filter(Boolean);
 

@@ -42,6 +42,10 @@ export function distanceLabel(km: number) {
   return km < 1 ? 'Under 1 km away' : `${Math.round(km)} km away`;
 }
 
+export function yearsLabel(years: number) {
+  return years === 1 ? '1 year' : `${years} years`;
+}
+
 export type TrainerSort = 'default' | 'nearest' | 'experience';
 
 // Missing numbers go last.
@@ -51,10 +55,14 @@ function ascending(a: number | null | undefined, b: number | null | undefined) {
   return a - b;
 }
 
-// Trainers in the chosen order. They arrive A to Z, and sorting keeps that order for ties.
+// Trainers in the chosen order, A to Z for ties. A to Z goes by the name on each card,
+// which is the business name for trainers who left their own name out.
 export function sortTrainers(trainers: PublicTrainer[], sort: TrainerSort, distances?: Map<string, number> | null) {
+  const byName = [...trainers].sort((a, b) =>
+    displayName(a).localeCompare(displayName(b), undefined, { sensitivity: 'base' }),
+  );
   if (sort === 'experience') {
-    return [...trainers].sort((a, b) =>
+    return byName.sort((a, b) =>
       ascending(
         a.years_experience == null ? null : -a.years_experience,
         b.years_experience == null ? null : -b.years_experience,
@@ -62,9 +70,9 @@ export function sortTrainers(trainers: PublicTrainer[], sort: TrainerSort, dista
     );
   }
   if (sort === 'nearest' && distances) {
-    return [...trainers].sort((a, b) => ascending(distances.get(a.id), distances.get(b.id)));
+    return byName.sort((a, b) => ascending(distances.get(a.id), distances.get(b.id)));
   }
-  return trainers;
+  return byName;
 }
 
 // Trainers type their own town, so "cape town " and "Cape Town" must match.

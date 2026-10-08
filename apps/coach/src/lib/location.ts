@@ -17,9 +17,15 @@ export async function findMe(): Promise<Found> {
   try {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (!permission.granted) return { problem: 'denied' };
+    // Browsers hand back their last fix however old it is unless told otherwise,
+    // and the person may have moved since.
+    const options =
+      Platform.OS === 'web'
+        ? { accuracy: Location.Accuracy.Balanced, maximumAge: 0 }
+        : { accuracy: Location.Accuracy.Balanced };
     // A fix can take a while indoors, so give up after 15 seconds.
     const position = await Promise.race([
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      Location.getCurrentPositionAsync(options),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('Timed out')), 15_000);
       }),

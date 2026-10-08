@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Colors, Spacing, themed } from '@/constants/theme';
-import { displayName, distanceLabel, type PublicTrainer } from '@/lib/trainers';
+import { displayName, distanceLabel, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer as a round photo with their name and main specialty. Opens their profile.
 export function TrainerCircle({
@@ -12,19 +12,27 @@ export function TrainerCircle({
   size = 76,
   width = 96,
   distanceKm,
+  years,
 }: {
   trainer: PublicTrainer;
   size?: number;
   width?: number;
   // How far away they are, when the client sorted by distance.
   distanceKm?: number;
+  // Years as a trainer, when the client sorted by experience.
+  years?: number;
 }) {
   const name = displayName(trainer);
   const hasDistance = distanceKm != null;
+  const extra = hasDistance
+    ? { icon: 'location' as const, text: distanceLabel(distanceKm) }
+    : years != null
+      ? { icon: 'ribbon' as const, text: yearsLabel(years) }
+      : null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={hasDistance ? `${name}, ${distanceLabel(distanceKm)}` : name}
+      accessibilityLabel={extra ? `${name}, ${extra.text}` : name}
       onPress={() =>
         router.push({
           pathname: '/trainers/[id]',
@@ -39,11 +47,11 @@ export function TrainerCircle({
       <Text style={styles.specialty} numberOfLines={2}>
         {trainer.specialties.slice(0, 2).join(' · ') || trainer.business_name || ' '}
       </Text>
-      {hasDistance ? (
-        <View style={styles.distance}>
-          <Ionicons name="location" size={12} color={Colors.accentText} />
-          <Text style={styles.distanceText} numberOfLines={1}>
-            {distanceLabel(distanceKm)}
+      {extra ? (
+        <View style={styles.extra}>
+          <Ionicons name={extra.icon} size={12} color={Colors.accentText} />
+          <Text style={styles.extraText} numberOfLines={1}>
+            {extra.text}
           </Text>
         </View>
       ) : null}
@@ -68,12 +76,12 @@ const styles = themed(() => ({
     fontSize: 12,
     textAlign: 'center',
   },
-  distance: {
+  extra: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
   },
-  distanceText: {
+  extraText: {
     color: Colors.accentText,
     fontSize: 12,
     fontWeight: '700',

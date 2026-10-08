@@ -2,9 +2,11 @@
 // already hide a story once it expires; this removes it for good. An hourly job
 // in the database calls it (see the clean_expired_stories migration).
 //
-// Anyone may call it, so it is deployed without a login check (verify_jwt =
-// false in supabase/config.toml): it only ever removes stories that have
-// already expired, and calling it again just finds nothing left to do.
+// The hourly job sends a secret key that only the database knows (see the
+// migration), so the function is deployed without Supabase's login check
+// (verify_jwt = false in supabase/config.toml) and checks that key instead. It
+// only ever removes stories that have already expired, and calling it again just
+// finds nothing left to do.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -23,7 +25,11 @@ function reply(body: Record<string, unknown>, status = 200) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST' && req.method !== 'GET') return reply({ error: 'Use POST' }, 405);
+  if (req.method !== 'POST') return reply({ error: 'Use POST' }, 405);
+  const key = req.headers.get('x-cron-key') ?? '';
+  const { data: allowed, error: keyError } = await supabase.rpc('check_cron_key', { p_key: key });
+  if (keyError) return reply({ error: keyError.message }, 500);
+  if (!allowed) return reply({ error: 'Not allowed' }, 401);
 
   // Only stories that had already expired when this run started.
   const cutoff = new Date().toISOString();

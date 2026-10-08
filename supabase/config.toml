@@ -3,9 +3,9 @@
 # jmnmqxhkcpcdnwlcoiuq.
 project_id = "voltrix"
 
-# The hourly job in the database calls this function with no login (see
+# The hourly job in the database calls this function with a secret key instead of a login (see
 # migrations/20261008170000_clean_expired_stories.sql), so it must run without
-# the JWT check or every call gets a 401. `supabase functions deploy` reads this.
+# the JWT check; the function checks the key itself. `supabase functions deploy` reads this.
 # Deploying another way (the dashboard or an MCP tool) needs JWT verification
 # turned off by hand.
 [functions.clean-expired-stories]

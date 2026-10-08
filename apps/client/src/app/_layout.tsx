@@ -11,7 +11,7 @@ import { SettingsProvider, useSettings } from '@/lib/settings';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { loading: authLoading, session, profile, recovering } = useAuth();
+  const { loading: authLoading, session, recovering } = useAuth();
   const { ready } = useSettings();
   const loading = authLoading || !ready;
 
@@ -21,8 +21,8 @@ function RootNavigator() {
 
   if (loading) return null;
 
+  // Clients and trainers can both use Valtrix; trainers use the same login as in Valtrix Coach.
   const signedIn = !!session && !recovering;
-  const isClient = profile?.role === 'client';
   return (
     <Stack
       screenOptions={{
@@ -35,11 +35,8 @@ function RootNavigator() {
       <Stack.Protected guard={!!session && recovering}>
         <Stack.Screen name="new-password" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && isClient}>
+      <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && !isClient}>
-        <Stack.Screen name="wrong-app" />
       </Stack.Protected>
     </Stack>
   );

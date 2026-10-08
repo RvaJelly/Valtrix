@@ -49,6 +49,9 @@ export default function Welcome() {
         <View style={styles.actions}>
           <Button title="Create my free account" onPress={() => router.push('/sign-up')} />
           <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
+          <Body secondary style={{ fontSize: 14, textAlign: 'center' }}>
+            Personal trainers can sign in with their Valtrix Coach login.
+          </Body>
         </View>
       </ScrollView>
     </SafeAreaView>

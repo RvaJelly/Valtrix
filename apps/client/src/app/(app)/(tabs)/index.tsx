@@ -48,6 +48,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = profile?.full_name?.split(' ')[0];
+  const isTrainer = profile?.role === 'trainer';
 
   const load = useCallback(async () => {
     try {
@@ -111,7 +112,25 @@ export default function Home() {
       <ErrorText>{error}</ErrorText>
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
-      {data && data.trainers.length === 0 ? (
+      {data && data.trainers.length === 0 && isTrainer ? (
+        <Card style={{ gap: Spacing.three }}>
+          <View style={styles.waitIcon}>
+            <Ionicons name="barbell" size={26} color={Colors.accentText} />
+          </View>
+          <Text style={styles.cardTitle}>You&apos;re in with your trainer account</Text>
+          <Body secondary>
+            Post stories and reels, and see Valtrix the way your clients do. Your clients and calendar stay in Valtrix
+            Coach.
+          </Body>
+          <Body secondary>
+            Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, your
+            sessions show up here.
+          </Body>
+          <Button title="Check again" variant="secondary" onPress={refresh} loading={refreshing} />
+        </Card>
+      ) : null}
+
+      {data && data.trainers.length === 0 && !isTrainer ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="link" size={26} color={Colors.accentText} />

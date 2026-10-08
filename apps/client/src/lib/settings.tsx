@@ -108,8 +108,8 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       .finally(() => setReady(true));
   }, []);
 
-  // After sign-in, take the settings saved with the account. A trainer who signs
-  // in here by mistake keeps their Valtrix Coach settings untouched.
+  // After sign-in, take the settings saved with the account. A trainer using
+  // Valtrix keeps these settings on the phone, so their Valtrix Coach settings stay as they are.
   if (ready && profile?.role === 'client' && syncedFor !== profile.id) {
     setSyncedFor(profile.id);
     const fromAccount = clean(profile.preferences);

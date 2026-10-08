@@ -134,7 +134,14 @@ export default function Settings() {
         </Section>
 
         <Button title="Sign out" variant="secondary" onPress={signOut} />
-        <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
+        {profile?.role === 'trainer' ? (
+          // Deleting here would also delete the trainer's clients and calendar.
+          <Body secondary style={[styles.small, { textAlign: 'center' }]}>
+            You&apos;re signed in with your Valtrix Coach account. To delete it, use Valtrix Coach.
+          </Body>
+        ) : (
+          <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

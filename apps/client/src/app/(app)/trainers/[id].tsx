@@ -34,6 +34,7 @@ export default function TrainerProfile() {
     );
   }
 
+  const isMe = trainer.id === session?.user.id;
   const name = displayName(trainer);
   const firstName = trainer.full_name?.split(' ')[0] ?? name;
   const facts = [
@@ -89,7 +90,16 @@ export default function TrainerProfile() {
         </View>
       ) : null}
 
-      {!isMine ? (
+      {isMe ? (
+        <Card style={{ gap: Spacing.two }}>
+          <Text style={styles.cardTitle}>This is your profile</Text>
+          <Body secondary>
+            This is how clients see you on Valtrix. Change it in Valtrix Coach under Settings, Profile.
+          </Body>
+        </Card>
+      ) : null}
+
+      {!isMine && !isMe ? (
         <Card style={{ gap: Spacing.two }}>
           <Text style={styles.cardTitle}>Want to train with {firstName}?</Text>
           <Body secondary>

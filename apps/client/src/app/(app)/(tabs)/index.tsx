@@ -5,10 +5,12 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 
 import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
+import { StoriesRow } from '@/components/stories-row';
 import { TrainerCircle } from '@/components/trainer-circle';
 import { Body, Button, Card, ErrorText, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
 import { addDays, endOf, formatDay, formatTime, loadSessions, trainerName, type Session } from '@/lib/sessions';
 import { listTrainers, loadTrainers, type PublicTrainer, type Trainer } from '@/lib/trainers';
@@ -31,7 +33,14 @@ function fromNow(date: Date, now = new Date()) {
   return days === 1 ? 'in 1 day' : `in ${days} days`;
 }
 
-type HomeData = { trainers: Trainer[]; everyone: PublicTrainer[]; sessions: Session[]; doneThisMonth: number };
+type HomeData = {
+  trainers: Trainer[];
+  everyone: PublicTrainer[];
+  sessions: Session[];
+  doneThisMonth: number;
+  stories: StoryGroup[];
+  seen: Set<string>;
+};
 
 export default function Home() {
   const { session, profile } = useAuth();
@@ -44,10 +53,12 @@ export default function Home() {
     try {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const [trainers, sessions, everyone] = await Promise.all([
+      const [trainers, sessions, everyone, stories, seen] = await Promise.all([
         loadTrainers(),
         loadSessions(monthStart, addDays(now, 90)),
         listTrainers().catch(() => [] as PublicTrainer[]),
+        loadStories().catch(() => [] as StoryGroup[]),
+        loadSeen(),
       ]);
       setError(null);
       setData({
@@ -55,6 +66,8 @@ export default function Home() {
         everyone,
         sessions: sessions.filter((s) => s.status === 'scheduled' && endOf(s) > now),
         doneThisMonth: sessions.filter((s) => s.status === 'completed').length,
+        stories,
+        seen,
       });
       // A newly linked trainer may have sessions booked already.
       refreshReminders();
@@ -86,6 +99,14 @@ export default function Home() {
         {greeting()}
         {firstName ? `, ${firstName}` : ''}
       </Title>
+
+      {data ? (
+        <StoriesRow
+          groups={data.stories}
+          seen={data.seen}
+          me={{ name: profile?.full_name ?? null, avatar: profile?.avatar_url ?? null }}
+        />
+      ) : null}
 
       <ErrorText>{error}</ErrorText>
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}

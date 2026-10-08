@@ -42,6 +42,14 @@
           "imageWidth": 120
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Valtrix to use your photos so you can share stories and reels and add a profile photo.",
+          "cameraPermission": "Allow Valtrix to use your camera so you can film stories and reels.",
+          "microphonePermission": "Allow Valtrix to use your microphone so your videos have sound."
+        }
+      ],
       "expo-video"
     ],
     "experiments": {

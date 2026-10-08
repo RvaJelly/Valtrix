@@ -22,6 +22,17 @@ export default function AppLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
+        <Stack.Screen
+          name="stories/[author]"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            contentStyle: { backgroundColor: '#000000' },
+          }}
+        />
+        <Stack.Screen name="posts/new" options={{ title: 'New post', presentation: 'modal' }} />
+        <Stack.Screen name="rules" options={{ title: 'Community rules' }} />
       </Stack>
     </>
   );

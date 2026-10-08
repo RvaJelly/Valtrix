@@ -8,6 +8,7 @@ export type Profile = {
   id: string;
   role: 'trainer' | 'client';
   full_name: string | null;
+  avatar_url?: string | null;
   // Theme, units and reminder time saved with the account.
   preferences?: Record<string, unknown> | null;
 };
@@ -32,7 +33,7 @@ const AuthContext = createContext<AuthState | null>(null);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, full_name, preferences')
+    .select('id, role, full_name, avatar_url, preferences')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;

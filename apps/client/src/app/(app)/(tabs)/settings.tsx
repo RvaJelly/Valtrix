@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
@@ -11,6 +13,8 @@ import { biometricName, confirmIdentity } from '@/lib/biometrics';
 import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
+import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
+import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
 import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
 
@@ -85,12 +89,22 @@ export default function Settings() {
         </Section>
 
         <Section title="Profile">
+          <ProfilePhoto
+            userId={session?.user.id}
+            name={profile?.full_name ?? null}
+            url={profile?.avatar_url ?? null}
+            onSaved={refreshProfile}
+          />
           <ProfileForm
             key={profile?.id}
             initialName={profile?.full_name ?? ''}
             userId={session?.user.id}
             onSaved={refreshProfile}
           />
+        </Section>
+
+        <Section title="Blocked people">
+          <BlockedList />
         </Section>
 
         <Section title="Account">
@@ -109,12 +123,131 @@ export default function Settings() {
           <Card style={{ gap: Spacing.three }}>
             <Row label="App version" value={Constants.expoConfig?.version ?? '–'} />
           </Card>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/rules')}
+            style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+            <Ionicons name="people-outline" size={22} color={Colors.accentText} />
+            <Text style={[styles.linkLabel, { flex: 1 }]}>Community rules</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+          </Pressable>
         </Section>
 
         <Button title="Sign out" variant="secondary" onPress={signOut} />
-        <DeleteAccount onDeleted={signOut} />
+        <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function ProfilePhoto({
+  userId,
+  name,
+  url,
+  onSaved,
+}: {
+  userId?: string;
+  name: string | null;
+  url: string | null;
+  onSaved: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function change() {
+    if (!userId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const next = await pickProfilePhoto(userId);
+      if (next) {
+        const { error } = await supabase.from('profiles').update({ avatar_url: next }).eq('id', userId);
+        if (error) throw error;
+        await removeProfilePhoto(url);
+        await onSaved();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The photo could not be saved.');
+    }
+    setBusy(false);
+  }
+
+  async function remove() {
+    if (!userId) return;
+    setError(null);
+    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
+    if (error) return setError(error.message);
+    await removeProfilePhoto(url);
+    await onSaved();
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <View style={styles.photoRow}>
+        <Avatar url={url} name={name} size={80} />
+        <View style={{ flex: 1, gap: Spacing.two }}>
+          <Button title={url ? 'Change photo' : 'Add a photo'} variant="secondary" onPress={change} loading={busy} />
+          {url ? (
+            <Pressable accessibilityRole="button" onPress={remove} hitSlop={8}>
+              <Text style={styles.removePhoto}>Remove photo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+      <Body secondary style={styles.small}>
+        Your photo shows on your stories and reels.
+      </Body>
+      <ErrorText>{error}</ErrorText>
+    </Card>
+  );
+}
+
+function BlockedList() {
+  const [blocked, setBlocked] = useState<Blocked[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadBlocked()
+      .then(setBlocked)
+      .catch(() => setBlocked([]));
+  }, []);
+
+  async function unblock(person: Blocked) {
+    setError(null);
+    try {
+      await unblockPerson(person.blocked_id);
+      setBlocked((current) => current?.filter((b) => b.blocked_id !== person.blocked_id) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not unblock. Try again.');
+    }
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {blocked && !blocked.length ? (
+        <Body secondary style={styles.small}>
+          You haven&apos;t blocked anyone. People you block can&apos;t see your stories and reels, and you won&apos;t
+          see theirs.
+        </Body>
+      ) : null}
+      {blocked?.map((person) => (
+        <View key={person.blocked_id} style={styles.blockedRow}>
+          <Avatar url={person.avatar_url} name={person.name} size={40} />
+          <Text style={[styles.linkLabel, { flex: 1 }]} numberOfLines={1}>
+            {person.name || 'Valtrix member'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Unblock ${person.name || 'Valtrix member'}`}
+            onPress={() => unblock(person)}
+            hitSlop={8}
+            style={styles.unblock}>
+            <Text style={styles.unblockText}>Unblock</Text>
+          </Pressable>
+        </View>
+      ))}
+      <ErrorText>{error}</ErrorText>
+    </Card>
   );
 }
 
@@ -192,18 +325,19 @@ function PasswordForm() {
   );
 }
 
-function DeleteAccount({ onDeleted }: { onDeleted: () => Promise<void> }) {
+function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () => Promise<void> }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function remove() {
     const sure = await confirm(
       'Delete your account?',
-      'This permanently deletes your account, your clients, workouts and exercises. It cannot be undone.',
+      'This permanently deletes your account, your stories, reels and photos. It cannot be undone.',
       'Delete account',
     );
     if (!sure) return;
     setBusy(true);
+    if (userId) await removeAllMyFiles(userId);
     const { error } = await supabase.rpc('delete_my_account');
     setBusy(false);
     if (error) return setError(error.message);
@@ -420,6 +554,34 @@ const styles = themed(() => ({
   linkLabel: {
     color: Colors.text,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.four,
+  },
+  removePhoto: {
+    color: Colors.danger,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  unblock: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.small,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  unblockText: {
+    color: Colors.text,
+    fontSize: 14,
     fontWeight: '700',
   },
   delete: {

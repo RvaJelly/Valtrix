@@ -27,6 +27,15 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.textSecondary,
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen
+        name="reels"
+        options={{
+          title: 'Reels',
+          tabBarIcon: tabIcon('play-circle'),
+          headerShown: false,
+          sceneStyle: { backgroundColor: '#000000' },
+        }}
+      />
       <Tabs.Screen name="sessions" options={{ title: 'Sessions', tabBarIcon: tabIcon('calendar') }} />
       <Tabs.Screen name="trainers" options={{ title: 'Trainers', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings') }} />

@@ -111,8 +111,9 @@ export default function Settings() {
           <Card style={{ gap: Spacing.three }}>
             <Row label="Email" value={session?.user.email ?? '–'} />
             <Body secondary style={styles.small}>
-              You stay signed in on this device. Your sessions, training and settings are saved to your account, so
-              signing in on a new phone brings everything back.
+              {profile?.role === 'trainer'
+                ? 'You stay signed in on this device. Your posts and profile are saved to your account. The settings on this page stay on this phone, so your Valtrix Coach settings are not changed.'
+                : 'You stay signed in on this device. Your sessions, training and settings are saved to your account, so signing in on a new phone brings everything back.'}
             </Body>
           </Card>
           <BiometricLock />
@@ -134,16 +135,33 @@ export default function Settings() {
         </Section>
 
         <Button title="Sign out" variant="secondary" onPress={signOut} />
+        {/* Only a known client account can be deleted here; a trainer's would take their clients and calendar with it. */}
+        {profile?.role === 'client' ? <DeleteAccount userId={session?.user.id} onDeleted={signOut} /> : null}
         {profile?.role === 'trainer' ? (
-          // Deleting here would also delete the trainer's clients and calendar.
           <Body secondary style={[styles.small, { textAlign: 'center' }]}>
             You&apos;re signed in with your Valtrix Coach account. To delete it, use Valtrix Coach.
           </Body>
-        ) : (
-          <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
-        )}
+        ) : null}
+        {!profile ? <ProfileRetry onRetry={refreshProfile} /> : null}
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function ProfileRetry({ onRetry }: { onRetry: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  async function retry() {
+    setBusy(true);
+    await onRetry();
+    setBusy(false);
+  }
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <Body secondary style={styles.small}>
+        Your account details could not be loaded. Check your connection and try again.
+      </Body>
+      <Button title="Try again" variant="secondary" onPress={retry} loading={busy} />
+    </Card>
   );
 }
 
@@ -344,8 +362,8 @@ function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () =
     );
     if (!sure) return;
     setBusy(true);
-    if (userId) await removeAllMyFiles(userId);
-    const { error } = await supabase.rpc('delete_my_account');
+    if (userId) await removeAllMyFiles(userId).catch(() => {});
+    const { error } = await supabase.rpc('delete_my_client_account');
     setBusy(false);
     if (error) return setError(error.message);
     await onDeleted();

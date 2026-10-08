@@ -15,6 +15,7 @@ import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
+import { removeAllMyFiles } from '@/lib/files';
 import { supabase } from '@/lib/supabase';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
@@ -140,7 +141,7 @@ export default function Settings() {
         </Section>
 
         <Button title="Sign out" variant="secondary" onPress={signOut} />
-        <DeleteAccount onDeleted={signOut} />
+        <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -182,18 +183,19 @@ function PasswordForm() {
   );
 }
 
-function DeleteAccount({ onDeleted }: { onDeleted: () => Promise<void> }) {
+function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () => Promise<void> }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function remove() {
     const sure = await confirm(
       'Delete your account?',
-      'This permanently deletes your account, your clients, workouts and exercises. It cannot be undone.',
+      'This permanently deletes your account, your clients, calendar, workouts and exercises, and your stories, reels and photos. It cannot be undone.',
       'Delete account',
     );
     if (!sure) return;
     setBusy(true);
+    if (userId) await removeAllMyFiles(userId).catch(() => {});
     const { error } = await supabase.rpc('delete_my_account');
     setBusy(false);
     if (error) return setError(error.message);

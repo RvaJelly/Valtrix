@@ -103,7 +103,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     // Stop this device reminding the trainer about sessions once they sign out.
     await replaceReminders([]).catch(() => {});
-    await supabase.auth.signOut();
+    // Only this app signs out: the same login may also be open in the Valtrix app.
+    await supabase.auth.signOut({ scope: 'local' });
   }, []);
 
   return (

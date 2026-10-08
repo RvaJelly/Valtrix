@@ -43,12 +43,13 @@ type HomeData = {
 };
 
 export default function Home() {
-  const { session, profile } = useAuth();
+  const { session, profile, refreshProfile } = useAuth();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = profile?.full_name?.split(' ')[0];
   const isTrainer = profile?.role === 'trainer';
+  const isClient = profile?.role === 'client';
 
   const load = useCallback(async () => {
     try {
@@ -85,7 +86,7 @@ export default function Home() {
 
   async function refresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), profile ? null : refreshProfile()]);
     setRefreshing(false);
   }
 
@@ -110,6 +111,11 @@ export default function Home() {
       ) : null}
 
       <ErrorText>{error}</ErrorText>
+      {data && !profile ? (
+        <Card>
+          <Body secondary>Your account details could not be loaded. Pull down to try again.</Body>
+        </Card>
+      ) : null}
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
       {data && data.trainers.length === 0 && isTrainer ? (
@@ -130,7 +136,7 @@ export default function Home() {
         </Card>
       ) : null}
 
-      {data && data.trainers.length === 0 && !isTrainer ? (
+      {data && data.trainers.length === 0 && isClient ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="link" size={26} color={Colors.accentText} />

@@ -108,6 +108,9 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       .finally(() => setReady(true));
   }, []);
 
+  // Signed out or a different person signed in: their saved settings have to be fetched first.
+  if (syncedFor !== null && profile?.id !== syncedFor) setSyncedFor(null);
+
   // After sign-in, take the settings saved with the account. A trainer using
   // Valtrix keeps these settings on the phone, so their Valtrix Coach settings stay as they are.
   if (ready && profile?.role === 'client' && syncedFor !== profile.id) {

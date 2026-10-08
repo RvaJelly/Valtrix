@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 
 import { replaceReminders } from '@/lib/notify';
 import { supabase } from '@/lib/supabase';
@@ -49,9 +50,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const loadedUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (next: Session | null) => {
-    const loaded = next ? await fetchProfile(next.user.id).catch(() => null) : null;
-    loadedUserId.current = loaded?.id ?? null;
-    setProfile(loaded);
+    if (!next) {
+      loadedUserId.current = null;
+      setProfile(null);
+      return;
+    }
+    try {
+      const loaded = await fetchProfile(next.user.id);
+      loadedUserId.current = loaded?.id ?? null;
+      setProfile(loaded);
+    } catch {
+      // On a bad connection keep what we already know about this person.
+      setProfile((current) => (current?.id === next.user.id ? current : null));
+    }
   }, []);
 
   useEffect(() => {
@@ -85,12 +96,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const refreshProfile = useCallback(() => loadProfile(session), [loadProfile, session]);
 
+  // If the profile couldn't load (no signal when the app opened), try again when the app comes back.
+  useEffect(() => {
+    if (!session || profile) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') loadProfile(session);
+    });
+    return () => sub.remove();
+  }, [session, profile, loadProfile]);
+
   const finishRecovery = useCallback(() => setRecovering(false), []);
 
   const signOut = useCallback(async () => {
     // Stop this device reminding the client about sessions once they sign out.
     await replaceReminders([]).catch(() => {});
-    await supabase.auth.signOut();
+    // Only this app signs out: the same login may also be open in Valtrix Coach.
+    await supabase.auth.signOut({ scope: 'local' });
   }, []);
 
   return (

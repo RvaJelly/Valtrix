@@ -46,7 +46,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos and add a profile photo.",
-          "cameraPermission": "Allow Voltrix to use your camera for video calls, chat photos, stories and reels.",
+          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories and reels.",
           "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound."
         }
       ],
@@ -61,6 +61,23 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow Voltrix to use your location to find trainers near you."
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories and reels.",
+          "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos and add a profile photo.",
+          "savePhotosPermission": "Allow Voltrix to save workout videos to your phone.",
+          "isAccessMediaLocationEnabled": false
         }
       ]
     ],

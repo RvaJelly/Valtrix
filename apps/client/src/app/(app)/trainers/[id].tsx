@@ -94,7 +94,7 @@ export default function TrainerProfile() {
         <Card style={{ gap: Spacing.two }}>
           <Text style={styles.cardTitle}>This is your profile</Text>
           <Body secondary>
-            This is how clients see you on Valtrix. Change it in Valtrix Coach under Settings, Profile.
+            This is how clients see you on Voltrix. Change it in Voltrix Coach under Settings, Profile.
           </Body>
         </Card>
       ) : null}
@@ -103,7 +103,7 @@ export default function TrainerProfile() {
         <Card style={{ gap: Spacing.two }}>
           <Text style={styles.cardTitle}>Want to train with {firstName}?</Text>
           <Body secondary>
-            Ask {firstName} to add you as a client in Valtrix Coach with {session?.user.email}. You will see your
+            Ask {firstName} to add you as a client in Voltrix Coach with {session?.user.email}. You will see your
             sessions here straight away.
           </Body>
         </Card>

@@ -65,7 +65,7 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          placeholder="Optional, lets them join the Valtrix app"
+          placeholder="Optional, lets them join the Voltrix app"
         />
         <TextField
           label="Phone"

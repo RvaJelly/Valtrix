@@ -69,9 +69,9 @@ export default function NewPost() {
 
         {rules === 'ask' ? (
           <Card style={{ gap: Spacing.four }}>
-            <Text style={styles.heading}>Valtrix community rules</Text>
+            <Text style={styles.heading}>Voltrix community rules</Text>
             <Body secondary>
-              Everyone on Valtrix can see what you share. Before your first post, please agree to keep it:
+              Everyone on Voltrix can see what you share. Before your first post, please agree to keep it:
             </Body>
             <CommunityRules />
             <Button title="I agree" onPress={agree} />
@@ -86,7 +86,7 @@ export default function NewPost() {
               </View>
               <Body secondary style={{ textAlign: 'center' }}>
                 {kind === 'reel'
-                  ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds. Everyone on Valtrix can watch them.`
+                  ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds. Everyone on Voltrix can watch them.`
                   : 'Your story shows on everyone’s Home for 24 hours, then disappears.'}
               </Body>
             </View>
@@ -141,7 +141,7 @@ export default function NewPost() {
             <Button title="Choose another" variant="ghost" onPress={() => setMedia(null)} disabled={!!busy} />
             {busy === 'sharing' && media.type === 'video' ? (
               <Body secondary style={{ textAlign: 'center', fontSize: 14 }}>
-                Uploading your video. Keep Valtrix open until it&apos;s done.
+                Uploading your video. Keep Voltrix open until it&apos;s done.
               </Body>
             ) : null}
           </View>

@@ -21,7 +21,7 @@ export type PublicTrainer = {
   years_experience: number | null;
 };
 
-// Every trainer on Valtrix with an active plan.
+// Every trainer on Voltrix with an active plan.
 export async function listTrainers() {
   const { data, error } = await supabase.rpc('list_trainers');
   if (error) throw error;

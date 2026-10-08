@@ -19,7 +19,7 @@ function newReel() {
   router.push({ pathname: '/posts/new', params: { kind: 'reel' } });
 }
 
-// Short videos from everyone on Valtrix, one per screen, like Instagram Reels.
+// Short videos from everyone on Voltrix, one per screen, like Instagram Reels.
 // Swipe up for the next one; tap to turn the sound on or off.
 export default function Reels() {
   const insets = useSafeAreaInsets();
@@ -140,7 +140,7 @@ export default function Reels() {
         <View style={styles.empty}>
           <Ionicons name="film-outline" size={48} color="#FFFFFF" />
           <Text style={styles.emptyTitle}>No reels yet</Text>
-          <Text style={styles.emptyText}>Share a short training video. Everyone on Valtrix will see it.</Text>
+          <Text style={styles.emptyText}>Share a short training video. Everyone on Voltrix will see it.</Text>
           <Button title="Post a reel" onPress={newReel} />
         </View>
       ) : null}

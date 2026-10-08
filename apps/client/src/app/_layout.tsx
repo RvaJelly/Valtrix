@@ -21,7 +21,7 @@ function RootNavigator() {
 
   if (loading) return null;
 
-  // Clients and trainers can both use Valtrix; trainers use the same login as in Valtrix Coach.
+  // Clients and trainers can both use Voltrix; trainers use the same login as in Voltrix Coach.
   const signedIn = !!session && !recovering;
   return (
     <Stack

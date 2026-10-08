@@ -16,7 +16,7 @@ export default function WrongApp() {
         <Title>This is a client account</Title>
         <Card>
           <Body>
-            {session?.user.email} is set up as a client. Clients use the Valtrix app to see their sessions. To coach
+            {session?.user.email} is set up as a client. Clients use the Voltrix app to see their sessions. To coach
             clients, sign up here with a different email.
           </Body>
         </Card>

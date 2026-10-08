@@ -26,7 +26,7 @@ export type Equipment = keyof typeof EQUIPMENT;
 
 export type Exercise = {
   id: string;
-  // null for the built-in Valtrix library.
+  // null for the built-in Voltrix library.
   trainer_id: string | null;
   name: string;
   muscle_group: MuscleGroup;

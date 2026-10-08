@@ -22,7 +22,7 @@ function RootNavigator() {
 
   if (loading) return null;
 
-  // Client accounts belong in the Valtrix client app.
+  // Client accounts belong in the Voltrix client app.
   const isClient = profile?.role === 'client';
   const signedIn = !!session && !recovering && !isClient;
   const setUp = !!profile?.business_name;

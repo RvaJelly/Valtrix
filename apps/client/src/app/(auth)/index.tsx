@@ -50,7 +50,7 @@ export default function Welcome() {
           <Button title="Create my free account" onPress={() => router.push('/sign-up')} />
           <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
           <Body secondary style={{ fontSize: 14, textAlign: 'center' }}>
-            Personal trainers can sign in with their Valtrix Coach login.
+            Personal trainers can sign in with their Voltrix Coach login.
           </Body>
         </View>
       </ScrollView>

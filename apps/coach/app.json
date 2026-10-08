@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Valtrix Coach",
-    "slug": "valtrix-coach",
+    "name": "Voltrix Coach",
+    "slug": "voltrix-coach",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "valtrixcoach",
+    "scheme": "voltrixcoach",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A1630",
     "ios": {
-      "bundleIdentifier": "com.valtrix.coach",
+      "bundleIdentifier": "com.voltrix.coach",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.valtrix.coach",
+      "package": "com.voltrix.coach",
       "adaptiveIcon": {
         "backgroundColor": "#0A1630",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,7 +31,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Valtrix Coach to use your photos for your profile picture.",
+          "photosPermission": "Allow Voltrix Coach to use your photos for your profile picture.",
           "cameraPermission": false,
           "microphonePermission": false
         }
@@ -39,7 +39,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Valtrix Coach to use Face ID to unlock the app."
+          "faceIDPermission": "Allow Voltrix Coach to use Face ID to unlock the app."
         }
       ],
       [

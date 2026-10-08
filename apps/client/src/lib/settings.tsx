@@ -27,6 +27,7 @@ const DEFAULTS: Settings = {
   reminder: DEFAULT_REMINDER,
   biometric: false,
 };
+// Keeps the old brand name so phones don't lose their saved settings.
 const STORAGE_KEY = 'valtrix.settings';
 // Version 2 made the white theme the default. A theme saved before that is not
 // reused; everything else saved is kept.
@@ -112,7 +113,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   if (syncedFor !== null && profile?.id !== syncedFor) setSyncedFor(null);
 
   // After sign-in, take the settings saved with the account. A trainer using
-  // Valtrix keeps these settings on the phone, so their Valtrix Coach settings stay as they are.
+  // Voltrix keeps these settings on the phone, so their Voltrix Coach settings stay as they are.
   if (ready && profile?.role === 'client' && syncedFor !== profile.id) {
     setSyncedFor(profile.id);
     const fromAccount = clean(profile.preferences);

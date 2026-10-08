@@ -1,4 +1,4 @@
-// Specialties a trainer can pick for their profile in the Valtrix app.
+// Specialties a trainer can pick for their profile in the Voltrix app.
 export const SPECIALTIES = [
   'Weight loss',
   'Strength',

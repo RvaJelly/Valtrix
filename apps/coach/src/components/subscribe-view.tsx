@@ -68,7 +68,7 @@ export function SubscribeView({ mode, onSignOut }: Props) {
 
       <View style={styles.plan}>
         <View style={styles.planHeader}>
-          <Text style={styles.planName}>Valtrix Coach</Text>
+          <Text style={styles.planName}>Voltrix Coach</Text>
           {starting ? <Text style={styles.planTrial}>{TRIAL_DAYS}-day free trial</Text> : null}
         </View>
         <View style={styles.priceRow}>

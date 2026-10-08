@@ -112,7 +112,7 @@ export default function Settings() {
             <Row label="Email" value={session?.user.email ?? '–'} />
             <Body secondary style={styles.small}>
               {profile?.role === 'trainer'
-                ? 'You stay signed in on this device. Your posts and profile are saved to your account. The settings on this page stay on this phone, so your Valtrix Coach settings are not changed.'
+                ? 'You stay signed in on this device. Your posts and profile are saved to your account. The settings on this page stay on this phone, so your Voltrix Coach settings are not changed.'
                 : 'You stay signed in on this device. Your sessions, training and settings are saved to your account, so signing in on a new phone brings everything back.'}
             </Body>
           </Card>
@@ -139,7 +139,7 @@ export default function Settings() {
         {profile?.role === 'client' ? <DeleteAccount userId={session?.user.id} onDeleted={signOut} /> : null}
         {profile?.role === 'trainer' ? (
           <Body secondary style={[styles.small, { textAlign: 'center' }]}>
-            You&apos;re signed in with your Valtrix Coach account. To delete it, use Valtrix Coach.
+            You&apos;re signed in with your Voltrix Coach account. To delete it, use Voltrix Coach.
           </Body>
         ) : null}
         {!profile ? <ProfileRetry onRetry={refreshProfile} /> : null}
@@ -259,11 +259,11 @@ function BlockedList() {
         <View key={person.blocked_id} style={styles.blockedRow}>
           <Avatar url={person.avatar_url} name={person.name} size={40} />
           <Text style={[styles.linkLabel, { flex: 1 }]} numberOfLines={1}>
-            {person.name || 'Valtrix member'}
+            {person.name || 'Voltrix member'}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Unblock ${person.name || 'Valtrix member'}`}
+            accessibilityLabel={`Unblock ${person.name || 'Voltrix member'}`}
             onPress={() => unblock(person)}
             hitSlop={8}
             style={styles.unblock}>
@@ -393,7 +393,7 @@ function BiometricLock() {
 
   async function toggle(on: boolean) {
     setError(null);
-    if (on && !(await confirmIdentity(`Turn on ${name} for Valtrix`))) {
+    if (on && !(await confirmIdentity(`Turn on ${name} for Voltrix`))) {
       return setError(`${name} didn't work, so it is still off.`);
     }
     setLocked(false);
@@ -440,13 +440,13 @@ function ReminderPicker() {
         {settings.reminder
           ? `You'll get a notification ${leadLabel(settings.reminder)} before every booked session.`
           : 'Session reminders are off.'}
-        {Platform.OS === 'web' && settings.reminder ? ' On a computer they only show while Valtrix is open.' : ''}
+        {Platform.OS === 'web' && settings.reminder ? ' On a computer they only show while Voltrix is open.' : ''}
       </Body>
       {blocked ? (
         <ErrorText>
           {Platform.OS === 'web'
             ? 'Notifications are blocked in this browser. Allow them for this site, then pick a time again.'
-            : 'Notifications are turned off for Valtrix. Turn them on in your phone settings, then pick a time again.'}
+            : 'Notifications are turned off for Voltrix. Turn them on in your phone settings, then pick a time again.'}
         </ErrorText>
       ) : null}
     </Card>

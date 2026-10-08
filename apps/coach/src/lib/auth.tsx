@@ -14,7 +14,7 @@ export type Profile = {
   subscription_expires_at: string | null;
   is_admin: boolean;
   free_access: boolean;
-  // The public profile clients see in the Valtrix app.
+  // The public profile clients see in the Voltrix app.
   avatar_url?: string | null;
   specialties?: string[];
   bio?: string | null;
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     // Stop this device reminding the trainer about sessions once they sign out.
     await replaceReminders([]).catch(() => {});
-    // Only this app signs out: the same login may also be open in the Valtrix app.
+    // Only this app signs out: the same login may also be open in the Voltrix app.
     await supabase.auth.signOut({ scope: 'local' });
   }, []);
 

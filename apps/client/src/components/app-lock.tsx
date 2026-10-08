@@ -34,13 +34,13 @@ export function AppLock() {
   }, [setLocked]);
 
   async function unlock() {
-    if (await confirmIdentity('Unlock Valtrix')) setLocked(false);
+    if (await confirmIdentity('Unlock Voltrix')) setLocked(false);
   }
 
   // Ask straight away when the lock screen appears.
   useEffect(() => {
     if (!active) return;
-    confirmIdentity('Unlock Valtrix').then((ok) => ok && setLocked(false));
+    confirmIdentity('Unlock Voltrix').then((ok) => ok && setLocked(false));
   }, [active, setLocked]);
 
   if (!active) return null;
@@ -48,7 +48,7 @@ export function AppLock() {
     <View style={styles.cover}>
       <Logo style={{ width: 200 }} />
       <Body secondary style={{ textAlign: 'center' }}>
-        Valtrix is locked.
+        Voltrix is locked.
       </Body>
       <View style={{ alignSelf: 'stretch', gap: Spacing.three }}>
         <Button title={`Unlock with ${name}`} onPress={unlock} />

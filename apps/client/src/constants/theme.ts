@@ -1,13 +1,13 @@
 import { StyleSheet } from 'react-native';
 
-// Valtrix brand colours (see the brand kit README), plus the themes a client
-// can pick in Settings. Valtrix is orange on white by default.
+// Voltrix brand colours (see the brand kit README), plus the themes a client
+// can pick in Settings. Voltrix is orange on white by default.
 
 // `color` fills buttons and chips, with `on` as the text on top. Text, icons and
 // links on the page use `ink`, which stays readable on that scheme's background.
 export const ACCENTS = {
   orange: {
-    label: 'Valtrix orange',
+    label: 'Voltrix orange',
     color: '#FF5B14',
     pressed: '#E04A08',
     on: '#0E0E0F',

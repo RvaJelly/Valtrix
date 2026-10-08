@@ -103,7 +103,7 @@ export default function Home() {
           <View style={{ flex: 1 }}>
             <Text style={styles.clientName}>Finish your profile</Text>
             <Body secondary style={{ fontSize: 14 }}>
-              Add a photo and your specialties. Clients see them in the Valtrix app.
+              Add a photo and your specialties. Clients see them in the Voltrix app.
             </Body>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />

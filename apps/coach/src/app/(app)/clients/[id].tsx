@@ -80,7 +80,7 @@ export default function ClientDetail() {
           return null;
         }}>
         <View style={{ gap: Spacing.three, marginTop: Spacing.three }}>
-          <Text style={styles.section}>Valtrix app</Text>
+          <Text style={styles.section}>Voltrix app</Text>
           <View style={styles.appStatus}>
             <Ionicons
               name={client.user_id ? 'checkmark-circle' : 'phone-portrait-outline'}
@@ -89,10 +89,10 @@ export default function ClientDetail() {
             />
             <Body style={{ flex: 1, fontSize: 14 }}>
               {client.user_id
-                ? `${client.first_name} has joined the Valtrix app. They see the sessions you book and get reminders.`
+                ? `${client.first_name} has joined the Voltrix app. They see the sessions you book and get reminders.`
                 : client.email
-                  ? `Not on the app yet. Ask ${client.first_name} to download Valtrix and sign up with ${client.email}.`
-                  : `Add ${client.first_name}'s email above, then ask them to sign up in the Valtrix app with it.`}
+                  ? `Not on the app yet. Ask ${client.first_name} to download Voltrix and sign up with ${client.email}.`
+                  : `Add ${client.first_name}'s email above, then ask them to sign up in the Voltrix app with it.`}
             </Body>
           </View>
           <Text style={styles.section}>Upcoming sessions</Text>

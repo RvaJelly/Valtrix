@@ -39,7 +39,7 @@ export default function Settings() {
       : access.kind === 'free'
         ? 'Free access'
         : access.kind === 'subscribed'
-          ? `Valtrix Coach, ${PRICE_LABEL} / month`
+          ? `Voltrix Coach, ${PRICE_LABEL} / month`
           : access.kind === 'trial'
             ? `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left, then ${PRICE_LABEL} / month`
             : 'No active plan';
@@ -226,7 +226,7 @@ function BiometricLock() {
 
   async function toggle(on: boolean) {
     setError(null);
-    if (on && !(await confirmIdentity(`Turn on ${name} for Valtrix Coach`))) {
+    if (on && !(await confirmIdentity(`Turn on ${name} for Voltrix Coach`))) {
       return setError(`${name} didn't work, so it is still off.`);
     }
     setLocked(false);
@@ -273,13 +273,13 @@ function ReminderPicker() {
         {settings.reminder
           ? `You'll get a notification ${leadLabel(settings.reminder)} before every booked session.`
           : 'Session reminders are off.'}
-        {Platform.OS === 'web' && settings.reminder ? ' On a computer they only show while Valtrix Coach is open.' : ''}
+        {Platform.OS === 'web' && settings.reminder ? ' On a computer they only show while Voltrix Coach is open.' : ''}
       </Body>
       {blocked ? (
         <ErrorText>
           {Platform.OS === 'web'
             ? 'Notifications are blocked in this browser. Allow them for this site, then pick a time again.'
-            : 'Notifications are turned off for Valtrix Coach. Turn them on in your phone settings, then pick a time again.'}
+            : 'Notifications are turned off for Voltrix Coach. Turn them on in your phone settings, then pick a time again.'}
         </ErrorText>
       ) : null}
     </Card>

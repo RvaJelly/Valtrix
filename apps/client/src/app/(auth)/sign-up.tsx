@@ -37,7 +37,7 @@ export default function SignUp() {
       setError(error.message);
     } else if (data.user && !data.user.identities?.length) {
       // Supabase answers this way when the email already has an account, for example a trainer's.
-      setError('This email already has a Valtrix account. Sign in with it instead, including a Valtrix Coach login.');
+      setError('This email already has a Voltrix account. Sign in with it instead, including a Voltrix Coach login.');
     } else if (!data.session) {
       // Email confirmation is switched on for this project.
       setCheckEmail(true);

@@ -22,7 +22,7 @@ export function CommunityRules() {
         </View>
       ))}
       <Text style={styles.note}>
-        Posts that break these rules are removed, and people who keep breaking them lose access to Valtrix. Report
+        Posts that break these rules are removed, and people who keep breaking them lose access to Voltrix. Report
         anything that doesn&apos;t belong, and block anyone you don&apos;t want to see.
       </Text>
     </View>

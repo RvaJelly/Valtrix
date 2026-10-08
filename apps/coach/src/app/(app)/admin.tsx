@@ -33,7 +33,7 @@ function planLabel(t: Trainer) {
   }
 }
 
-// Owner only: every trainer on Valtrix Coach, with a switch to give free access.
+// Owner only: every trainer on Voltrix Coach, with a switch to give free access.
 // The database refuses these calls for anyone who isn't the owner.
 export default function AllTrainers() {
   const [trainers, setTrainers] = useState<Trainer[] | null>(null);

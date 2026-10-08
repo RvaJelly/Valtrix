@@ -27,6 +27,7 @@ const DEFAULTS: Settings = {
   reminder: DEFAULT_REMINDER,
   biometric: false,
 };
+// Keeps the old brand name so phones don't lose their saved settings.
 const STORAGE_KEY = 'valtrix.settings';
 
 // The settings saved with the account, so they come back on a new phone.
@@ -102,7 +103,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   }, []);
 
   // After sign-in, take the settings saved with the account.
-  // A client who signs in here by mistake keeps their Valtrix settings untouched.
+  // A client who signs in here by mistake keeps their Voltrix settings untouched.
   if (ready && profile && profile.role !== 'client' && syncedFor !== profile.id) {
     setSyncedFor(profile.id);
     const fromAccount = clean(profile.preferences);

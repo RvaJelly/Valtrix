@@ -31,7 +31,7 @@ export default function SignIn() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Title>Welcome back</Title>
-          <Body secondary>Sign in to your Valtrix Coach account.</Body>
+          <Body secondary>Sign in to your Voltrix Coach account.</Body>
           <TextField
             label="Email"
             value={email}

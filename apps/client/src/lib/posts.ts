@@ -4,7 +4,7 @@ import type { PickedMedia } from '@/lib/media';
 import { supabase } from '@/lib/supabase';
 
 // Stories last 24 hours; reels are short videos that stay up. Everyone signed
-// in to Valtrix sees them, apart from people they blocked or who blocked them.
+// in to Voltrix sees them, apart from people they blocked or who blocked them.
 
 export type Story = {
   id: string;
@@ -59,7 +59,7 @@ export function mediaUrl(path: string) {
 }
 
 export function authorName(post: { author_name: string | null }) {
-  return post.author_name || 'Valtrix member';
+  return post.author_name || 'Voltrix member';
 }
 
 // "now", "5m", "3h", "2d"
@@ -199,6 +199,7 @@ export async function removeAllMyFiles(userId: string) {
 }
 
 // Which stories this phone has already shown, so new ones get an orange ring.
+// The keys below keep the old brand name so nothing saved on the phone is lost.
 const SEEN_KEY = 'valtrix.seenStories';
 
 export async function loadSeen(): Promise<Set<string>> {

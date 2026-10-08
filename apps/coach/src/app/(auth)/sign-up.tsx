@@ -62,7 +62,7 @@ export default function SignUp() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Title>Create your account</Title>
-          <Body secondary>Set up Valtrix Coach for your training business.</Body>
+          <Body secondary>Set up Voltrix Coach for your training business.</Body>
           <TextField
             label="Your name"
             value={fullName}

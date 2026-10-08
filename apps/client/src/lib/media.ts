@@ -50,7 +50,7 @@ export async function pickMedia(kind: 'story' | 'reel', from: 'camera' | 'librar
   if (from === 'camera') {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      throw new MediaError('Valtrix needs your camera for this. Allow it in your phone settings, then try again.');
+      throw new MediaError('Voltrix needs your camera for this. Allow it in your phone settings, then try again.');
     }
   }
   const result =

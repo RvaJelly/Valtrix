@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 
 type Props = { profile: Profile; onSaved: () => Promise<void> };
 
-// The trainer's profile, as clients see it in the Valtrix app.
+// The trainer's profile, as clients see it in the Voltrix app.
 export function ProfileEditor({ profile, onSaved }: Props) {
   const [name, setName] = useState(profile.full_name ?? '');
   const [business, setBusiness] = useState(profile.business_name ?? '');
@@ -101,7 +101,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         </View>
       </View>
       <Body secondary style={styles.small}>
-        Clients see your photo, specialties and info in the Valtrix app.
+        Clients see your photo, specialties and info in the Voltrix app.
       </Body>
       <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
       <TextField label="Business name" value={business} onChangeText={setBusiness} autoCapitalize="words" />

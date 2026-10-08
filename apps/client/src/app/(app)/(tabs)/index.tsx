@@ -125,7 +125,7 @@ export default function Home() {
           </View>
           <Text style={styles.cardTitle}>You&apos;re in with your trainer account</Text>
           <Body secondary>
-            Post stories and reels, and see Valtrix the way your clients do. Your clients and calendar stay in Valtrix
+            Post stories and reels, and see Voltrix the way your clients do. Your clients and calendar stay in Voltrix
             Coach.
           </Body>
           <Body secondary>
@@ -142,7 +142,7 @@ export default function Home() {
             <Ionicons name="link" size={26} color={Colors.accentText} />
           </View>
           <Text style={styles.cardTitle}>Connect to your trainer</Text>
-          <Body secondary>Ask your personal trainer to add you as a client in Valtrix Coach with this email:</Body>
+          <Body secondary>Ask your personal trainer to add you as a client in Voltrix Coach with this email:</Body>
           <Text style={styles.email}>{session?.user.email}</Text>
           <Body secondary>Then tap the button below. Your sessions will show up here.</Body>
           <Button title="Check again" onPress={refresh} loading={refreshing} />
@@ -238,7 +238,7 @@ export default function Home() {
       {data && data.everyone.length ? (
         <View style={{ gap: Spacing.three }}>
           <View style={styles.header}>
-            <Text style={[styles.section, { flex: 1 }]}>Trainers on Valtrix</Text>
+            <Text style={[styles.section, { flex: 1 }]}>Trainers on Voltrix</Text>
             <Pressable onPress={() => router.navigate('/trainers')} hitSlop={8}>
               <Text style={styles.link}>See all</Text>
             </Pressable>

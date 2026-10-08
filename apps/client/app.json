@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Valtrix",
-    "slug": "valtrix",
+    "name": "Voltrix",
+    "slug": "voltrix",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "valtrix",
+    "scheme": "voltrix",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#FFFFFF",
     "ios": {
-      "bundleIdentifier": "com.valtrix.client",
+      "bundleIdentifier": "com.voltrix.client",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.valtrix.client",
+      "package": "com.voltrix.client",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,7 +31,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Valtrix to use Face ID to unlock the app."
+          "faceIDPermission": "Allow Voltrix to use Face ID to unlock the app."
         }
       ],
       [
@@ -45,9 +45,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Valtrix to use your photos so you can share stories and reels and add a profile photo.",
-          "cameraPermission": "Allow Valtrix to use your camera so you can film stories and reels.",
-          "microphonePermission": "Allow Valtrix to use your microphone so your videos have sound."
+          "photosPermission": "Allow Voltrix to use your photos so you can share stories and reels and add a profile photo.",
+          "cameraPermission": "Allow Voltrix to use your camera so you can film stories and reels.",
+          "microphonePermission": "Allow Voltrix to use your microphone so your videos have sound."
         }
       ],
       "expo-video"

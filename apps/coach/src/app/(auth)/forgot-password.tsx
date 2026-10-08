@@ -30,7 +30,7 @@ export default function ForgotPassword() {
           <Title>{sent ? 'Check your email' : 'Reset your password'}</Title>
           {sent ? (
             <Body secondary>
-              If {email.trim()} has a Valtrix Coach account, we’ve sent it a link to choose a new password.
+              If {email.trim()} has a Voltrix Coach account, we’ve sent it a link to choose a new password.
             </Body>
           ) : (
             <>

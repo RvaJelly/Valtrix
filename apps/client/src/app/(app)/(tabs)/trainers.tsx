@@ -53,7 +53,7 @@ export default function Trainers() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
-      <Body secondary>Personal trainers on Valtrix. Tap a trainer to see what they do.</Body>
+      <Body secondary>Personal trainers on Voltrix. Tap a trainer to see what they do.</Body>
       <TextInput
         value={search}
         onChangeText={setSearch}

@@ -3,7 +3,7 @@ import type { StyleProp } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
-// The Valtrix Coach wordmark, with white or black text to suit the theme.
+// The Voltrix Coach wordmark, with white or black text to suit the theme.
 export function Logo({ style }: { style?: StyleProp<ImageStyle> }) {
   return (
     <Image
@@ -12,9 +12,9 @@ export function Logo({ style }: { style?: StyleProp<ImageStyle> }) {
           ? require('@/assets/images/logo-coach-dark.png')
           : require('@/assets/images/logo-coach-white.png')
       }
-      style={[{ aspectRatio: 2400 / 1052 }, style]}
+      style={[{ aspectRatio: 2400 / 1025 }, style]}
       contentFit="contain"
-      accessibilityLabel="Valtrix Coach"
+      accessibilityLabel="Voltrix Coach"
     />
   );
 }

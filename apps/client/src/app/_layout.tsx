@@ -5,7 +5,6 @@ import { useEffect } from 'react';
 
 import { AppLock } from '@/components/app-lock';
 import { Colors } from '@/constants/theme';
-import { coachAccess } from '@/lib/access';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { SettingsProvider, useSettings } from '@/lib/settings';
 
@@ -22,11 +21,8 @@ function RootNavigator() {
 
   if (loading) return null;
 
-  // Client accounts belong in the Valtrix client app.
+  const signedIn = !!session && !recovering;
   const isClient = profile?.role === 'client';
-  const signedIn = !!session && !recovering && !isClient;
-  const setUp = !!profile?.business_name;
-  const hasAccess = coachAccess(profile).kind !== 'none';
   return (
     <Stack
       screenOptions={{
@@ -39,16 +35,10 @@ function RootNavigator() {
       <Stack.Protected guard={!!session && recovering}>
         <Stack.Screen name="new-password" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && !setUp}>
-        <Stack.Screen name="(setup)" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && setUp && hasAccess}>
+      <Stack.Protected guard={signedIn && isClient}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && setUp && !hasAccess}>
-        <Stack.Screen name="(paywall)" />
-      </Stack.Protected>
-      <Stack.Protected guard={!!session && !recovering && isClient}>
+      <Stack.Protected guard={signedIn && !isClient}>
         <Stack.Screen name="wrong-app" />
       </Stack.Protected>
     </Stack>

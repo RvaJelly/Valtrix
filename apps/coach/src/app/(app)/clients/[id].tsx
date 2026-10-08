@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
@@ -5,7 +6,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { ClientForm } from '@/components/client-form';
 import { Body, Button } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
 import { formatDay, SESSION_COLUMNS, type Session } from '@/lib/sessions';
@@ -79,6 +80,21 @@ export default function ClientDetail() {
           return null;
         }}>
         <View style={{ gap: Spacing.three, marginTop: Spacing.three }}>
+          <Text style={styles.section}>Valtrix app</Text>
+          <View style={styles.appStatus}>
+            <Ionicons
+              name={client.user_id ? 'checkmark-circle' : 'phone-portrait-outline'}
+              size={22}
+              color={client.user_id ? Colors.accent : Colors.textSecondary}
+            />
+            <Body style={{ flex: 1, fontSize: 14 }}>
+              {client.user_id
+                ? `${client.first_name} has joined the Valtrix app. They see the sessions you book and get reminders.`
+                : client.email
+                  ? `Not on the app yet. Ask ${client.first_name} to download Valtrix and sign up with ${client.email}.`
+                  : `Add ${client.first_name}'s email above, then ask them to sign up in the Valtrix app with it.`}
+            </Body>
+          </View>
           <Text style={styles.section}>Upcoming sessions</Text>
           {upcoming.length === 0 ? <Body secondary>Nothing booked yet.</Body> : null}
           {upcoming.map((session) => (
@@ -108,6 +124,14 @@ export default function ClientDetail() {
 }
 
 const styles = themed(() => ({
+  appStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.large,
+    backgroundColor: Colors.surface,
+  },
   section: {
     color: Colors.textSecondary,
     fontSize: 13,

@@ -31,9 +31,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Voltrix Coach to use your photos for your profile picture.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "photosPermission": "Allow Voltrix Coach to use your photos so you can share stories and reels and add a profile photo.",
+          "cameraPermission": "Allow Voltrix Coach to use your camera so you can film stories and reels.",
+          "microphonePermission": "Allow Voltrix Coach to use your microphone so your videos have sound."
         }
       ],
       [
@@ -49,7 +49,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

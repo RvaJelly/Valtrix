@@ -28,6 +28,15 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
       <Tabs.Screen name="clients" options={{ title: 'Clients', tabBarIcon: tabIcon('people') }} />
+      <Tabs.Screen
+        name="reels"
+        options={{
+          title: 'Reels',
+          tabBarIcon: tabIcon('play-circle'),
+          headerShown: false,
+          sceneStyle: { backgroundColor: '#000000' },
+        }}
+      />
       <Tabs.Screen name="programs" options={{ title: 'Programs', tabBarIcon: tabIcon('barbell') }} />
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: tabIcon('calendar') }} />
       <Tabs.Screen name="messages" options={{ title: 'Chat', tabBarIcon: tabIcon('chatbubbles') }} />

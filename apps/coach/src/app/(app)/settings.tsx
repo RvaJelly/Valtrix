@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
 import { ProfileEditor } from '@/components/profile-editor';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
@@ -16,6 +17,7 @@ import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { removeAllMyFiles } from '@/lib/files';
+import { loadBlocked, unblockPerson, type Blocked } from '@/lib/posts';
 import { supabase } from '@/lib/supabase';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
@@ -104,6 +106,10 @@ export default function Settings() {
           {profile ? <ProfileEditor key={profile.id} profile={profile} onSaved={refreshProfile} /> : null}
         </Section>
 
+        <Section title="Blocked people">
+          <BlockedList />
+        </Section>
+
         <Section title="Subscription">
           <Card style={{ gap: Spacing.three }}>
             <Row label="Plan" value={plan} />
@@ -138,12 +144,67 @@ export default function Settings() {
           <Card style={{ gap: Spacing.three }}>
             <Row label="App version" value={Constants.expoConfig?.version ?? '–'} />
           </Card>
+          <LinkRow
+            icon="people-outline"
+            label="Community rules"
+            detail="What's allowed in stories and reels"
+            onPress={() => router.push('/rules')}
+          />
         </Section>
 
         <Button title="Sign out" variant="secondary" onPress={signOut} />
         <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function BlockedList() {
+  const [blocked, setBlocked] = useState<Blocked[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadBlocked()
+      .then(setBlocked)
+      .catch(() => setBlocked([]));
+  }, []);
+
+  async function unblock(person: Blocked) {
+    setError(null);
+    try {
+      await unblockPerson(person.blocked_id);
+      setBlocked((current) => current?.filter((b) => b.blocked_id !== person.blocked_id) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not unblock. Try again.');
+    }
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {blocked && !blocked.length ? (
+        <Body secondary style={styles.small}>
+          You haven&apos;t blocked anyone. People you block can&apos;t see your stories and reels, and you won&apos;t
+          see theirs.
+        </Body>
+      ) : null}
+      {blocked?.map((person) => (
+        <View key={person.blocked_id} style={styles.blockedRow}>
+          <Avatar url={person.avatar_url} name={person.name} size={40} />
+          <Text style={[styles.linkLabel, { flex: 1 }]} numberOfLines={1}>
+            {person.name || 'Voltrix member'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Unblock ${person.name || 'Voltrix member'}`}
+            onPress={() => unblock(person)}
+            hitSlop={8}
+            style={styles.unblock}>
+            <Text style={styles.unblockText}>Unblock</Text>
+          </Pressable>
+        </View>
+      ))}
+      <ErrorText>{error}</ErrorText>
+    </Card>
   );
 }
 
@@ -439,6 +500,23 @@ const styles = themed(() => ({
   linkLabel: {
     color: Colors.text,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  unblock: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.small,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  unblockText: {
+    color: Colors.text,
+    fontSize: 14,
     fontWeight: '700',
   },
   delete: {

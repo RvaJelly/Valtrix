@@ -12,7 +12,6 @@ import { PostMenu } from '@/components/post-menu';
 import { Button } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { authorName, loadReels, mediaUrl, setLiked, sharedCount, timeAgo, type Reel } from '@/lib/posts';
-import { listTrainers } from '@/lib/trainers';
 
 const PAGE = 20;
 
@@ -20,11 +19,7 @@ function newReel() {
   router.push({ pathname: '/posts/new', params: { kind: 'reel' } });
 }
 
-function openTrainer(id: string) {
-  router.push({ pathname: '/trainers/[id]', params: { id } });
-}
-
-// Short videos from everyone on Voltrix, one per screen, like Instagram Reels.
+// Short videos from trainers and clients on Voltrix, one per screen, like Instagram Reels.
 // Swipe up for the next one; tap to turn the sound on or off.
 export default function Reels() {
   const insets = useSafeAreaInsets();
@@ -39,14 +34,11 @@ export default function Reels() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [menuReel, setMenuReel] = useState<Reel | null>(null);
-  // Trainers on Voltrix, so their name opens their profile.
-  const [trainerIds, setTrainerIds] = useState<Set<string>>(new Set());
   const loadedAt = useRef(-1);
 
   const load = useCallback(async () => {
     try {
-      const [first, trainers] = await Promise.all([loadReels(), listTrainers().catch(() => [])]);
-      setTrainerIds(new Set(trainers.map((t) => t.id)));
+      const first = await loadReels();
       setReels(first);
       setHasMore(first.length >= PAGE);
       setActive(0);
@@ -125,7 +117,6 @@ export default function Reels() {
               onToggleMute={() => setMuted((m) => !m)}
               onLike={() => toggleLike(item)}
               onMenu={() => setMenuReel(item)}
-              onAuthor={!item.is_mine && trainerIds.has(item.author_id) ? () => openTrainer(item.author_id) : undefined}
             />
           )}
           pagingEnabled
@@ -149,7 +140,9 @@ export default function Reels() {
         <View style={styles.empty}>
           <Ionicons name="film-outline" size={48} color="#FFFFFF" />
           <Text style={styles.emptyTitle}>No reels yet</Text>
-          <Text style={styles.emptyText}>Share a short training video. Everyone on Voltrix will see it.</Text>
+          <Text style={styles.emptyText}>
+            Share a short training video. Your clients and other trainers will see it.
+          </Text>
           <Button title="Post a reel" onPress={newReel} />
         </View>
       ) : null}
@@ -186,7 +179,6 @@ function ReelItem({
   onToggleMute,
   onLike,
   onMenu,
-  onAuthor,
 }: {
   reel: Reel;
   height: number;
@@ -196,8 +188,6 @@ function ReelItem({
   onToggleMute: () => void;
   onLike: () => void;
   onMenu: () => void;
-  // Set when the author is a trainer: their name opens their profile.
-  onAuthor?: () => void;
 }) {
   const player = useVideoPlayer(mediaUrl(reel.media_path), (p) => {
     p.loop = true;
@@ -259,27 +249,18 @@ function ReelItem({
         </Pressable>
       </View>
 
-      <View style={styles.info} pointerEvents="box-none">
-        <Pressable
-          accessibilityRole={onAuthor ? 'button' : undefined}
-          accessibilityLabel={onAuthor ? `See ${name}'s profile` : undefined}
-          onPress={onAuthor}
-          disabled={!onAuthor}
-          pointerEvents={onAuthor ? 'auto' : 'none'}
-          hitSlop={6}
-          style={styles.author}>
+      <View style={styles.info} pointerEvents="none">
+        <View style={styles.author}>
           <Avatar url={reel.author_avatar} name={name} size={36} />
           <Text style={styles.name} numberOfLines={1}>
             {reel.is_mine ? 'You' : name}
           </Text>
           <Text style={styles.time}>{timeAgo(reel.created_at)}</Text>
-        </Pressable>
+        </View>
         {reel.caption ? (
-          <View pointerEvents="none">
-            <Text style={styles.caption} numberOfLines={3}>
-              {reel.caption}
-            </Text>
-          </View>
+          <Text style={styles.caption} numberOfLines={3}>
+            {reel.caption}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -362,7 +343,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   author: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,

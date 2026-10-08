@@ -32,6 +32,17 @@ export default function AppLayout() {
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
         <Stack.Screen name="exercises/index" options={{ title: 'Exercise library' }} />
         <Stack.Screen name="exercises/new" options={{ title: 'New exercise', presentation: 'modal' }} />
+        <Stack.Screen
+          name="stories/[author]"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            contentStyle: { backgroundColor: '#000000' },
+          }}
+        />
+        <Stack.Screen name="posts/new" options={{ title: 'New post', presentation: 'modal' }} />
+        <Stack.Screen name="rules" options={{ title: 'Community rules' }} />
       </Stack>
     </>
   );

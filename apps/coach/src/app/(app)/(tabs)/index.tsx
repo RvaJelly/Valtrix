@@ -5,11 +5,13 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
+import { StoriesRow } from '@/components/stories-row';
 import { Body, Button, Card, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { fullName, initials, type Client } from '@/lib/clients';
+import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { addDays, dayKey, SESSION_COLUMNS, startOfDay, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -33,6 +35,7 @@ export default function Home() {
   const { profile } = useAuth();
   const navigation = useNavigation();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [stories, setStories] = useState<{ groups: StoryGroup[]; seen: Set<string> } | null>(null);
   const firstName = profile?.full_name?.split(' ')[0];
   const access = coachAccess(profile);
 
@@ -77,11 +80,23 @@ export default function Home() {
           today: (today.data as unknown as Session[]) ?? [],
         }),
       );
+      // Stories from clients and trainers. If they can't load, "Your story" still shows.
+      Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]).then(([groups, seen]) =>
+        setStories({ groups, seen }),
+      );
     }, []),
   );
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      {stories ? (
+        <StoriesRow
+          groups={stories.groups}
+          seen={stories.seen}
+          me={{ name: profile?.full_name ?? profile?.business_name ?? null, avatar: profile?.avatar_url ?? null }}
+        />
+      ) : null}
+
       <View style={styles.hello}>
         <Pressable accessibilityLabel="Your profile" onPress={() => router.push('/settings')}>
           <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.business_name} size={56} />

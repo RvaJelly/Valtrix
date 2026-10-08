@@ -12,7 +12,7 @@ export function Logo({ style }: { style?: StyleProp<ImageStyle> }) {
           ? require('@/assets/images/logo-coach-dark.png')
           : require('@/assets/images/logo-coach-white.png')
       }
-      style={[{ aspectRatio: 2400 / 1025 }, style]}
+      style={[{ aspectRatio: 2400 / 1110 }, style]}
       contentFit="contain"
       accessibilityLabel="Voltrix Coach"
     />

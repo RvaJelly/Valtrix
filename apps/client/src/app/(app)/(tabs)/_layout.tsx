@@ -28,6 +28,7 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
       <Tabs.Screen name="sessions" options={{ title: 'Sessions', tabBarIcon: tabIcon('calendar') }} />
+      <Tabs.Screen name="trainers" options={{ title: 'Trainers', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );

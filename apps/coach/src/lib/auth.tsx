@@ -14,6 +14,12 @@ export type Profile = {
   subscription_expires_at: string | null;
   is_admin: boolean;
   free_access: boolean;
+  // The public profile clients see in the Valtrix app.
+  avatar_url?: string | null;
+  specialties?: string[];
+  bio?: string | null;
+  city?: string | null;
+  years_experience?: number | null;
   // Theme, units and reminder time saved with the account.
   preferences?: Record<string, unknown> | null;
 };
@@ -39,7 +45,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences',
+      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience',
     )
     .eq('id', userId)
     .maybeSingle();

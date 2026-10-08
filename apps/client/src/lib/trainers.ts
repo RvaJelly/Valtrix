@@ -9,15 +9,33 @@ export type Trainer = {
   client_status: 'active' | 'paused';
 };
 
+// A trainer's public profile, as every client can see it.
+export type PublicTrainer = {
+  id: string;
+  full_name: string | null;
+  business_name: string | null;
+  avatar_url: string | null;
+  specialties: string[];
+  bio: string | null;
+  city: string | null;
+  years_experience: number | null;
+};
+
+// Every trainer on Valtrix with an active plan.
+export async function listTrainers() {
+  const { data, error } = await supabase.rpc('list_trainers');
+  if (error) throw error;
+  return (data ?? []) as PublicTrainer[];
+}
+
+export function displayName(t: { full_name: string | null; business_name: string | null }) {
+  return t.full_name || t.business_name || 'Trainer';
+}
+
 // Link the client to any trainer who saved their email, then list their trainers.
 export async function loadTrainers() {
   await supabase.rpc('claim_my_invites');
   const { data, error } = await supabase.rpc('my_trainers');
   if (error) throw error;
   return (data ?? []) as Trainer[];
-}
-
-export function initials(name: string | null) {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || 'V';
 }

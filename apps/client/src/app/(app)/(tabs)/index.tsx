@@ -3,13 +3,15 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
+import { TrainerCircle } from '@/components/trainer-circle';
 import { Body, Button, Card, ErrorText, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { refreshReminders } from '@/lib/reminders';
 import { addDays, endOf, formatDay, formatTime, loadSessions, trainerName, type Session } from '@/lib/sessions';
-import { initials, loadTrainers, type Trainer } from '@/lib/trainers';
+import { listTrainers, loadTrainers, type PublicTrainer, type Trainer } from '@/lib/trainers';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -29,7 +31,7 @@ function fromNow(date: Date, now = new Date()) {
   return days === 1 ? 'in 1 day' : `in ${days} days`;
 }
 
-type HomeData = { trainers: Trainer[]; sessions: Session[]; doneThisMonth: number };
+type HomeData = { trainers: Trainer[]; everyone: PublicTrainer[]; sessions: Session[]; doneThisMonth: number };
 
 export default function Home() {
   const { session, profile } = useAuth();
@@ -42,10 +44,15 @@ export default function Home() {
     try {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const [trainers, sessions] = await Promise.all([loadTrainers(), loadSessions(monthStart, addDays(now, 90))]);
+      const [trainers, sessions, everyone] = await Promise.all([
+        loadTrainers(),
+        loadSessions(monthStart, addDays(now, 90)),
+        listTrainers().catch(() => [] as PublicTrainer[]),
+      ]);
       setError(null);
       setData({
         trainers,
+        everyone,
         sessions: sessions.filter((s) => s.status === 'scheduled' && endOf(s) > now),
         doneThisMonth: sessions.filter((s) => s.status === 'completed').length,
       });
@@ -157,10 +164,16 @@ export default function Home() {
           <View style={{ gap: Spacing.two }}>
             <Text style={styles.section}>{data.trainers.length === 1 ? 'Your trainer' : 'Your trainers'}</Text>
             {data.trainers.map((t) => (
-              <View key={t.client_id} style={styles.trainer}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initials(t.trainer_name ?? t.business_name)}</Text>
-                </View>
+              <Pressable
+                key={t.client_id}
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: t.trainer_id } })}
+                style={({ pressed }) => [styles.trainer, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+                <Avatar
+                  url={data.everyone.find((e) => e.id === t.trainer_id)?.avatar_url}
+                  name={t.trainer_name ?? t.business_name}
+                  size={48}
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.trainerName}>{t.trainer_name || t.business_name || 'Your trainer'}</Text>
                   {t.trainer_name && t.business_name ? (
@@ -170,10 +183,26 @@ export default function Home() {
                   ) : null}
                 </View>
                 {t.client_status === 'paused' ? <Text style={styles.paused}>Paused</Text> : null}
-              </View>
+              </Pressable>
             ))}
           </View>
         </>
+      ) : null}
+
+      {data && data.everyone.length ? (
+        <View style={{ gap: Spacing.three }}>
+          <View style={styles.header}>
+            <Text style={[styles.section, { flex: 1 }]}>Trainers on Valtrix</Text>
+            <Pressable onPress={() => router.navigate('/trainers')} hitSlop={8}>
+              <Text style={styles.link}>See all</Text>
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three }}>
+            {data.everyone.slice(0, 12).map((t) => (
+              <TrainerCircle key={t.id} trainer={t} />
+            ))}
+          </ScrollView>
+        </View>
       ) : null}
     </ScrollView>
   );
@@ -276,19 +305,6 @@ const styles = themed(() => ({
     padding: Spacing.three,
     borderRadius: Radius.large,
     backgroundColor: Colors.surface,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.accent,
-  },
-  avatarText: {
-    color: Colors.onAccent,
-    fontSize: 16,
-    fontWeight: '800',
   },
   trainerName: {
     color: Colors.text,

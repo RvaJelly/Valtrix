@@ -3,6 +3,7 @@ import { router, useFocusEffect, useNavigation, type Href } from 'expo-router';
 import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
 import { Body, Button, Card, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
@@ -81,13 +82,33 @@ export default function Home() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={{ gap: Spacing.one }}>
-        <Title>
-          {greeting()}
-          {firstName ? `, ${firstName}` : ''}
-        </Title>
-        <Body secondary>{profile?.business_name}</Body>
+      <View style={styles.hello}>
+        <Pressable accessibilityLabel="Your profile" onPress={() => router.push('/settings')}>
+          <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.business_name} size={56} />
+        </Pressable>
+        <View style={{ flex: 1, gap: Spacing.one }}>
+          <Title>
+            {greeting()}
+            {firstName ? `, ${firstName}` : ''}
+          </Title>
+          <Body secondary>{profile?.business_name}</Body>
+        </View>
       </View>
+
+      {profile && (!profile.avatar_url || !profile.specialties?.length) ? (
+        <Pressable
+          onPress={() => router.push('/settings')}
+          style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+          <Ionicons name="person-circle" size={26} color={Colors.accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.clientName}>Finish your profile</Text>
+            <Body secondary style={{ fontSize: 14 }}>
+              Add a photo and your specialties. Clients see them in the Valtrix app.
+            </Body>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+        </Pressable>
+      ) : null}
 
       {access.kind === 'trial' ? (
         <Pressable onPress={() => router.push('/settings')} style={styles.trial}>
@@ -218,6 +239,11 @@ function Action({ icon, label, href }: { icon: IconName; label: string; href: Hr
 }
 
 const styles = themed(() => ({
+  hello: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
   content: {
     padding: Spacing.four,
     gap: Spacing.four,

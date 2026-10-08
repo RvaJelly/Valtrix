@@ -29,6 +29,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Valtrix Coach to use your photos for your profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Valtrix Coach to use Face ID to unlock the app."

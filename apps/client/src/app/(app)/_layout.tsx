@@ -21,6 +21,7 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: Colors.background },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
       </Stack>
     </>
   );

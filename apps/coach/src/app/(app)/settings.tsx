@@ -5,6 +5,7 @@ import { useEffect, useState, type ComponentProps, type ReactNode } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
+import { ProfileEditor } from '@/components/profile-editor';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
@@ -99,13 +100,7 @@ export default function Settings() {
         </Section>
 
         <Section title="Profile">
-          <ProfileForm
-            key={profile?.id}
-            initialName={profile?.full_name ?? ''}
-            initialBusiness={profile?.business_name ?? ''}
-            userId={session?.user.id}
-            onSaved={refreshProfile}
-          />
+          {profile ? <ProfileEditor key={profile.id} profile={profile} onSaved={refreshProfile} /> : null}
         </Section>
 
         <Section title="Subscription">
@@ -148,54 +143,6 @@ export default function Settings() {
         <DeleteAccount onDeleted={signOut} />
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function ProfileForm({
-  initialName,
-  initialBusiness,
-  userId,
-  onSaved,
-}: {
-  initialName: string;
-  initialBusiness: string;
-  userId?: string;
-  onSaved: () => Promise<void>;
-}) {
-  const [name, setName] = useState(initialName);
-  const [business, setBusiness] = useState(initialBusiness);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const changed = name.trim() !== initialName || business.trim() !== initialBusiness;
-
-  async function save() {
-    if (!userId) return;
-    setError(null);
-    setSaved(false);
-    if (!business.trim()) return setError('Enter a name for your business.');
-    setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: name.trim() || null,
-        business_name: business.trim(),
-      })
-      .eq('id', userId);
-    setBusy(false);
-    if (error) return setError(error.message);
-    setSaved(true);
-    await onSaved();
-  }
-
-  return (
-    <Card style={{ gap: Spacing.three }}>
-      <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
-      <TextField label="Business name" value={business} onChangeText={setBusiness} autoCapitalize="words" />
-      <ErrorText>{error}</ErrorText>
-      {saved && !changed ? <Body style={{ color: Colors.accent }}>Saved</Body> : null}
-      <Button title="Save profile" onPress={save} loading={busy} disabled={!changed} />
-    </Card>
   );
 }
 

@@ -1,15 +1,17 @@
-import { ScrollView } from 'react-native';
+import { router } from 'expo-router';
 
-import { EmptyState } from '@/components/ui';
+import { ChatList } from '@/components/chat-list';
+import { Button } from '@/components/ui';
 
-export default function ChatScreen() {
+export default function Chats() {
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-      <EmptyState
-        icon="chatbubbles-outline"
-        title="Chat"
-        message="Message your clients directly from the app. Coming soon."
-      />
-    </ScrollView>
+    <ChatList
+      empty={{
+        title: 'No chats yet',
+        message:
+          'You can message and call clients who have joined the Voltrix app. Add their email to a client, then ask them to sign up with it.',
+        action: <Button title="Go to clients" variant="secondary" onPress={() => router.navigate('/clients')} />,
+      }}
+    />
   );
 }

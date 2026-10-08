@@ -229,6 +229,19 @@ export default function Home() {
                   ) : null}
                 </View>
                 {t.client_status === 'paused' ? <Text style={styles.paused}>Paused</Text> : null}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: '/chat/[id]',
+                      params: { id: t.client_id, name: t.trainer_name || t.business_name || 'Your trainer' },
+                    })
+                  }
+                  hitSlop={8}
+                  style={styles.chatButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Message ${t.trainer_name || t.business_name || 'your trainer'}`}>
+                  <Ionicons name="chatbubble-ellipses" size={20} color={Colors.onAccent} />
+                </Pressable>
               </Pressable>
             ))}
           </View>
@@ -361,5 +374,13 @@ const styles = themed(() => ({
     color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  chatButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.accent,
   },
 }));

@@ -3,13 +3,14 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { ChatProvider } from '@/lib/chat-live';
 import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
 import { useSettings } from '@/lib/settings';
 
 export default function AppLayout() {
   return (
-    <>
+    <ChatProvider>
       <ReminderSync />
       <Stack
         screenOptions={{
@@ -32,8 +33,19 @@ export default function AppLayout() {
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
         <Stack.Screen name="exercises/index" options={{ title: 'Exercise library' }} />
         <Stack.Screen name="exercises/new" options={{ title: 'New exercise', presentation: 'modal' }} />
+        <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="call"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            gestureEnabled: false,
+            contentStyle: { backgroundColor: '#0B0F1A' },
+          }}
+        />
       </Stack>
-    </>
+    </ChatProvider>
   );
 }
 

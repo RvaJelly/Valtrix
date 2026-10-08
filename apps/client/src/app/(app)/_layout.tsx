@@ -3,13 +3,14 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { ChatProvider } from '@/lib/chat-live';
 import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
 import { useSettings } from '@/lib/settings';
 
 export default function AppLayout() {
   return (
-    <>
+    <ChatProvider>
       <ReminderSync />
       <Stack
         screenOptions={{
@@ -33,8 +34,19 @@ export default function AppLayout() {
         />
         <Stack.Screen name="posts/new" options={{ title: 'New post', presentation: 'modal' }} />
         <Stack.Screen name="rules" options={{ title: 'Community rules' }} />
+        <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="call"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            gestureEnabled: false,
+            contentStyle: { backgroundColor: '#0B0F1A' },
+          }}
+        />
       </Stack>
-    </>
+    </ChatProvider>
   );
 }
 

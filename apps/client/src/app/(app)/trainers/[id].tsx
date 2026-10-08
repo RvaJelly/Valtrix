@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Body, Card } from '@/components/ui';
+import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { displayName, listTrainers, loadTrainers, type PublicTrainer } from '@/lib/trainers';
@@ -14,13 +14,14 @@ export default function TrainerProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { session } = useAuth();
   const [trainer, setTrainer] = useState<PublicTrainer | null | undefined>(undefined);
-  const [isMine, setIsMine] = useState(false);
+  // The chat with this trainer, when they are the signed-in client's trainer.
+  const [chatId, setChatId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([listTrainers(), loadTrainers()])
       .then(([all, mine]) => {
         setTrainer(all.find((t) => t.id === id) ?? null);
-        setIsMine(mine.some((t) => t.trainer_id === id));
+        setChatId(mine.find((t) => t.trainer_id === id)?.client_id ?? null);
       })
       .catch(() => setTrainer(null));
   }, [id]);
@@ -35,6 +36,7 @@ export default function TrainerProfile() {
   }
 
   const isMe = trainer.id === session?.user.id;
+  const isMine = !!chatId;
   const name = displayName(trainer);
   const firstName = trainer.full_name?.split(' ')[0] ?? name;
   const facts = [
@@ -67,6 +69,34 @@ export default function TrainerProfile() {
           </View>
         ) : null}
       </View>
+
+      {chatId && !isMe ? (
+        <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              title="Message"
+              onPress={() =>
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: { id: chatId, name, avatar: trainer.avatar_url ?? '' },
+                })
+              }
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              title="Call"
+              variant="secondary"
+              onPress={() =>
+                router.push({
+                  pathname: '/call',
+                  params: { chat: chatId, video: '0', name, avatar: trainer.avatar_url ?? '' },
+                })
+              }
+            />
+          </View>
+        </View>
+      ) : null}
 
       {trainer.specialties.length ? (
         <View style={{ gap: Spacing.two }}>

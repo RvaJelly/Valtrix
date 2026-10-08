@@ -14,6 +14,7 @@ import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
+import { removeMyChatPhotos } from '@/lib/chat';
 import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
 import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
@@ -357,11 +358,12 @@ function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () =
   async function remove() {
     const sure = await confirm(
       'Delete your account?',
-      'This permanently deletes your account, your stories, reels and photos. It cannot be undone.',
+      'This permanently deletes your account, your stories, reels, photos and the messages you sent. It cannot be undone.',
       'Delete account',
     );
     if (!sure) return;
     setBusy(true);
+    await removeMyChatPhotos().catch(() => {});
     if (userId) await removeAllMyFiles(userId).catch(() => {});
     const { error } = await supabase.rpc('delete_my_client_account');
     setBusy(false);

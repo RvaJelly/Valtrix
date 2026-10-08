@@ -7,6 +7,7 @@ import { ClientForm } from '@/components/client-form';
 import { Body, Button } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
 import { formatDay, SESSION_COLUMNS, type Session } from '@/lib/sessions';
@@ -17,6 +18,7 @@ export default function ClientDetail() {
   const [client, setClient] = useState<Client | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<Session[]>([]);
+  const { session } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
@@ -95,6 +97,27 @@ export default function ClientDetail() {
                   : `Add ${client.first_name}'s email above, then ask them to sign up in the Voltrix app with it.`}
             </Body>
           </View>
+          {client.user_id && client.user_id !== session?.user.id ? (
+            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Message"
+                  onPress={() =>
+                    router.push({ pathname: '/chat/[id]', params: { id: client.id, name: fullName(client) } })
+                  }
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Call"
+                  variant="secondary"
+                  onPress={() =>
+                    router.push({ pathname: '/call', params: { chat: client.id, video: '0', name: fullName(client) } })
+                  }
+                />
+              </View>
+            </View>
+          ) : null}
           <Text style={styles.section}>Upcoming sessions</Text>
           {upcoming.length === 0 ? <Body secondary>Nothing booked yet.</Body> : null}
           {upcoming.map((session) => (

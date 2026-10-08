@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useChat } from '@/lib/chat-live';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -14,6 +15,7 @@ function tabIcon(name: IconName) {
 }
 
 export default function TabLayout() {
+  const { unread } = useChat();
   return (
     <Tabs
       screenOptions={{
@@ -30,7 +32,15 @@ export default function TabLayout() {
       <Tabs.Screen name="clients" options={{ title: 'Clients', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="programs" options={{ title: 'Programs', tabBarIcon: tabIcon('barbell') }} />
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: tabIcon('calendar') }} />
-      <Tabs.Screen name="messages" options={{ title: 'Chat', tabBarIcon: tabIcon('chatbubbles') }} />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Chat',
+          tabBarIcon: tabIcon('chatbubbles'),
+          tabBarBadge: unread ? (unread > 99 ? '99+' : unread) : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.accent, color: Colors.onAccent },
+        }}
+      />
     </Tabs>
   );
 }

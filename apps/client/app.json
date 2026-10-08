@@ -45,12 +45,18 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Voltrix to use your photos so you can share stories and reels and add a profile photo.",
-          "cameraPermission": "Allow Voltrix to use your camera so you can film stories and reels.",
-          "microphonePermission": "Allow Voltrix to use your microphone so your videos have sound."
+          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos and add a profile photo.",
+          "cameraPermission": "Allow Voltrix to use your camera for video calls, chat photos, stories and reels.",
+          "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

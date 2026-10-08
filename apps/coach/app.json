@@ -31,9 +31,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Voltrix Coach to use your photos for your profile picture.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "photosPermission": "Allow Voltrix Coach to use your photos for your profile picture and to send photos in chats.",
+          "cameraPermission": "Allow Voltrix Coach to use your camera for video calls and chat photos.",
+          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls."
         }
       ],
       [
@@ -48,6 +48,12 @@
           "backgroundColor": "#0A1630",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 120
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls."
         }
       ]
     ],

@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { AppLock } from '@/components/app-lock';
 import { Colors } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -55,6 +56,7 @@ export default function RootLayout() {
       <SettingsProvider>
         <ThemedStatusBar />
         <RootNavigator />
+        <AppLock />
       </SettingsProvider>
     </AuthProvider>
   );

@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useState, type ComponentProps, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
+import { biometricName, confirmIdentity } from '@/lib/biometrics';
 import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
@@ -128,7 +129,12 @@ export default function Settings() {
         <Section title="Account">
           <Card style={{ gap: Spacing.three }}>
             <Row label="Email" value={session?.user.email ?? '–'} />
+            <Body secondary style={styles.small}>
+              You stay signed in on this device. Your clients, sessions, workouts and settings are saved to your
+              account, so signing in on a new phone brings everything back.
+            </Body>
           </Card>
+          <BiometricLock />
           <PasswordForm />
         </Section>
 
@@ -257,6 +263,47 @@ function DeleteAccount({ onDeleted }: { onDeleted: () => Promise<void> }) {
   );
 }
 
+function BiometricLock() {
+  const { settings, update } = useSettings();
+  const { setLocked } = useAuth();
+  const [name, setName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    biometricName().then(setName);
+  }, []);
+
+  if (!name) return null;
+
+  async function toggle(on: boolean) {
+    setError(null);
+    if (on && !(await confirmIdentity(`Turn on ${name} for Valtrix Coach`))) {
+      return setError(`${name} didn't work, so it is still off.`);
+    }
+    setLocked(false);
+    update({ biometric: on });
+  }
+
+  return (
+    <Card style={{ gap: Spacing.two }}>
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>Unlock with {name}</Text>
+        <Switch
+          accessibilityLabel={`Unlock with ${name}`}
+          value={settings.biometric}
+          onValueChange={toggle}
+          trackColor={{ true: Colors.accent, false: Colors.border }}
+          thumbColor={Colors.text}
+        />
+      </View>
+      <Body secondary style={styles.small}>
+        Ask for {name} each time the app opens, so nobody else can get in on this phone.
+      </Body>
+      <ErrorText>{error}</ErrorText>
+    </Card>
+  );
+}
+
 function ReminderPicker() {
   const { settings, update } = useSettings();
   const [blocked, setBlocked] = useState(false);
@@ -368,6 +415,18 @@ function LinkRow({
 }
 
 const styles = themed(() => ({
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  switchLabel: {
+    flex: 1,
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   content: {
     padding: Spacing.four,
     gap: Spacing.four,

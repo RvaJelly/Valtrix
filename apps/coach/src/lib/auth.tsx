@@ -14,6 +14,8 @@ export type Profile = {
   subscription_expires_at: string | null;
   is_admin: boolean;
   free_access: boolean;
+  // Theme, units and reminder time saved with the account.
+  preferences?: Record<string, unknown> | null;
 };
 
 type AuthState = {
@@ -26,6 +28,9 @@ type AuthState = {
   finishRecovery: () => void;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
+  // True until the trainer passes the Face ID or fingerprint lock (when it is turned on).
+  locked: boolean;
+  setLocked: (locked: boolean) => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -33,7 +38,9 @@ const AuthContext = createContext<AuthState | null>(null);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access')
+    .select(
+      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences',
+    )
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -45,6 +52,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [recovering, setRecovering] = useState(false);
+  const [locked, setLocked] = useState(true);
   const loadedUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (next: Session | null) => {
@@ -64,6 +72,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       // SIGNED_IN also fires when a web tab regains focus; only reload for a new user.
       if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && next && next.user.id !== loadedUserId.current) {
         setLoading(true);
+        // They just signed in with their password, so there is no need to lock.
+        setLocked(false);
         // Supabase advises against awaiting other calls inside this callback.
         setTimeout(async () => {
           await loadProfile(next);
@@ -91,7 +101,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <AuthContext value={{ loading, session, profile, recovering, finishRecovery, refreshProfile, signOut }}>{children}</AuthContext>
+    <AuthContext
+      value={{ loading, session, profile, recovering, finishRecovery, refreshProfile, signOut, locked, setLocked }}>
+      {children}
+    </AuthContext>
   );
 }
 

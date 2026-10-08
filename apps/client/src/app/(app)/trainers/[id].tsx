@@ -7,11 +7,12 @@ import { Avatar } from '@/components/avatar';
 import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { displayName, listTrainers, loadTrainers, type PublicTrainer } from '@/lib/trainers';
+import { displayName, distanceLabel, listTrainers, loadTrainers, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer's public profile.
 export default function TrainerProfile() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // km is how far away they are, when the client came from the list sorted by distance.
+  const { id, km } = useLocalSearchParams<{ id: string; km?: string }>();
   const { session } = useAuth();
   const [trainer, setTrainer] = useState<PublicTrainer | null | undefined>(undefined);
   // The chat with this trainer, when they are the signed-in client's trainer.
@@ -41,9 +42,8 @@ export default function TrainerProfile() {
   const firstName = trainer.full_name?.split(' ')[0] ?? name;
   const facts = [
     trainer.city,
-    trainer.years_experience != null
-      ? `${trainer.years_experience} ${trainer.years_experience === 1 ? 'year' : 'years'} experience`
-      : null,
+    trainer.years_experience != null ? `${yearsLabel(trainer.years_experience)} experience` : null,
+    km && Number.isFinite(Number(km)) ? distanceLabel(Number(km)) : null,
   ].filter(Boolean);
 
   return (

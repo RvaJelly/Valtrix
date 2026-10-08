@@ -1,26 +1,44 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Colors, Spacing, themed } from '@/constants/theme';
-import { displayName, type PublicTrainer } from '@/lib/trainers';
+import { displayName, distanceLabel, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer as a round photo with their name and main specialty. Opens their profile.
 export function TrainerCircle({
   trainer,
   size = 76,
   width = 96,
+  distanceKm,
+  years,
 }: {
   trainer: PublicTrainer;
   size?: number;
   width?: number;
+  // How far away they are, when the client sorted by distance.
+  distanceKm?: number;
+  // Years as a trainer, when the client sorted by experience.
+  years?: number;
 }) {
   const name = displayName(trainer);
+  const hasDistance = distanceKm != null;
+  const extra = hasDistance
+    ? { icon: 'location' as const, text: distanceLabel(distanceKm) }
+    : years != null
+      ? { icon: 'ribbon' as const, text: yearsLabel(years) }
+      : null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={name}
-      onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: trainer.id } })}
+      accessibilityLabel={extra ? `${name}, ${extra.text}` : name}
+      onPress={() =>
+        router.push({
+          pathname: '/trainers/[id]',
+          params: hasDistance ? { id: trainer.id, km: String(distanceKm) } : { id: trainer.id },
+        })
+      }
       style={({ pressed }) => [styles.item, { width }, pressed && { opacity: 0.7 }]}>
       <Avatar url={trainer.avatar_url} name={name} size={size} />
       <Text style={styles.name} numberOfLines={1}>
@@ -29,6 +47,14 @@ export function TrainerCircle({
       <Text style={styles.specialty} numberOfLines={2}>
         {trainer.specialties.slice(0, 2).join(' · ') || trainer.business_name || ' '}
       </Text>
+      {extra ? (
+        <View style={styles.extra}>
+          <Ionicons name={extra.icon} size={12} color={Colors.accentText} />
+          <Text style={styles.extraText} numberOfLines={1}>
+            {extra.text}
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -49,5 +75,15 @@ const styles = themed(() => ({
     color: Colors.textSecondary,
     fontSize: 12,
     textAlign: 'center',
+  },
+  extra: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  extraText: {
+    color: Colors.accentText,
+    fontSize: 12,
+    fontWeight: '700',
   },
 }));

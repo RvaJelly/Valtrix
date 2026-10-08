@@ -20,6 +20,9 @@ export type Profile = {
   bio?: string | null;
   city?: string | null;
   years_experience?: number | null;
+  // Rough location (about 1 km) so clients near the trainer can find them.
+  latitude?: number | null;
+  longitude?: number | null;
   // Theme, units and reminder time saved with the account.
   preferences?: Record<string, unknown> | null;
 };
@@ -45,7 +48,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience',
+      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience, latitude, longitude',
     )
     .eq('id', userId)
     .maybeSingle();

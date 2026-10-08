@@ -54,6 +54,12 @@
         "expo-audio",
         {
           "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls."
+          }
+        ],
+        [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Voltrix Coach to use your location so clients near you can find you."
         }
       ]
     ],

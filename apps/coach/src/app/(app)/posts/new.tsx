@@ -71,7 +71,8 @@ export default function NewPost() {
           <Card style={{ gap: Spacing.four }}>
             <Text style={styles.heading}>Voltrix community rules</Text>
             <Body secondary>
-              Clients and trainers on Voltrix can see what you share. Before your first post, please agree to keep it:
+              Everyone on Voltrix, clients and trainers, can see what you share. Before your first post, please agree to
+              keep it:
             </Body>
             <CommunityRules />
             <Button title="I agree" onPress={agree} />
@@ -86,8 +87,8 @@ export default function NewPost() {
               </View>
               <Body secondary style={{ textAlign: 'center' }}>
                 {kind === 'reel'
-                  ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds. Clients and trainers on Voltrix can watch them.`
-                  : 'Your story shows on Home for your clients and other trainers for 24 hours, then disappears.'}
+                  ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds. Everyone on Voltrix, clients and trainers, can watch them.`
+                  : 'Your story shows on Home for everyone on Voltrix, clients and trainers, for 24 hours, then disappears.'}
               </Body>
             </View>
             {Platform.OS !== 'web' ? (

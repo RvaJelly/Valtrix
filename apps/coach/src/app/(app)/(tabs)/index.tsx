@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation, type Href } from 'expo-router';
 import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
@@ -16,6 +16,8 @@ import { addDays, dayKey, SESSION_COLUMNS, startOfDay, type Session } from '@/li
 import { supabase } from '@/lib/supabase';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+
+const NONE_SEEN = new Set<string>();
 
 function greeting() {
   const hour = new Date().getHours();
@@ -81,21 +83,28 @@ export default function Home() {
         }),
       );
       // Stories from clients and trainers. If they can't load, "Your story" still shows.
-      Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]).then(([groups, seen]) =>
-        setStories({ groups, seen }),
-      );
+      const refreshStories = () =>
+        Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]).then(([groups, seen]) =>
+          setStories({ groups, seen }),
+        );
+      refreshStories();
+      // Coming back to the app doesn't refocus Home, so check again then: stories
+      // that ended while the phone was locked disappear, and new ones show up.
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') refreshStories();
+      });
+      return () => sub.remove();
     }, []),
   );
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {stories ? (
-        <StoriesRow
-          groups={stories.groups}
-          seen={stories.seen}
-          me={{ name: profile?.full_name ?? profile?.business_name ?? null, avatar: profile?.avatar_url ?? null }}
-        />
-      ) : null}
+      {/* Shown straight away so Home doesn't jump when the stories arrive. */}
+      <StoriesRow
+        groups={stories?.groups ?? []}
+        seen={stories?.seen ?? NONE_SEEN}
+        me={{ name: profile?.full_name ?? profile?.business_name ?? null, avatar: profile?.avatar_url ?? null }}
+      />
 
       <View style={styles.hello}>
         <Pressable accessibilityLabel="Your profile" onPress={() => router.push('/settings')}>

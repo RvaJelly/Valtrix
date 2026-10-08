@@ -12,8 +12,9 @@ grant usage on schema cron to postgres;
 grant all privileges on all tables in schema cron to postgres;
 
 -- Every hour, on the hour. The function is deployed without a login check (it
--- only removes stories that have already expired), so no key is sent. Scheduling
--- a job with the same name again just updates it, so this can safely run twice.
+-- only removes stories that have already expired; supabase/config.toml sets
+-- verify_jwt = false for it), so no key is sent. Scheduling a job with the same
+-- name again just updates it, so this can safely run twice.
 select cron.schedule(
   'clean-expired-stories',
   '0 * * * *',

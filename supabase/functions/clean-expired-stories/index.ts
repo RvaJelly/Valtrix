@@ -2,9 +2,9 @@
 // already hide a story once it expires; this removes it for good. An hourly job
 // in the database calls it (see the clean_expired_stories migration).
 //
-// Anyone may call it, so it is deployed without a login check: it only ever
-// removes stories that have already expired, and calling it again just finds
-// nothing left to do.
+// Anyone may call it, so it is deployed without a login check (verify_jwt =
+// false in supabase/config.toml): it only ever removes stories that have
+// already expired, and calling it again just finds nothing left to do.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 

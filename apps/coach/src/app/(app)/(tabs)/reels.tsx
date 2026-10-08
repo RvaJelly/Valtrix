@@ -141,7 +141,7 @@ export default function Reels() {
           <Ionicons name="film-outline" size={48} color="#FFFFFF" />
           <Text style={styles.emptyTitle}>No reels yet</Text>
           <Text style={styles.emptyText}>
-            Share a short training video. Your clients and other trainers will see it.
+            Share a short training video. Everyone on Voltrix, clients and trainers, can watch it.
           </Text>
           <Button title="Post a reel" onPress={newReel} />
         </View>

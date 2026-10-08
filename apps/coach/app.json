@@ -31,9 +31,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Voltrix Coach to use your photos for your profile picture and to send photos in chats.",
-          "cameraPermission": "Allow Voltrix Coach to use your camera for video calls and chat photos.",
-          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls."
+          "photosPermission": "Allow Voltrix Coach to use your photos so you can share stories, reels and chat photos and add a profile photo.",
+          "cameraPermission": "Allow Voltrix Coach to use your camera for video calls, chat photos, stories and reels.",
+          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls and so your videos have sound."
         }
       ],
       [
@@ -50,13 +50,14 @@
           "imageWidth": 120
         }
       ],
+      "expo-video",
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls."
-          }
-        ],
-        [
+          "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls and so your videos have sound."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow Voltrix Coach to use your location so clients near you can find you."

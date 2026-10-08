@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { SessionRow } from '@/components/session-row';
@@ -81,6 +81,14 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       load();
+      // Coming back to the app doesn't refocus Home, so check the stories again
+      // then: ones that ended while the phone was locked disappear.
+      const sub = AppState.addEventListener('change', async (state) => {
+        if (state !== 'active') return;
+        const [stories, seen] = await Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]);
+        setData((d) => (d ? { ...d, stories, seen } : d));
+      });
+      return () => sub.remove();
     }, [load]),
   );
 

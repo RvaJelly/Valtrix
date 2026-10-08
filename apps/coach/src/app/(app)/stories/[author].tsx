@@ -21,7 +21,6 @@ import {
   type Story,
   type StoryGroup,
 } from '@/lib/posts';
-import { listTrainers } from '@/lib/trainers';
 
 // How long a photo story stays on screen.
 const PHOTO_MS = 5000;
@@ -44,8 +43,6 @@ export default function StoryViewer() {
   const [seen, setSeen] = useState<Set<string>>(new Set());
   const [position, setPosition] = useState<Position>({ group: 0, story: 0 });
   const [error, setError] = useState<string | null>(null);
-  // Trainers on Voltrix, so their name opens their profile.
-  const [trainerIds, setTrainerIds] = useState<Set<string>>(new Set());
   // How far through the current story we are, from 0 to 1.
   const [progress, setProgress] = useState({ id: '', fraction: 0 });
   const [readyId, setReadyId] = useState<string | null>(null);
@@ -56,13 +53,12 @@ export default function StoryViewer() {
   const elapsed = useRef({ id: '', ms: 0 });
 
   useEffect(() => {
-    Promise.all([loadStories(), loadSeen(), listTrainers().catch(() => [])])
-      .then(([all, seenBefore, trainers]) => {
+    Promise.all([loadStories(), loadSeen()])
+      .then(([all, seenBefore]) => {
         const start = all.findIndex((g) => g.author_id === author);
         if (start < 0) return setError('This story has ended.');
         const shown = all.slice(start);
         setSeen(seenBefore);
-        setTrainerIds(new Set(trainers.map((t) => t.id)));
         setGroups(shown);
         setPosition({ group: 0, story: firstUnseen(shown[0], seenBefore) });
       })
@@ -162,8 +158,6 @@ export default function StoryViewer() {
 
   const url = mediaUrl(story.media_path);
   const name = authorName(group);
-  const isTrainer = !group.is_mine && trainerIds.has(group.author_id);
-  const authorId = group.author_id;
 
   return (
     <View style={styles.screen}>
@@ -215,18 +209,10 @@ export default function StoryViewer() {
           ))}
         </View>
         <View style={styles.header} pointerEvents="box-none">
-          {/* A trainer's name opens their profile, in place of the stories. */}
-          <Pressable
-            accessibilityRole={isTrainer ? 'button' : undefined}
-            accessibilityLabel={isTrainer ? `See ${name}'s profile` : undefined}
-            disabled={!isTrainer}
-            onPress={() => router.replace({ pathname: '/trainers/[id]', params: { id: authorId } })}
-            style={styles.author}>
-            <Avatar url={group.author_avatar} name={name} size={34} />
-            <Text style={styles.name} numberOfLines={1}>
-              {group.is_mine ? 'Your story' : name}
-            </Text>
-          </Pressable>
+          <Avatar url={group.author_avatar} name={name} size={34} />
+          <Text style={styles.name} numberOfLines={1}>
+            {group.is_mine ? 'Your story' : name}
+          </Text>
           <Text style={styles.time}>{timeAgo(story.created_at)}</Text>
           <View style={{ flex: 1 }} />
           <Pressable
@@ -340,12 +326,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingHorizontal: Spacing.one,
-  },
-  author: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
   },
   name: {
     flexShrink: 1,

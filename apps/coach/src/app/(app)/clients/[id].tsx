@@ -5,6 +5,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 
 import { ClientForm } from '@/components/client-form';
 import { ClientWorkoutPlan } from '@/components/client-workout-plan';
+import { ClientNutrition } from '@/components/client-nutrition';
 import { Body, Button } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
@@ -120,6 +121,7 @@ export default function ClientDetail() {
             </View>
           ) : null}
           <ClientWorkoutPlan clientId={client.id} clientName={client.first_name} />
+          <ClientNutrition client={client} />
           <Text style={styles.section}>Upcoming sessions</Text>
           {upcoming.length === 0 ? <Body secondary>Nothing booked yet.</Body> : null}
           {upcoming.map((session) => (

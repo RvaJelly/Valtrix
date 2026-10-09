@@ -1,0 +1,85 @@
+# Builds the two Android apps, Voltrix Coach (trainers) and Voltrix (clients), as
+# APK files that install straight onto a phone, and puts them on a GitHub release.
+# The newest ones are always at:
+#   https://github.com/RvaJelly/valtrix/releases/latest/download/voltrix-coach.apk
+#   https://github.com/RvaJelly/valtrix/releases/latest/download/voltrix.apk
+# These are test builds signed with the standard Expo test key. Google Play and the
+# App Store get their own signed builds later.
+name: Android apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apps
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: coach
+            apk: voltrix-coach.apk
+          - app: client
+            apk: voltrix.apk
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      # Each build gets a higher version number, so a new APK installs over the old one.
+      - name: Set the version number
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.android = { ...app.expo.android, versionCode: Number(process.env.GITHUB_RUN_NUMBER) };
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+          "
+      - run: npx expo prebuild --platform android --no-install
+      # Phone chips only (64-bit and older 32-bit), which keeps the download small.
+      - name: Build the APK
+        working-directory: apps/${{ matrix.app }}/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      - run: cp android/app/build/outputs/apk/release/app-release.apk ${{ matrix.apk }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.apk }}
+          path: apps/${{ matrix.app }}/${{ matrix.apk }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: apks
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "android-${GITHUB_RUN_NUMBER}" apks/*.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "Android apps, build ${GITHUB_RUN_NUMBER}" \
+            --notes "Voltrix Coach (voltrix-coach.apk) is the trainer app and Voltrix (voltrix.apk) is the client app. Open the file on an Android phone to install it."

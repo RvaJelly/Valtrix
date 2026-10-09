@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useEffect, useEffectEvent, useState, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  BackHandler,
+  Easing,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   Text,
@@ -15,7 +17,6 @@ import {
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
@@ -39,6 +40,9 @@ type Props = {
   onClose: () => void;
   // The reel's comment count went up or down (a comment was added, deleted, reported or blocked).
   onCountChange: (postId: string, delta: number) => void;
+  // Room to leave for the phone's own bar at the bottom (home indicator or Back/Home buttons).
+  // 0 above a tab bar, which already keeps clear of it.
+  bottomInset: number;
   // Someone was blocked from a comment: their reels should go too.
   onBlocked: (personId: string) => void;
   // In Voltrix, a trainer's name opens their profile.
@@ -50,12 +54,27 @@ type Page = { postId: string; comments: PostComment[]; more: boolean };
 
 // The comments on a reel, in a sheet that slides up over it like Instagram and TikTok.
 // Newest first, with a box at the bottom to add one.
-export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrainer, onOpenAuthor }: Props) {
+//
+// Render it last inside a full-screen screen: it covers that screen instead of opening a
+// Modal. On Android a Modal is a window of its own. The apps draw edge to edge, so the
+// system doesn't make that window smaller for the keyboard, and the keyboard events the
+// sheet needs come from the main window, so the comment box could end up behind the
+// keyboard. Inside the screen the keyboard is reported like on any other screen, and the
+// sheet moves up above it.
+export function CommentsSheet({
+  reel,
+  onClose,
+  onCountChange,
+  bottomInset,
+  onBlocked,
+  isTrainer,
+  onOpenAuthor,
+}: Props) {
   const { session, profile } = useAuth();
   const me = session?.user.id ?? '';
-  const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const postId = reel?.id ?? null;
+  const [slide] = useState(() => new Animated.Value(0));
 
   const [page, setPage] = useState<Page | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
@@ -79,6 +98,34 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
       hidden.remove();
     };
   }, []);
+
+  // Slide up from the bottom each time it opens.
+  useEffect(() => {
+    if (!postId) return;
+    slide.setValue(0);
+    const animation = Animated.timing(slide, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [postId, slide]);
+
+  // Android's Back button closes the comment's options first, then the sheet.
+  const goBack = useEffectEvent(() => {
+    if (chosen) setChosen(null);
+    else onClose();
+  });
+  useEffect(() => {
+    if (!postId || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [postId]);
 
   // Start fresh each time the sheet opens for a reel.
   if (postId !== shownFor) {
@@ -261,14 +308,22 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
   const sheetHeight = Math.round(height * 0.72);
   const chosenName = chosen ? authorName(chosen) : '';
 
+  if (!reel) return null;
+
   return (
-    <Modal visible={!!reel} transparent animationType="slide" onRequestClose={chosen ? () => setChosen(null) : onClose}>
-      {/* On Android the sheet's window is edge-to-edge, so the system doesn't shrink it for the
-          keyboard: padding lifts the sheet by however much the keyboard covers (none if it
-          was shrunk after all). */}
+    <View style={styles.cover} role="dialog" aria-modal accessibilityViewIsModal>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close comments" />
-        <View style={[styles.sheet, { height: sheetHeight }]}>
+        <Animated.View style={[styles.backdrop, { opacity: slide }]}>
+          <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close comments" />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              height: sheetHeight,
+              transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight, 0] }) }],
+            },
+          ]}>
           <View style={styles.header}>
             <View style={styles.handle} />
             <Text style={styles.title} accessibilityRole="header">
@@ -326,10 +381,7 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
           )}
 
           <View
-            style={[
-              styles.composer,
-              { paddingBottom: keyboardUp ? Spacing.two : Math.max(insets.bottom, Spacing.two) },
-            ]}>
+            style={[styles.composer, { paddingBottom: keyboardUp ? Spacing.two : Math.max(bottomInset, Spacing.two) }]}>
             {remaining <= 50 ? (
               <Text style={[styles.left, remaining <= 0 && { color: Colors.danger }]}>
                 {remaining} {remaining === 1 ? 'letter' : 'letters'} left
@@ -361,7 +413,7 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
           {chosen ? (
             <View style={styles.overlay}>
               <Pressable style={{ flex: 1 }} onPress={() => setChosen(null)} accessibilityLabel="Close options" />
-              <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+              <View style={[styles.panel, { paddingBottom: Math.max(bottomInset, Spacing.three) }]}>
                 {step === 'menu' ? (
                   <>
                     {chosen.can_delete ? (
@@ -428,9 +480,9 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
               </View>
             </View>
           ) : null}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 
@@ -520,6 +572,15 @@ function Option({
 }
 
 const styles = themed(() => ({
+  cover: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+    elevation: 10,
+  },
   backdrop: {
     flex: 1,
     minHeight: 40,

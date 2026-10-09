@@ -180,6 +180,8 @@ export default function Reels() {
         reel={commentsReel}
         onClose={() => setCommentsReel(null)}
         onCountChange={countComments}
+        // The tab bar below already keeps clear of the phone's bottom bar.
+        bottomInset={0}
         onBlocked={blockedFromComments}
       />
       <ShareSheet reel={shareReel} onClose={() => setShareReel(null)} />

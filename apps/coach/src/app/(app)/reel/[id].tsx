@@ -113,6 +113,7 @@ export default function ReelScreen() {
             reel={commentsOpen ? reel : null}
             onClose={() => setCommentsOpen(false)}
             onCountChange={(_, delta) => change((r) => ({ comment_count: Math.max(0, r.comment_count + delta) }))}
+            bottomInset={insets.bottom}
             onBlocked={blockedFromComments}
           />
           <ShareSheet reel={shareOpen ? reel : null} onClose={() => setShareOpen(false)} />

@@ -16,12 +16,12 @@ import { Avatar } from '@/components/avatar';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import type { ChatSummary } from '@/lib/chat';
 import { useChat } from '@/lib/chat-live';
-import type { Reel } from '@/lib/posts';
+import { mediaUrl, type Reel } from '@/lib/posts';
 import { canShareLink, CopyFailedError, shareReelToApps } from '@/lib/share-reel';
 import { sendReelInChat } from '@/lib/social';
 
 type SendState = 'sending' | 'sent' | 'failed';
-// link: shown so it can be copied by hand when copying didn't work.
+// link: shown so it can be copied by hand. Browsers don't always say when copying didn't work.
 type Status = { kind: 'busy' | 'done' | 'error'; text: string; link?: string };
 
 // Share a reel: send it to someone you chat with, or to other apps like WhatsApp.
@@ -95,7 +95,7 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
     try {
       const result = await shareReelToApps(reel, stillWanted);
       if (!stillWanted()) return;
-      setStatus(result === 'copied' ? { kind: 'done', text: 'Link copied' } : null);
+      setStatus(result === 'copied' ? { kind: 'done', text: 'Link copied', link: mediaUrl(reel.media_path) } : null);
     } catch (e) {
       if (!stillWanted()) return;
       setStatus(
@@ -275,7 +275,7 @@ const styles = themed(() => ({
   },
   link: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 13,
     marginHorizontal: Spacing.two,
     padding: Spacing.two,
     borderRadius: Radius.small,

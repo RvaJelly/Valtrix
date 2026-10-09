@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { PickedMedia } from '@/lib/media';
+import { loadCounts } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 
 // Stories last 24 hours; reels are short videos that stay up. Everyone signed
@@ -39,6 +40,7 @@ export type Reel = {
   like_count: number;
   liked_by_me: boolean;
   is_mine: boolean;
+  comment_count: number;
 };
 
 export type ReportReason = 'spam' | 'nudity' | 'violence' | 'hate' | 'bullying' | 'other';
@@ -96,11 +98,18 @@ export async function loadStories(): Promise<StoryGroup[]> {
 export async function loadReels(before?: string): Promise<Reel[]> {
   const { data, error } = await supabase.rpc('feed_reels', before ? { before } : {});
   if (error) throw error;
-  return ((data ?? []) as Reel[]).map((r) => ({
+  const reels = ((data ?? []) as Reel[]).map((r) => ({
     ...r,
     like_count: Number(r.like_count),
+    comment_count: 0,
     duration_seconds: r.duration_seconds == null ? null : Number(r.duration_seconds),
   }));
+  // Comment counts come separately. Without them the reels still show.
+  const counts = await loadCounts(reels.map((r) => r.id)).catch(() => null);
+  return reels.map((r) => {
+    const c = counts?.get(r.id);
+    return c ? { ...r, like_count: c.like_count, liked_by_me: c.liked_by_me, comment_count: c.comment_count } : r;
+  });
 }
 
 export async function setLiked(postId: string, liked: boolean) {

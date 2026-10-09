@@ -24,6 +24,9 @@ export type Message = {
   media_path: string | null;
   call_id: string | null;
   call?: CallInfo | null;
+  // A reel sent in the chat. Cleared when the reel is deleted; shared_reel stays true.
+  post_id?: string | null;
+  shared_reel?: boolean;
   created_at: string;
   read_at: string | null;
   // Only on this phone: a message still being sent, or one that failed.
@@ -51,7 +54,7 @@ export type ChatSummary = {
 };
 
 const MESSAGE_COLUMNS =
-  'id, chat_id, sender_id, kind, body, media_path, call_id, created_at, read_at, call:calls(id, video, status, caller_id, answered_at, ended_at)';
+  'id, chat_id, sender_id, kind, body, media_path, call_id, post_id, shared_reel, created_at, read_at, call:calls(id, video, status, caller_id, answered_at, ended_at)';
 const PAGE = 40;
 const BUCKET = 'chat';
 

@@ -61,14 +61,16 @@ const CALL_COLUMNS = 'id, chat_id, caller_id, callee_id, video, status, created_
 export type CallRow = Omit<Call, 'callee_role' | 'caller_name' | 'caller_avatar' | 'callee_name' | 'callee_avatar'>;
 
 // Calls ringing for this person right now, for when the app opens while someone is calling.
+// Throws when they couldn't be loaded, so the app can try again.
 export async function ringingCalls(myId: string): Promise<CallRow[]> {
   const since = new Date(Date.now() - RING_SECONDS * 1000).toISOString();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('calls')
     .select(CALL_COLUMNS)
     .eq('callee_id', myId)
     .eq('status', 'ringing')
     .gt('created_at', since);
+  if (error) throw error;
   return (data ?? []) as CallRow[];
 }
 

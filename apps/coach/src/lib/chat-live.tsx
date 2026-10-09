@@ -17,7 +17,7 @@ import { useAppLocked } from '@/components/app-lock';
 import { useAuth } from '@/lib/auth';
 import { CHAT_ROLE } from '@/lib/chat-role';
 import { loadChats, type ChatSummary, type Message } from '@/lib/chat';
-import { currentCall, rememberCall, RING_SECONDS, ringingCalls, type Call } from '@/lib/calls';
+import { currentCall, fetchCall, isOver, rememberCall, RING_SECONDS, ringingCalls, type Call } from '@/lib/calls';
 import { playTone, stopTone } from '@/lib/ring';
 import { supabase } from '@/lib/supabase';
 
@@ -56,10 +56,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const rang = useRef(new Set<string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const locked = useAppLocked();
-  // A call that came in while the Face ID or fingerprint lock showed. It rings, and its
-  // call screen opens once the app is unlocked, if it is still ringing.
-  const waiting = useRef<string | null>(null);
-  const waitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Calls that came in while the Face ID or fingerprint lock showed, each with a timer for
+  // when it would have rung out. They ring, and once the app is unlocked the call screen
+  // opens for one that is still ringing.
+  const waiting = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const wasLocked = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(
     () =>
@@ -95,26 +97,32 @@ export function ChatProvider({ children }: PropsWithChildren) {
     }, 250);
   });
 
-  const stopWaiting = useEffectEvent(() => {
-    if (!waiting.current) return;
-    waiting.current = null;
-    if (waitTimer.current) clearTimeout(waitTimer.current);
-    waitTimer.current = null;
-    stopTone();
+  // Stops waiting for one call, or for all of them. The ringtone stops with the last one.
+  const stopWaiting = useEffectEvent((id?: string) => {
+    const ids = id ? [id] : [...waiting.current.keys()];
+    if (!ids.some((each) => waiting.current.has(each))) return;
+    for (const each of ids) {
+      clearTimeout(waiting.current.get(each));
+      waiting.current.delete(each);
+    }
+    if (!waiting.current.size) stopTone();
   });
 
   const ring = useEffectEvent((call: Pick<Call, 'id'>) => {
-    if (rang.current.has(call.id) || currentCall()) return;
     // On an iPhone the call screen would open on top of the lock screen, and the call
     // could be answered without unlocking. So only the ringtone plays until then.
     if (locked) {
-      if (waiting.current === call.id) return;
-      waiting.current = call.id;
-      playTone('incoming');
-      if (waitTimer.current) clearTimeout(waitTimer.current);
-      waitTimer.current = setTimeout(() => stopWaiting(), (RING_SECONDS + 10) * 1000);
+      if (rang.current.has(call.id) || currentCall() || waiting.current.has(call.id)) return;
+      if (!waiting.current.size) playTone('incoming');
+      waiting.current.set(
+        call.id,
+        setTimeout(() => stopWaiting(call.id), (RING_SECONDS + 10) * 1000),
+      );
       return;
     }
+    // The call screen does the ringing from here.
+    stopWaiting();
+    if (rang.current.has(call.id) || currentCall()) return;
     rang.current.add(call.id);
     router.push({ pathname: '/call', params: { id: call.id, incoming: '1' } });
   });
@@ -122,21 +130,25 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const onCall = useEffectEvent((call: Call) => {
     rememberCall(call);
     emit({ type: 'call', call });
-    if (call.id === waiting.current && call.status !== 'ringing') stopWaiting();
+    if (call.status !== 'ringing') stopWaiting(call.id);
     // Only ring in the app for this side of the chat: a trainer who also uses
     // the client app hears calls from their clients in Voltrix Coach.
     if (call.status === 'ringing' && call.callee_id === userId && call.callee_role === CHAT_ROLE) ring(call);
     if (call.status !== 'ringing' && call.status !== 'accepted') refreshSoon();
   });
 
-  // Someone may have called while the app was closed or offline.
+  // Someone may have called while the app was closed, offline or locked. False when the
+  // calls couldn't be checked.
   const checkRinging = useEffectEvent(async (list: ChatSummary[] | null) => {
-    if (!userId || !list) return;
-    const calls = await ringingCalls(userId);
+    if (!userId) return true;
+    if (!list) return false;
+    const calls = await ringingCalls(userId).catch(() => null);
+    if (!calls) return false;
     const mine = new Set(list.map((c) => c.chat_id));
     for (const call of calls) {
       if (mine.has(call.chat_id)) ring(call);
     }
+    return true;
   });
 
   const onConnected = useEffectEvent(async () => {
@@ -189,15 +201,44 @@ export function ChatProvider({ children }: PropsWithChildren) {
     return () => sub.remove();
   }, [userId, refresh]);
 
-  // Unlocked: open the call screen if the call that came in meanwhile is still ringing.
+  // Unlocked: open the call screen for the newest call that rang meanwhile, unless it has
+  // ended since. If that can't be checked, the call screen opens anyway and checks itself.
+  // Then look for any other call ringing now (live updates may have been down), and try
+  // once more if that fails.
+  const onUnlocked = useEffectEvent(async () => {
+    if (!userId) return stopWaiting();
+    for (const id of [...waiting.current.keys()].reverse()) {
+      const call = await fetchCall(id).catch(() => null);
+      // Stopped waiting meanwhile: it ended, or a call screen opened.
+      if (!waiting.current.has(id)) continue;
+      if (call && isOver(call.status)) stopWaiting(id);
+      else {
+        ring({ id });
+        break;
+      }
+    }
+    const check = () => refresh().then((list) => checkRinging(list));
+    if (await check()) return;
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      check();
+    }, 3000);
+  });
+
   useEffect(() => {
-    if (locked || !waiting.current) return;
-    stopWaiting();
-    refresh().then((list) => checkRinging(list));
-  }, [locked, refresh]);
+    if (locked) wasLocked.current = true;
+    else if (wasLocked.current) {
+      wasLocked.current = false;
+      onUnlocked();
+    }
+  }, [locked]);
 
   // Signing out from the lock screen stops the ringing too.
-  useEffect(() => () => stopWaiting(), []);
+  const onLeave = useEffectEvent(() => {
+    stopWaiting();
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+  });
+  useEffect(() => () => onLeave(), []);
 
   const unread = chats.reduce((sum, c) => sum + c.unread, 0);
   const value = useMemo(

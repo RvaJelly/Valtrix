@@ -32,7 +32,7 @@ function greeting() {
   return 'Good evening';
 }
 
-// "in 3 days", "in 2 hours", "now"
+// "in 3 days", "in 2 hours", "now" (for a session that has started and not ended yet)
 function fromNow(date: Date, now = new Date()) {
   const minutes = Math.round((date.getTime() - now.getTime()) / 60_000);
   if (minutes <= 0) return 'now';
@@ -44,9 +44,11 @@ function fromNow(date: Date, now = new Date()) {
 }
 
 type HomeData = {
-  trainers: Trainer[];
+  // Null when they couldn't be loaded.
+  trainers: Trainer[] | null;
   everyone: PublicTrainer[];
-  sessions: Session[];
+  // Booked sessions that hadn't ended when they were loaded; null when they couldn't be loaded.
+  sessions: Session[] | null;
   doneThisMonth: number;
   stories: StoryGroup[];
   seen: Set<string>;
@@ -58,6 +60,10 @@ export default function Home() {
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // The time the screen was last drawn for, moved on every minute so a session that
+  // has ended leaves "Next session".
+  const [now, setNow] = useState(() => new Date());
   const firstName = profile?.full_name?.split(' ')[0];
   const isTrainer = profile?.role === 'trainer';
   const isClient = profile?.role === 'client';
@@ -78,44 +84,47 @@ export default function Home() {
     });
   }, [navigation]);
 
+  // Each part loads on its own, so stories and trainers still show when the sessions
+  // can't be loaded, and a failed refresh keeps what was already on screen.
   const load = useCallback(async () => {
-    try {
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const [trainers, sessions, everyone, stories, seen] = await Promise.all([
-        loadTrainers(),
-        loadSessions(monthStart, addDays(now, 90)),
-        listTrainers().catch(() => [] as PublicTrainer[]),
-        loadStories().catch(() => [] as StoryGroup[]),
-        loadSeen(),
-      ]);
-      setError(null);
-      setData({
-        trainers,
-        everyone,
-        sessions: sessions.filter((s) => s.status === 'scheduled' && endOf(s) > now),
-        doneThisMonth: sessions.filter((s) => s.status === 'completed').length,
-        stories,
-        seen,
-      });
-      // A newly linked trainer may have sessions booked already.
-      refreshReminders();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load your sessions.');
-    }
+    const start = new Date();
+    const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+    const [trainers, sessions, everyone, stories, seen] = await Promise.all([
+      loadTrainers().catch(() => null),
+      loadSessions(monthStart, addDays(start, 90)).catch(() => null),
+      listTrainers().catch(() => null),
+      loadStories().catch(() => null),
+      loadSeen(),
+    ]);
+    setNow(new Date());
+    setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
+    setData((old) => ({
+      trainers: trainers ?? old?.trainers ?? null,
+      everyone: everyone ?? old?.everyone ?? [],
+      sessions: sessions
+        ? sessions.filter((s) => s.status === 'scheduled' && endOf(s) > start)
+        : (old?.sessions ?? null),
+      doneThisMonth: sessions ? sessions.filter((s) => s.status === 'completed').length : (old?.doneThisMonth ?? 0),
+      stories: stories ?? old?.stories ?? [],
+      seen,
+    }));
+    // A newly linked trainer may have sessions booked already.
+    if (trainers && sessions) refreshReminders();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       load();
-      // Coming back to the app doesn't refocus Home, so check the stories again
-      // then: ones that ended while the phone was locked disappear.
-      const sub = AppState.addEventListener('change', async (state) => {
-        if (state !== 'active') return;
-        const [stories, seen] = await Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]);
-        setData((d) => (d ? { ...d, stories, seen } : d));
+      // Coming back to the app doesn't refocus Home, so load again then: the next session
+      // may have ended and stories may have expired while the phone was locked.
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') load();
       });
-      return () => sub.remove();
+      const timer = setInterval(() => setNow(new Date()), 60_000);
+      return () => {
+        sub.remove();
+        clearInterval(timer);
+      };
     }, [load]),
   );
 
@@ -125,8 +134,18 @@ export default function Home() {
     setRefreshing(false);
   }
 
-  const next = data?.sessions[0];
-  const later = data?.sessions.slice(1, 4) ?? [];
+  async function retry() {
+    setRetrying(true);
+    await load();
+    setRetrying(false);
+  }
+
+  // Sessions that ended since they were loaded drop off here.
+  const upcoming = data?.sessions?.filter((s) => endOf(s) > now) ?? null;
+  const next = upcoming?.[0];
+  const later = upcoming?.slice(1, 4) ?? [];
+  // The trainers loaded but the sessions didn't: the Next session card says so instead.
+  const sessionsMissing = !!data?.trainers && !upcoming;
 
   return (
     <ScrollView
@@ -145,7 +164,13 @@ export default function Home() {
         />
       ) : null}
 
-      <ErrorText>{error}</ErrorText>
+      {/* A web page can't be pulled down to refresh, so there's always a button. */}
+      {error && !sessionsMissing ? (
+        <View style={{ gap: Spacing.two }}>
+          <ErrorText>{error}</ErrorText>
+          <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
+        </View>
+      ) : null}
       {data && !profile ? (
         <Card>
           <Body secondary>Your account details could not be loaded. Pull down to try again.</Body>
@@ -153,7 +178,7 @@ export default function Home() {
       ) : null}
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
-      {data && data.trainers.length === 0 && isTrainer ? (
+      {data?.trainers && data.trainers.length === 0 && isTrainer ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="barbell" size={26} color={Colors.accentText} />
@@ -171,7 +196,7 @@ export default function Home() {
         </Card>
       ) : null}
 
-      {data && data.trainers.length === 0 && isClient ? (
+      {data?.trainers && data.trainers.length === 0 && isClient ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="link" size={26} color={Colors.accentText} />
@@ -184,11 +209,16 @@ export default function Home() {
         </Card>
       ) : null}
 
-      {data && data.trainers.length > 0 ? (
+      {data?.trainers && data.trainers.length > 0 ? (
         <>
           <View style={{ gap: Spacing.three }}>
             <Text style={styles.section}>Next session</Text>
-            {next ? (
+            {!upcoming ? (
+              <Card style={{ gap: Spacing.three }}>
+                <Body secondary>Your sessions could not be loaded. Check your internet connection.</Body>
+                <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
+              </Card>
+            ) : next ? (
               <View style={styles.next}>
                 <Text style={styles.nextWhen}>{fromNow(new Date(next.starts_at))}</Text>
                 <Text style={styles.nextDay}>{formatDay(new Date(next.starts_at))}</Text>
@@ -238,13 +268,13 @@ export default function Home() {
 
           <View style={styles.stats}>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{data.doneThisMonth}</Text>
+              <Text style={styles.statNumber}>{upcoming ? data.doneThisMonth : '–'}</Text>
               <Body secondary style={{ fontSize: 14 }}>
                 Sessions done this month
               </Body>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>{data.sessions.length}</Text>
+              <Text style={styles.statNumber}>{upcoming ? upcoming.length : '–'}</Text>
               <Body secondary style={{ fontSize: 14 }}>
                 Booked ahead
               </Body>

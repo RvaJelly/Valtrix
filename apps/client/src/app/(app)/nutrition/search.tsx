@@ -232,7 +232,8 @@ function Shortcut({
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.three,
+    // The same side margins as the other tabs.
+    padding: Spacing.four,
     paddingBottom: Spacing.six,
     gap: Spacing.three,
     width: '100%',

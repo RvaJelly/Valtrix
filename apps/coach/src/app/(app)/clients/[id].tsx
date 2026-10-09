@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 import { ClientForm } from '@/components/client-form';
@@ -12,6 +12,9 @@ import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
+import { goBack } from '@/lib/nav';
+import { useRefreshOnReturn } from '@/lib/refresh-on-return';
+import { saveError } from '@/lib/save-error';
 import { formatDay, SESSION_COLUMNS, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -20,39 +23,48 @@ export default function ClientDetail() {
   const [client, setClient] = useState<Client | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<Session[]>([]);
+  // Changes typed into the nutrition plan editor that aren't saved yet.
+  const [planUnsaved, setPlanUnsaved] = useState(false);
+  const loaded = useRef(false);
   const { session } = useAuth();
 
-  useFocusEffect(
-    useCallback(() => {
-      supabase
-        .from('sessions')
-        .select(SESSION_COLUMNS)
-        .eq('client_id', id)
-        .eq('status', 'scheduled')
-        .gte('starts_at', new Date().toISOString())
-        .order('starts_at')
-        .limit(5)
-        .then(({ data }) => setUpcoming((data as unknown as Session[]) ?? []));
-    }, [id]),
-  );
-
-  useEffect(() => {
+  // Loaded each time the page shows or the app comes back, so it notices the client
+  // joining the app (Message and Call appear) while the page stays open.
+  const load = useCallback(() => {
+    supabase
+      .from('sessions')
+      .select(SESSION_COLUMNS)
+      .eq('client_id', id)
+      .eq('status', 'scheduled')
+      .gte('starts_at', new Date().toISOString())
+      .order('starts_at')
+      .limit(5)
+      .then(({ data }) => {
+        if (data) setUpcoming(data as unknown as Session[]);
+      });
     supabase
       .from('clients')
       .select(CLIENT_COLUMNS)
       .eq('id', id)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else if (!data) setError('This client could not be found.');
-        else setClient(data as Client);
+        if (data) {
+          loaded.current = true;
+          setClient(data as Client);
+        } else if (!loaded.current) {
+          setError(error ? error.message : 'This client could not be found.');
+        }
+        // A failed reload keeps the page as it was.
       });
   }, [id]);
+
+  useFocusEffect(load);
+  useRefreshOnReturn(load);
 
   async function setStatus(status: ClientStatus) {
     const { error } = await supabase.from('clients').update({ status }).eq('id', id);
     if (error) return setError(error.message);
-    if (status === 'archived') router.back();
+    if (status === 'archived') goBack('/clients');
     else setClient((c) => (c ? { ...c, status } : c));
   }
 
@@ -79,8 +91,20 @@ export default function ClientDetail() {
         submitLabel="Save changes"
         onSubmit={async (input) => {
           const { error } = await supabase.from('clients').update(input).eq('id', id);
-          if (error) return error.message;
-          router.back();
+          if (error) return saveError(error);
+          setClient((c) => (c ? { ...c, ...input } : c));
+          // This button saves the details only. Don't quietly drop an open plan edit.
+          if (
+            planUnsaved &&
+            !(await confirm(
+              'Nutrition plan not saved',
+              `${input.first_name}’s details are saved, but your changes to the nutrition plan aren’t. Leave without saving them?`,
+              'Leave',
+            ))
+          ) {
+            return null;
+          }
+          goBack('/clients');
           return null;
         }}>
         <View style={{ gap: Spacing.three, marginTop: Spacing.three }}>
@@ -121,7 +145,7 @@ export default function ClientDetail() {
             </View>
           ) : null}
           <ClientWorkoutPlan clientId={client.id} clientName={client.first_name} />
-          <ClientNutrition client={client} />
+          <ClientNutrition client={client} onUnsavedChange={setPlanUnsaved} />
           <Text style={styles.section}>Upcoming sessions</Text>
           {upcoming.length === 0 ? <Body secondary>Nothing booked yet.</Body> : null}
           {upcoming.map((session) => (

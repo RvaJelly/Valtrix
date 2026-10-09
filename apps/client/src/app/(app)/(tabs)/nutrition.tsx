@@ -394,7 +394,8 @@ function PlanCard({ plan, open, onToggle }: { plan: NutritionPlan; open: boolean
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.three,
+    // The same side margins as the other tabs.
+    padding: Spacing.four,
     paddingBottom: Spacing.five,
     gap: Spacing.three,
     width: '100%',

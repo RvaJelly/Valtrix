@@ -96,6 +96,11 @@ export default function ExerciseLibrary() {
               autoCorrect={false}
             />
             <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} allowClear />
+            {!picking ? (
+              <Body secondary style={{ fontSize: 13 }}>
+                Tap one of yours to change it. Built-in exercises can’t be changed. Tap + to add your own.
+              </Body>
+            ) : null}
             <ErrorText>{error}</ErrorText>
           </View>
         }
@@ -112,6 +117,8 @@ export default function ExerciseLibrary() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => open(item)}
+            // Built-in exercises open nothing outside the picker, so they don't look tappable.
+            disabled={!picking && !item.trainer_id}
             style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>

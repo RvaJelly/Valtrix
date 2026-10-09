@@ -62,10 +62,11 @@ function MacroBar({ label, grams, target }: { label: string; grams: number; targ
       accessible
       accessibilityLabel={`${label}: ${formatGrams(grams)}${target ? ` of ${target} g` : ''}`}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.macroValue} numberOfLines={1}>
-        {formatGrams(grams).replace(' g', '')}
-        <Text style={styles.macroTarget}>{target ? ` / ${target} g` : ' g'}</Text>
-      </Text>
+      {/* On a narrow phone the target moves under the amount instead of being cut off. */}
+      <View style={styles.macroValueRow}>
+        <Text style={styles.macroValue}>{formatGrams(grams).replace(' g', '')}</Text>
+        <Text style={styles.macroTarget}>{target ? `/ ${target} g` : 'g'}</Text>
+      </View>
       {target ? (
         <View style={styles.bar}>
           <View
@@ -182,6 +183,12 @@ const styles = themed(() => ({
   macros: {
     flexDirection: 'row',
     gap: Spacing.three,
+  },
+  macroValueRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    columnGap: 3,
   },
   macroValue: {
     color: Colors.text,

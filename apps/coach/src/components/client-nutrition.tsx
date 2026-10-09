@@ -63,11 +63,18 @@ function targetsOf(plan: NutritionPlan | null | undefined): Targets | null {
 }
 
 // A client's nutrition plan (which they see in the Voltrix app) and, once they have
-// joined the app, what they logged in their food diary.
-export function ClientNutrition({ client }: { client: Client }) {
+// joined the app, what they logged in their food diary. onUnsavedChange says whether
+// the plan editor holds changes that aren't saved yet.
+export function ClientNutrition({
+  client,
+  onUnsavedChange,
+}: {
+  client: Client;
+  onUnsavedChange?: (unsaved: boolean) => void;
+}) {
   const [plan, setPlan] = useState<NutritionPlan | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraftState] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,12 +82,17 @@ export function ClientNutrition({ client }: { client: Client }) {
     loadPlan(client.id).then(setPlan, () => setLoadError('Could not load the nutrition plan. Try again later.'));
   }, [client.id]);
 
+  function setDraft(next: Draft | null) {
+    setDraftState(next);
+    onUnsavedChange?.(!!next && JSON.stringify(next) !== JSON.stringify(draftFrom(plan ?? null)));
+  }
+
   function edit(next: Partial<Draft>) {
-    setDraft((d) => (d ? { ...d, ...next } : d));
+    if (draft) setDraft({ ...draft, ...next });
   }
 
   function editMeal(index: number, next: Partial<Draft['meals'][number]>) {
-    setDraft((d) => (d ? { ...d, meals: d.meals.map((m, i) => (i === index ? { ...m, ...next } : m)) } : d));
+    if (draft) setDraft({ ...draft, meals: draft.meals.map((m, i) => (i === index ? { ...m, ...next } : m)) });
   }
 
   async function save() {

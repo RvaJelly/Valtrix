@@ -35,8 +35,8 @@ type Units = 'kg' | 'lb';
 const LB_PER_KG = 2.20462;
 
 // Trainers write weights as free text ("40", "20-25", "light band"), with plain
-// numbers in their own units. Those get the trainer's unit, plus about how much that
-// is in the client's unit when the two differ.
+// numbers in kg or lb. Those get the unit they were written in, plus about how much
+// that is in the client's unit when the two differ.
 function weightLabel(weight: string, trainerUnits: Units, myUnits: Units): { value: string; also?: string } {
   const text = weight.trim();
   const numbers = /^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?$/.exec(text);
@@ -155,7 +155,10 @@ export default function PlanWorkout() {
               <Stat label="Sets" value={String(ex.sets)} />
               <Stat label="Reps" value={ex.reps} />
               {ex.weight ? (
-                <Stat label="Weight" {...weightLabel(ex.weight, item.trainer_units, settings.units)} />
+                <Stat
+                  label="Weight"
+                  {...weightLabel(ex.weight, ex.weight_unit ?? item.trainer_units, settings.units)}
+                />
               ) : null}
               {ex.rest_seconds != null ? <Stat label="Rest" value={restLabel(ex.rest_seconds)} /> : null}
             </View>

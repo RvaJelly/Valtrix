@@ -54,11 +54,24 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
     if (problem) setError(problem);
   }
 
+  // maxLength matches the limits the database checks.
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextField label="First name" value={firstName} onChangeText={setFirstName} autoCapitalize="words" />
-        <TextField label="Last name" value={lastName} onChangeText={setLastName} autoCapitalize="words" />
+        <TextField
+          label="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          autoCapitalize="words"
+          maxLength={200}
+        />
+        <TextField
+          label="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+          maxLength={200}
+        />
         <TextField
           label="Email"
           value={email}
@@ -66,6 +79,7 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
           autoCapitalize="none"
           keyboardType="email-address"
           placeholder="Optional, lets them join the Voltrix app"
+          maxLength={320}
         />
         <TextField
           label="Phone"
@@ -73,12 +87,20 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
           onChangeText={setPhone}
           keyboardType="phone-pad"
           placeholder="Optional"
+          maxLength={30}
         />
-        <TextField label="Goal" value={goal} onChangeText={setGoal} placeholder="For example: lose 5 kg by summer" />
+        <TextField
+          label="Goal"
+          value={goal}
+          onChangeText={setGoal}
+          placeholder="For example: lose 5 kg by summer"
+          maxLength={500}
+        />
         <TextField
           label="Notes"
           value={notes}
           onChangeText={setNotes}
+          maxLength={10000}
           multiline
           placeholder="Injuries, preferences, anything useful"
           style={{ minHeight: 100, paddingTop: Spacing.three, textAlignVertical: 'top' }}

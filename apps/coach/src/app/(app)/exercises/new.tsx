@@ -1,4 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 
@@ -7,6 +7,7 @@ import { Button, ErrorText, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { goBack } from '@/lib/nav';
 import { supabase } from '@/lib/supabase';
 import { removeWorkoutVideos } from '@/lib/workout-videos';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Equipment, type Exercise, type MuscleGroup } from '@/lib/workouts';
@@ -81,7 +82,7 @@ export default function ExerciseForm() {
     setBusy(false);
     if (error) return setError(error.message);
     unsaved.current.path = null;
-    router.back();
+    goBack('/exercises');
   }
 
   async function remove() {
@@ -90,7 +91,7 @@ export default function ExerciseForm() {
     // 23503: still used in a workout (foreign key).
     if (error) return setError(error.code === '23503' ? 'Remove it from your workouts first.' : error.message);
     await removeWorkoutVideos([video]);
-    router.back();
+    goBack('/exercises');
   }
 
   if (!loaded) {

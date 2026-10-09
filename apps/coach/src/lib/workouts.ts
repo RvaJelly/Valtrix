@@ -32,16 +32,22 @@ export type Exercise = {
   muscle_group: MuscleGroup;
   equipment: Equipment;
   instructions: string | null;
+  // The exercise's demo video in the workout-videos bucket, for a trainer's own exercises.
+  video_path: string | null;
 };
 
-export const EXERCISE_COLUMNS = 'id, trainer_id, name, muscle_group, equipment, instructions';
+export const EXERCISE_COLUMNS = 'id, trainer_id, name, muscle_group, equipment, instructions, video_path';
 
 export type Workout = {
   id: string;
   name: string;
   notes: string | null;
   updated_at: string;
+  // A video for the whole workout, like a follow-along.
+  video_path: string | null;
 };
+
+export const WORKOUT_COLUMNS = 'id, name, notes, updated_at, video_path';
 
 export type WorkoutExercise = {
   id: string;
@@ -53,8 +59,10 @@ export type WorkoutExercise = {
   weight: string | null;
   rest_seconds: number | null;
   notes: string | null;
-  exercises: Pick<Exercise, 'name' | 'muscle_group' | 'equipment'>;
+  // A demo for this exercise in this workout. Without one, the exercise's own demo shows.
+  video_path: string | null;
+  exercises: Pick<Exercise, 'name' | 'muscle_group' | 'equipment' | 'video_path'>;
 };
 
 export const WORKOUT_EXERCISE_COLUMNS =
-  'id, workout_id, exercise_id, position, sets, reps, weight, rest_seconds, notes, exercises(name, muscle_group, equipment)';
+  'id, workout_id, exercise_id, position, sets, reps, weight, rest_seconds, notes, video_path, exercises(name, muscle_group, equipment, video_path)';

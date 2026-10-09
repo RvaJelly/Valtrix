@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
@@ -29,6 +29,7 @@ export type SessionInput = {
   duration_minutes: number;
   location: string | null;
   notes: string | null;
+  online: boolean;
 };
 
 const NO_CLIENT = 'none';
@@ -39,6 +40,8 @@ type Props = {
   day: Date;
   submitLabel: string;
   onSubmit: (input: SessionInput) => Promise<string | null>;
+  // Shown above the form, like the button to join an online session.
+  top?: ReactNode;
   children?: ReactNode;
 };
 
@@ -47,7 +50,7 @@ function orNull(value: string) {
   return trimmed ? trimmed : null;
 }
 
-export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, children }: Props) {
+export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, top, children }: Props) {
   const initialStart = initial?.starts_at ? new Date(initial.starts_at) : null;
   const [clients, setClients] = useState<Pick<Client, 'id' | 'first_name' | 'last_name'>[] | null>(null);
   const [who, setWho] = useState<string | null>(initial?.client_id ?? (initial?.title ? NO_CLIENT : null));
@@ -57,6 +60,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, c
   const [duration, setDuration] = useState<string | null>(String(initial?.duration_minutes ?? 60));
   const [location, setLocation] = useState(initial?.location ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [online, setOnline] = useState(initial?.online ?? false);
   const [dayBookings, setDayBookings] = useState<Session[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -106,6 +110,8 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, c
       duration_minutes: Number(duration ?? 60),
       location: orNull(location),
       notes: orNull(notes),
+      // A video call needs a client to call.
+      online: who !== NO_CLIENT && online,
     });
     setBusy(false);
     if (problem) setError(problem);
@@ -114,6 +120,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, c
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {top}
         <Text style={styles.label}>Client</Text>
         {clients && clients.length === 0 && !initial?.client_id ? (
           <Body secondary style={{ fontSize: 14 }}>
@@ -155,7 +162,34 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, c
           </View>
         ) : null}
 
-        <TextField label="Where" value={location} onChangeText={setLocation} placeholder="Optional, for example: Main gym" />
+        {who && who !== NO_CLIENT ? (
+          <View style={styles.online}>
+            <Ionicons name="videocam-outline" size={22} color={Colors.accentText} />
+            {/* The words toggle it too, so it is easy to hit. */}
+            <Pressable accessible={false} onPress={() => setOnline(!online)} style={{ flex: 1 }}>
+              <Text style={styles.onlineTitle}>Online (video call)</Text>
+              <Body secondary style={{ fontSize: 13 }}>
+                You both get a “Join video call” button 15 minutes before it starts.
+              </Body>
+            </Pressable>
+            <Switch
+              accessibilityLabel="Online (video call)"
+              value={online}
+              onValueChange={setOnline}
+              trackColor={{ true: Colors.accent, false: Colors.border }}
+              thumbColor="#FFFFFF"
+              // The web Switch tints the thumb teal unless told otherwise.
+              {...(Platform.OS === 'web' ? { activeThumbColor: '#FFFFFF' } : {})}
+            />
+          </View>
+        ) : null}
+
+        <TextField
+          label="Where"
+          value={location}
+          onChangeText={setLocation}
+          placeholder={online && who !== NO_CLIENT ? 'Optional' : 'Optional, for example: Main gym'}
+        />
         <TextField
           label="Notes"
           value={notes}
@@ -235,6 +269,19 @@ const styles = themed(() => ({
   dayText: {
     flex: 1,
     textAlign: 'center',
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  online: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.surface,
+  },
+  onlineTitle: {
     color: Colors.text,
     fontSize: 16,
     fontWeight: '700',

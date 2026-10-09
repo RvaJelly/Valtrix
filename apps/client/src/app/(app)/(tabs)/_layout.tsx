@@ -29,6 +29,7 @@ export default function TabLayout() {
         tabBarInactiveTintColor: Colors.textSecondary,
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen name="plan" options={{ title: 'Plan', tabBarIcon: tabIcon('barbell') }} />
       <Tabs.Screen
         name="chats"
         options={{
@@ -47,9 +48,6 @@ export default function TabLayout() {
           sceneStyle: { backgroundColor: '#000000' },
         }}
       />
-      <Tabs.Screen name="sessions" options={{ title: 'Sessions', tabBarIcon: tabIcon('calendar') }} />
-      <Tabs.Screen name="trainers" options={{ title: 'Trainers', tabBarIcon: tabIcon('people') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );
 }

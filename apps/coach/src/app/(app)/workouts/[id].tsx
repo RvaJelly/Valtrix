@@ -4,11 +4,19 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/components/ui';
+import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
-import { MUSCLE_GROUPS, WORKOUT_EXERCISE_COLUMNS, type Workout, type WorkoutExercise } from '@/lib/workouts';
+import { removeWorkoutVideos } from '@/lib/workout-videos';
+import {
+  MUSCLE_GROUPS,
+  WORKOUT_COLUMNS,
+  WORKOUT_EXERCISE_COLUMNS,
+  type Workout,
+  type WorkoutExercise,
+} from '@/lib/workouts';
 
 type Editable = Pick<WorkoutExercise, 'sets' | 'reps' | 'weight' | 'rest_seconds'>;
 
@@ -22,7 +30,7 @@ export default function WorkoutEditor() {
 
   const load = useCallback(async () => {
     const [w, rows] = await Promise.all([
-      supabase.from('workouts').select('id, name, notes, updated_at').eq('id', id).maybeSingle(),
+      supabase.from('workouts').select(WORKOUT_COLUMNS).eq('id', id).maybeSingle(),
       supabase.from('workout_exercises').select(WORKOUT_EXERCISE_COLUMNS).eq('workout_id', id).order('position'),
     ]);
     if (w.error || rows.error) return setError((w.error ?? rows.error)!.message);
@@ -45,6 +53,20 @@ export default function WorkoutEditor() {
     const { error } = await supabase.from('workouts').update({ name: trimmed }).eq('id', id);
     if (error) setError(error.message);
     else setWorkout({ ...workout, name: trimmed });
+  }
+
+  async function saveWorkoutVideo(path: string | null) {
+    const { error } = await supabase.from('workouts').update({ video_path: path }).eq('id', id);
+    if (error) return error.message;
+    setWorkout((w) => (w ? { ...w, video_path: path } : w));
+    return null;
+  }
+
+  async function saveItemVideo(itemId: string, path: string | null) {
+    const { error } = await supabase.from('workout_exercises').update({ video_path: path }).eq('id', itemId);
+    if (error) return error.message;
+    setItems((list) => list.map((it) => (it.id === itemId ? { ...it, video_path: path } : it)));
+    return null;
   }
 
   async function saveItem(itemId: string, changes: Partial<Editable>) {
@@ -71,15 +93,19 @@ export default function WorkoutEditor() {
   }
 
   async function remove(itemId: string) {
+    const video = items.find((it) => it.id === itemId)?.video_path;
     setItems((list) => list.filter((it) => it.id !== itemId));
     const { error } = await supabase.from('workout_exercises').delete().eq('id', itemId);
     if (error) setError(error.message);
+    else await removeWorkoutVideos([video]);
   }
 
   async function deleteWorkout() {
-    if (!(await confirm('Delete workout?', 'This cannot be undone.', 'Delete'))) return;
+    const message = 'It also comes off any client plans it is in. This cannot be undone.';
+    if (!(await confirm('Delete workout?', message, 'Delete'))) return;
     const { error } = await supabase.from('workouts').delete().eq('id', id);
     if (error) return setError(error.message);
+    await removeWorkoutVideos([workout?.video_path, ...items.map((it) => it.video_path)]);
     router.back();
   }
 
@@ -105,6 +131,12 @@ export default function WorkoutEditor() {
       <Stack.Screen options={{ title: workout.name }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextField label="Workout name" value={name} onChangeText={setName} onBlur={saveName} onSubmitEditing={saveName} />
+        <WorkoutVideo
+          label="Workout video"
+          path={workout.video_path}
+          onChange={saveWorkoutVideo}
+          title={workout.name}
+        />
         <ErrorText>{error}</ErrorText>
 
         {items.length === 0 ? (
@@ -176,6 +208,15 @@ export default function WorkoutEditor() {
                   }}
                 />
               </View>
+              <WorkoutVideo
+                label="Demo video"
+                path={item.video_path}
+                onChange={(path) => saveItemVideo(item.id, path)}
+                fallback={
+                  item.exercises.video_path ? { path: item.exercises.video_path, note: 'From the exercise' } : null
+                }
+                title={item.exercises.name}
+              />
             </Card>
           ))
         )}

@@ -22,7 +22,10 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: Colors.background },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="trainers/index" options={{ title: 'Trainers' }} />
         <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
+        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
         <Stack.Screen
           name="stories/[author]"
           options={{

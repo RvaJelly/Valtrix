@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Body } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { endOf, formatTime, SESSION_STATUS, sessionName, type Session } from '@/lib/sessions';
+import { endOf, formatTime, ONLINE_LABEL, SESSION_STATUS, sessionName, type Session } from '@/lib/sessions';
 
 // One session in a list: time on the left, who and where on the right.
 export function SessionRow({ session }: { session: Session }) {
@@ -27,7 +27,11 @@ export function SessionRow({ session }: { session: Session }) {
           {sessionName(session)}
         </Text>
         <Body secondary style={styles.small} numberOfLines={1}>
-          {[session.location, session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null]
+          {[
+            session.online ? ONLINE_LABEL : null,
+            session.location,
+            session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null,
+          ]
             .filter(Boolean)
             .join(' · ') || `${session.duration_minutes} min`}
         </Body>

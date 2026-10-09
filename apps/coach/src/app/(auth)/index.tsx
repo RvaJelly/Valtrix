@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/logo';
 import { Body, Button } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { TRIAL_DAYS } from '@/lib/access';
 
 const HIGHLIGHTS: { icon: ComponentProps<typeof Ionicons>['name']; title: string; text: string }[] = [
   { icon: 'people', title: 'All your clients', text: 'Goals, notes and progress for every client in one place.' },
@@ -43,7 +44,7 @@ export default function Welcome() {
         </View>
 
         <View style={styles.actions}>
-          <Button title="Start your 3-day free trial" onPress={() => router.push('/sign-up')} />
+          <Button title={`Start your ${TRIAL_DAYS}-day free trial`} onPress={() => router.push('/sign-up')} />
           <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
         </View>
       </ScrollView>

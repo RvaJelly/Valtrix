@@ -28,8 +28,8 @@ function formatDate(date: Date) {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
 }
 
-// Trainers add a card here before they get into the app. Nothing is charged
-// for the first three days; after that the monthly plan starts on its own.
+// Trainers add a card here before they get into the app. Nothing is charged for the first TRIAL_DAYS (14) days;
+// after that the monthly plan starts on its own.
 export function SubscribeView({ mode, onSignOut }: Props) {
   const [notice, setNotice] = useState(false);
   const starting = mode === 'start';

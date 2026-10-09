@@ -32,6 +32,11 @@ const UNITS: Record<SettingsValues['units'], string> = {
   lb: 'Pounds (lb)',
 };
 
+const LENGTHS: Record<SettingsValues['lengths'], string> = {
+  cm: 'Centimetres (cm)',
+  in: 'Inches (in)',
+};
+
 export default function Settings() {
   const { session, profile, refreshProfile, signOut } = useAuth();
   const { settings, update } = useSettings();
@@ -102,6 +107,13 @@ export default function Settings() {
             <Segmented options={UNITS} value={settings.units} onChange={(units) => update({ units })} />
             <Body secondary style={styles.small}>
               For new weights. Weights you already wrote keep their unit.
+            </Body>
+            <Body secondary style={styles.small}>
+              Body measurements
+            </Body>
+            <Segmented options={LENGTHS} value={settings.lengths} onChange={(lengths) => update({ lengths })} />
+            <Body secondary style={styles.small}>
+              Your clients’ workouts, weight and measurements show in these units.
             </Body>
           </Card>
         </Section>

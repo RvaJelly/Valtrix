@@ -4,8 +4,11 @@ import { ActivityIndicator, Text, View } from 'react-native';
 
 import { AppStatusLabel } from '@/components/app-status';
 import { ClientForm } from '@/components/client-form';
-import { ClientWorkoutPlan } from '@/components/client-workout-plan';
+import { ClientHabits } from '@/components/client-habits';
 import { ClientNutrition } from '@/components/client-nutrition';
+import { ClientProgress } from '@/components/client-progress';
+import { ClientTrainingLog } from '@/components/client-training-log';
+import { ClientWorkoutPlan } from '@/components/client-workout-plan';
 import { Body, Button, ErrorText } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
@@ -163,6 +166,14 @@ export default function ClientDetail() {
           ) : null}
           <ClientWorkoutPlan clientId={client.id} clientName={client.first_name} />
           <ClientNutrition client={client} onUnsavedChange={setPlanUnsaved} />
+          {/* What the client logs in Voltrix, only while they have accepted this trainer. */}
+          {appStatusOf(client) === 'joined' && client.user_id && client.status !== 'archived' ? (
+            <>
+              <ClientTrainingLog client={client} />
+              <ClientProgress client={client} />
+              <ClientHabits client={client} />
+            </>
+          ) : null}
           <Text style={styles.section}>Upcoming sessions</Text>
           {upcoming.length === 0 ? <Body secondary>Nothing booked yet.</Body> : null}
           {upcoming.map((session) => (
@@ -196,13 +207,13 @@ function explain(status: AppStatus, client: Client) {
   const name = client.first_name;
   switch (status) {
     case 'joined':
-      return `${name} accepted your invite in the Voltrix app. They see the sessions you book and the plans you set, and you can message and call each other.`;
+      return `${name} accepted your invite in the Voltrix app. They see the sessions you book and the plans you set, you see their food diary, workouts, progress, check-ins and habits, and you can message and call each other.`;
     case 'invited':
       return `${name} has a Voltrix account with ${client.email}. Your invite is on their Home screen, and you'll be linked once they accept.`;
     case 'declined':
       return `${name} said no to your invite, so you're not linked. You can send it again later.`;
     case 'left':
-      return `${name} left, so you no longer see their food diary, plan ticks, chat or calls. Your notes, sessions and plans stay here.`;
+      return `${name} left, so you no longer see their food diary, workouts, progress, check-ins, habits, chat or calls. Your notes, sessions and plans stay here.`;
     case 'gone':
       return client.email
         ? `The person who joined as this client left, and isn't on Voltrix with ${client.email} now. If their email changed, put the new one above to invite them again. To invite someone else, add them as a new client: this chat and history stay with the person who left.`

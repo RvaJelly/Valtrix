@@ -4,9 +4,9 @@ export type ClientStatus = 'active' | 'paused' | 'archived';
 
 // Where a client is with the Voltrix app (app_status in the database). Adding a client's
 // email invites them; only 'joined' (they accepted) links them, which brings their food
-// diary, plan ticks, chat and calls. 'gone' is a client who left and isn't on Voltrix with
-// the email on the client now: the chat and history stay theirs, so nobody else can be
-// invited on that client.
+// diary, workouts, progress, check-ins, habits, plan ticks, chat and calls. 'gone' is a
+// client who left and isn't on Voltrix with the email on the client now: the chat and
+// history stay theirs, so nobody else can be invited on that client.
 export type AppStatus = 'not_on_app' | 'invited' | 'declined' | 'joined' | 'left' | 'gone';
 
 export type Client = {

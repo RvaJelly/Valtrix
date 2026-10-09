@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -10,14 +10,16 @@ import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
+import { useChat, useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { removeMyChatPhotos } from '@/lib/chat';
 import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
-import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
+import { leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
 import { supabase } from '@/lib/supabase';
+import { leaveTrainer, loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
   light: 'White',
@@ -102,6 +104,10 @@ export default function Settings() {
             userId={session?.user.id}
             onSaved={refreshProfile}
           />
+        </Section>
+
+        <Section title="My trainers">
+          <MyTrainers />
         </Section>
 
         <Section title="Blocked people">
@@ -223,6 +229,122 @@ function ProfilePhoto({
       <Body secondary style={styles.small}>
         Your photo shows on your stories and reels.
       </Body>
+      <ErrorText>{error}</ErrorText>
+    </Card>
+  );
+}
+
+// The trainers the person accepted, each with Leave. Trainers who archived the person are
+// listed too: they see the food diary and chat again if they make the person active.
+function MyTrainers() {
+  const { refresh } = useChat();
+  const [trainers, setTrainers] = useState<Trainer[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(
+    () =>
+      loadTrainers(true).then(
+        (list) => {
+          setTrainers(list);
+          setFailed(false);
+        },
+        () => setFailed(true),
+      ),
+    [],
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Joined or left on another phone.
+  useChatEvents((event) => {
+    if (event.type === 'link') load();
+  });
+
+  // A trainer who added the person twice is still one trainer, shown as active if either is.
+  const list = trainers
+    ? [...trainers]
+        .sort((a, b) => Number(a.client_status === 'archived') - Number(b.client_status === 'archived'))
+        .filter((t, i, all) => all.findIndex((x) => x.trainer_id === t.trainer_id) === i)
+    : null;
+
+  async function leave(trainer: Trainer) {
+    const name = trainerTitle(trainer);
+    const firstName = trainer.trainer_name?.split(' ')[0] || name;
+    const sure = await confirm(
+      `Leave ${name}?`,
+      `${firstName} will no longer see your food diary, the workouts you tick off, your chat or your calls, and you won't see the plans and sessions they set for you. ${firstName} keeps their own notes. You can join again if they send you a new invite.`,
+      'Leave',
+    );
+    if (!sure) return;
+    setError(null);
+    setLeaving(trainer.trainer_id);
+    try {
+      await leaveTrainer(trainer.client_id);
+      // The chat goes from Chats, and reminders for their sessions stop.
+      refresh();
+      refreshReminders();
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not leave. Check your connection and try again.');
+    }
+    setLeaving(null);
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {failed && !trainers ? (
+        <Body secondary style={styles.small}>
+          Your trainers could not be loaded. Check your connection.
+        </Body>
+      ) : null}
+      {list && !list.length ? (
+        <Body secondary style={styles.small}>
+          You haven&apos;t joined a trainer. When a trainer invites you, the invite shows on Home for you to accept.
+        </Body>
+      ) : null}
+      {list?.map((trainer) => (
+        <View key={trainer.trainer_id} style={{ gap: Spacing.two }}>
+          <View style={styles.blockedRow}>
+            <Avatar url={trainer.trainer_avatar} name={trainerTitle(trainer)} size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkLabel} numberOfLines={1}>
+                {trainerTitle(trainer)}
+              </Text>
+              {trainer.trainer_name && trainer.business_name ? (
+                <Body secondary style={styles.small} numberOfLines={1}>
+                  {trainer.business_name}
+                </Body>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Leave ${trainerTitle(trainer)}`}
+              onPress={() => leave(trainer)}
+              disabled={!!leaving}
+              hitSlop={8}
+              style={[styles.unblock, leaving === trainer.trainer_id && { opacity: 0.5 }]}>
+              <Text style={[styles.unblockText, { color: Colors.danger }]}>
+                {leaving === trainer.trainer_id ? 'Leaving…' : 'Leave'}
+              </Text>
+            </Pressable>
+          </View>
+          {trainer.client_status === 'archived' ? (
+            <Body secondary style={styles.small}>
+              {trainer.trainer_name?.split(' ')[0] || trainerTitle(trainer)} archived you for now, so they don&apos;t
+              see your food diary or chat. They will again if they make you active. Leave if you don&apos;t want that.
+            </Body>
+          ) : null}
+        </View>
+      ))}
+      {list?.length ? (
+        <Body secondary style={styles.small}>
+          Your trainers see your food diary, the workouts you tick off and your chats with them.
+        </Body>
+      ) : null}
       <ErrorText>{error}</ErrorText>
     </Card>
   );

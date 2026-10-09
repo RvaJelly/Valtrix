@@ -9,7 +9,7 @@ export default function Chats() {
       empty={{
         title: 'No chats yet',
         message:
-          'You can message and call clients who have joined the Voltrix app. Add their email to a client, then ask them to sign up with it.',
+          'You can message and call clients once they accept your invite in the Voltrix app. Add a client’s email to invite them.',
         action: <Button title="Go to clients" variant="secondary" onPress={() => router.navigate('/clients')} />,
       }}
     />

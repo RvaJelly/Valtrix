@@ -1,17 +1,27 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
+import { AppStatusLabel } from '@/components/app-status';
 import { ClientForm } from '@/components/client-form';
 import { ClientWorkoutPlan } from '@/components/client-workout-plan';
 import { ClientNutrition } from '@/components/client-nutrition';
-import { Body, Button } from '@/components/ui';
+import { Body, Button, ErrorText } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
-import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
+import {
+  appStatusOf,
+  CLIENT_COLUMNS,
+  clientWithEmail,
+  fullName,
+  inviteAgain,
+  type AppStatus,
+  type Client,
+  type ClientStatus,
+} from '@/lib/clients';
 import { useGoBack } from '@/lib/nav';
 import { useRefreshOnReturn } from '@/lib/refresh-on-return';
 import { saveError } from '@/lib/save-error';
@@ -30,7 +40,7 @@ export default function ClientDetail() {
   const { session } = useAuth();
 
   // Loaded each time the page shows or the app comes back, so it notices the client
-  // joining the app (Message and Call appear) while the page stays open.
+  // accepting the invite (Message and Call appear) while the page stays open.
   const load = useCallback(() => {
     supabase
       .from('sessions')
@@ -61,6 +71,10 @@ export default function ClientDetail() {
 
   useFocusEffect(load);
   useRefreshOnReturn(load);
+  // The client accepted, declined or left just now.
+  useChatEvents((event) => {
+    if (event.type === 'link' && event.client_id === id) load();
+  });
 
   async function setStatus(status: ClientStatus) {
     const { error } = await supabase.from('clients').update({ status }).eq('id', id);
@@ -91,6 +105,20 @@ export default function ClientDetail() {
         initial={client}
         submitLabel="Save changes"
         onSubmit={async (input) => {
+          const same =
+            input.email?.toLowerCase() !== client.email?.trim().toLowerCase()
+              ? await clientWithEmail(input.email, id)
+              : null;
+          if (
+            same &&
+            !(await confirm(
+              `You already have ${fullName(same)}`,
+              `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them twice. Save anyway?`,
+              'Save anyway',
+            ))
+          ) {
+            return null;
+          }
           const { error } = await supabase.from('clients').update(input).eq('id', id);
           if (error) return saveError(error);
           setClient((c) => (c ? { ...c, ...input } : c));
@@ -110,20 +138,7 @@ export default function ClientDetail() {
         }}>
         <View style={{ gap: Spacing.three, marginTop: Spacing.three }}>
           <Text style={styles.section}>Voltrix app</Text>
-          <View style={styles.appStatus}>
-            <Ionicons
-              name={client.user_id ? 'checkmark-circle' : 'phone-portrait-outline'}
-              size={22}
-              color={client.user_id ? Colors.accentText : Colors.textSecondary}
-            />
-            <Body style={{ flex: 1, fontSize: 14 }}>
-              {client.user_id
-                ? `${client.first_name} has joined the Voltrix app. They see the sessions you book and get reminders.`
-                : client.email
-                  ? `Not on the app yet. Ask ${client.first_name} to download Voltrix and sign up with ${client.email}.`
-                  : `Add ${client.first_name}'s email above, then ask them to sign up in the Voltrix app with it.`}
-            </Body>
-          </View>
+          <AppLink client={client} onChanged={load} />
           {client.user_id && client.user_id !== session?.user.id ? (
             <View style={{ flexDirection: 'row', gap: Spacing.two }}>
               <View style={{ flex: 1 }}>
@@ -175,11 +190,62 @@ export default function ClientDetail() {
   );
 }
 
+// What each state means for the trainer, in plain words.
+function explain(status: AppStatus, client: Client) {
+  const name = client.first_name;
+  switch (status) {
+    case 'joined':
+      return `${name} accepted your invite in the Voltrix app. They see the sessions you book and the plans you set, and you can message and call each other.`;
+    case 'invited':
+      return `${name} has a Voltrix account with ${client.email}. Your invite is on their Home screen, and you'll be linked once they accept.`;
+    case 'declined':
+      return `${name} said no to your invite, so you're not linked. You can send it again later.`;
+    case 'left':
+      return `${name} left, so you no longer see their food diary, plan ticks, chat or calls. Your notes, sessions and plans stay here.`;
+    case 'gone':
+      return client.email
+        ? `The person who joined as this client left, and isn't on Voltrix with ${client.email} now. If their email changed, put the new one above to invite them again. To invite someone else, add them as a new client: this chat and history stay with the person who left.`
+        : `The person who joined as this client left. Put the email they use on Voltrix above to invite them again, or add someone else as a new client.`;
+    default:
+      return client.email
+        ? `Ask ${name} to download the Voltrix app and sign up with ${client.email}. Your invite will be waiting there for them to accept.`
+        : `Add ${name}'s email above to invite them to the Voltrix app.`;
+  }
+}
+
+// The client's place with the Voltrix app, with "Send invite again" after a no or a leave.
+function AppLink({ client, onChanged }: { client: Client; onChanged: () => void }) {
+  const status = appStatusOf(client);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function again() {
+    setError(null);
+    setBusy(true);
+    try {
+      await inviteAgain(client.id);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the invite. Try again.');
+    }
+    setBusy(false);
+  }
+
+  return (
+    <View style={styles.appStatus}>
+      <AppStatusLabel status={status} size={15} />
+      <Body style={{ fontSize: 14 }}>{explain(status, client)}</Body>
+      {(status === 'declined' || status === 'left') && client.email ? (
+        <Button title="Send invite again" variant="secondary" onPress={again} loading={busy} />
+      ) : null}
+      <ErrorText>{error}</ErrorText>
+    </View>
+  );
+}
+
 const styles = themed(() => ({
   appStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
+    gap: Spacing.two,
     padding: Spacing.three,
     borderRadius: Radius.large,
     backgroundColor: Colors.surface,

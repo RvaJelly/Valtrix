@@ -78,7 +78,7 @@ export function ClientForm({ initial, submitLabel, onSubmit, children }: Props) 
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          placeholder="Optional, lets them join the Voltrix app"
+          placeholder="Optional, invites them to the Voltrix app"
           maxLength={320}
         />
         <TextField

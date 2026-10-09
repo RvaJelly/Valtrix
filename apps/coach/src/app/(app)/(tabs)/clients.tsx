@@ -3,9 +3,11 @@ import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 
+import { AppStatusLabel } from '@/components/app-status';
 import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { CLIENT_COLUMNS, fullName, initials, STATUS_LABELS, type Client } from '@/lib/clients';
+import { useChatEvents } from '@/lib/chat-live';
+import { appStatusOf, CLIENT_COLUMNS, fullName, initials, STATUS_LABELS, type Client } from '@/lib/clients';
 import { supabase } from '@/lib/supabase';
 
 export default function Clients() {
@@ -48,6 +50,11 @@ export default function Clients() {
       load();
     }, [load]),
   );
+
+  // A client accepted, declined or left: their state changes here straight away.
+  useChatEvents((event) => {
+    if (event.type === 'link') load();
+  });
 
   async function refresh() {
     setRefreshing(true);
@@ -102,6 +109,7 @@ export default function Clients() {
       ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
       renderItem={({ item }) => (
         <Pressable
+          accessibilityRole="button"
           onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.id } })}
           style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
           <View style={styles.avatar}>
@@ -112,6 +120,9 @@ export default function Clients() {
             <Body secondary numberOfLines={1} style={{ fontSize: 14 }}>
               {item.goal || item.email || 'No goal set yet'}
             </Body>
+            <View style={{ marginTop: Spacing.one }}>
+              <AppStatusLabel status={appStatusOf(item)} />
+            </View>
           </View>
           {item.status !== 'active' ? <Text style={styles.badge}>{STATUS_LABELS[item.status]}</Text> : null}
           <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />

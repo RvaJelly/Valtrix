@@ -4,6 +4,7 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { InviteCard } from '@/components/invite-card';
 import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
@@ -11,6 +12,7 @@ import { TrainerCircle } from '@/components/trainer-circle';
 import { Body, Button, Card, ErrorText, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { useChatEvents } from '@/lib/chat-live';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
 import {
@@ -23,7 +25,15 @@ import {
   trainerName,
   type Session,
 } from '@/lib/sessions';
-import { listTrainers, loadTrainers, type PublicTrainer, type Trainer } from '@/lib/trainers';
+import {
+  listTrainers,
+  loadInvites,
+  loadTrainers,
+  trainerTitle,
+  type Invite,
+  type PublicTrainer,
+  type Trainer,
+} from '@/lib/trainers';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -46,6 +56,8 @@ function fromNow(date: Date, now = new Date()) {
 type HomeData = {
   // Null when they couldn't be loaded.
   trainers: Trainer[] | null;
+  // Trainers waiting for a yes or no.
+  invites: Invite[];
   everyone: PublicTrainer[];
   // Booked sessions that hadn't ended when they were loaded; null when they couldn't be loaded.
   sessions: Session[] | null;
@@ -89,8 +101,9 @@ export default function Home() {
   const load = useCallback(async (reminders = true) => {
     const start = new Date();
     const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-    const [trainers, sessions, everyone, stories, seen] = await Promise.all([
+    const [trainers, invites, sessions, everyone, stories, seen] = await Promise.all([
       loadTrainers().catch(() => null),
+      loadInvites().catch(() => null),
       loadSessions(monthStart, addDays(start, 90)).catch(() => null),
       listTrainers().catch(() => null),
       loadStories().catch(() => null),
@@ -99,7 +112,12 @@ export default function Home() {
     setNow(new Date());
     setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
     setData((old) => ({
-      trainers: trainers ?? old?.trainers ?? null,
+      // A trainer who added the client twice shows once.
+      trainers:
+        trainers?.filter((t, i) => trainers.findIndex((x) => x.trainer_id === t.trainer_id) === i) ??
+        old?.trainers ??
+        null,
+      invites: invites ?? old?.invites ?? [],
       everyone: everyone ?? old?.everyone ?? [],
       sessions: sessions
         ? sessions.filter((s) => s.status === 'scheduled' && endOf(s) > start)
@@ -111,6 +129,11 @@ export default function Home() {
     // A newly linked trainer may have sessions booked already.
     if (reminders && trainers && sessions) refreshReminders();
   }, []);
+
+  // A trainer invited this person, or an invite or link changed on another phone.
+  useChatEvents((event) => {
+    if (event.type === 'link') load();
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -179,7 +202,11 @@ export default function Home() {
       ) : null}
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
-      {data?.trainers && data.trainers.length === 0 && isTrainer ? (
+      {data?.invites.map((invite) => (
+        <InviteCard key={invite.client_id} invite={invite} onAnswered={load} />
+      ))}
+
+      {data?.trainers && data.trainers.length === 0 && !data.invites.length && isTrainer ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="barbell" size={26} color={Colors.accentText} />
@@ -190,14 +217,14 @@ export default function Home() {
             Coach.
           </Body>
           <Body secondary>
-            Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, your
-            sessions show up here.
+            Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, their invite
+            shows up here for you to accept.
           </Body>
           <Button title="Check again" variant="secondary" onPress={refresh} loading={refreshing} />
         </Card>
       ) : null}
 
-      {data?.trainers && data.trainers.length === 0 && isClient ? (
+      {data?.trainers && data.trainers.length === 0 && !data.invites.length && isClient ? (
         <Card style={{ gap: Spacing.three }}>
           <View style={styles.waitIcon}>
             <Ionicons name="link" size={26} color={Colors.accentText} />
@@ -205,7 +232,7 @@ export default function Home() {
           <Text style={styles.cardTitle}>Connect to your trainer</Text>
           <Body secondary>Ask your personal trainer to add you as a client in Voltrix Coach with this email:</Body>
           <Text style={styles.email}>{session?.user.email}</Text>
-          <Body secondary>Then tap the button below. Your sessions will show up here.</Body>
+          <Body secondary>Their invite will show up here for you to accept. Tap the button below to check.</Body>
           <Button title="Check again" onPress={refresh} loading={refreshing} />
         </Card>
       ) : null}
@@ -290,13 +317,9 @@ export default function Home() {
                 accessibilityRole="button"
                 onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: t.trainer_id } })}
                 style={({ pressed }) => [styles.trainer, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-                <Avatar
-                  url={data.everyone.find((e) => e.id === t.trainer_id)?.avatar_url}
-                  name={t.trainer_name ?? t.business_name}
-                  size={48}
-                />
+                <Avatar url={t.trainer_avatar} name={trainerTitle(t)} size={48} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.trainerName}>{t.trainer_name || t.business_name || 'Your trainer'}</Text>
+                  <Text style={styles.trainerName}>{trainerTitle(t)}</Text>
                   {t.trainer_name && t.business_name ? (
                     <Body secondary style={{ fontSize: 14 }}>
                       {t.business_name}
@@ -308,7 +331,7 @@ export default function Home() {
                   onPress={() =>
                     router.push({
                       pathname: '/chat/[id]',
-                      params: { id: t.client_id, name: t.trainer_name || t.business_name || 'Your trainer' },
+                      params: { id: t.client_id, name: trainerTitle(t), avatar: t.trainer_avatar ?? '' },
                     })
                   }
                   hitSlop={8}

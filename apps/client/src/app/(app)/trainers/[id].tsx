@@ -1,14 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { InviteCard } from '@/components/invite-card';
 import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { useChat } from '@/lib/chat-live';
-import { displayName, distanceLabel, listTrainers, loadTrainers, yearsLabel, type PublicTrainer } from '@/lib/trainers';
+import { useChat, useChatEvents } from '@/lib/chat-live';
+import {
+  displayName,
+  distanceLabel,
+  listTrainers,
+  loadInvites,
+  loadTrainers,
+  yearsLabel,
+  type Invite,
+  type PublicTrainer,
+} from '@/lib/trainers';
 
 // A trainer's public profile.
 export default function TrainerProfile() {
@@ -19,30 +29,46 @@ export default function TrainerProfile() {
   const [trainer, setTrainer] = useState<PublicTrainer | null | undefined>(undefined);
   // The chat with this trainer, when they are the signed-in client's trainer.
   const [chatId, setChatId] = useState<string | null>(null);
+  // This trainer's invite, while it waits for a yes or no.
+  const [invite, setInvite] = useState<Invite | null>(null);
+
+  const load = useCallback(
+    () =>
+      Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => [] as Invite[])])
+        .then(([all, mine, invites]) => {
+          const link = mine.find((t) => t.trainer_id === id);
+          const asked = invites.find((t) => t.trainer_id === id) ?? null;
+          // The list only has trainers on an active plan with a business name. The client's
+          // own trainer, or one who invited them, always shows.
+          const known = link ?? asked;
+          const own: PublicTrainer | null = known
+            ? {
+                id: known.trainer_id,
+                full_name: known.trainer_name,
+                business_name: known.business_name,
+                avatar_url: known.trainer_avatar,
+                specialties: [],
+                bio: null,
+                city: null,
+                years_experience: null,
+              }
+            : null;
+          setTrainer(all.find((t) => t.id === id) ?? own);
+          setChatId(link?.client_id ?? null);
+          setInvite(asked);
+        })
+        .catch(() => setTrainer(null)),
+    [id],
+  );
 
   useEffect(() => {
-    Promise.all([listTrainers(), loadTrainers()])
-      .then(([all, mine]) => {
-        const link = mine.find((t) => t.trainer_id === id);
-        // The list only has trainers on an active plan with a business name. The client's
-        // own trainer always shows, with their name and the Message and Call buttons.
-        const own: PublicTrainer | null = link
-          ? {
-              id: link.trainer_id,
-              full_name: link.trainer_name,
-              business_name: link.business_name,
-              avatar_url: null,
-              specialties: [],
-              bio: null,
-              city: null,
-              years_experience: null,
-            }
-          : null;
-        setTrainer(all.find((t) => t.id === id) ?? own);
-        setChatId(link?.client_id ?? null);
-      })
-      .catch(() => setTrainer(null));
-  }, [id]);
+    load();
+  }, [load]);
+
+  // Answered on another phone, or the trainer sent or withdrew the invite.
+  useChatEvents((event) => {
+    if (event.type === 'link') load();
+  });
 
   if (trainer === undefined) return <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
   if (trainer === null) {
@@ -88,6 +114,8 @@ export default function TrainerProfile() {
           </View>
         ) : null}
       </View>
+
+      {invite && !isMine ? <InviteCard invite={invite} onAnswered={load} /> : null}
 
       {chatId && !isMe ? (
         <View style={{ flexDirection: 'row', gap: Spacing.two }}>
@@ -148,12 +176,12 @@ export default function TrainerProfile() {
         </Card>
       ) : null}
 
-      {!isMine && !isMe ? (
+      {!isMine && !isMe && !invite ? (
         <Card style={{ gap: Spacing.two }}>
           <Text style={styles.cardTitle}>Want to train with {firstName}?</Text>
           <Body secondary>
-            Ask {firstName} to add you as a client in Voltrix Coach with {session?.user.email}. You will see your
-            sessions here straight away.
+            Ask {firstName} to add you as a client in Voltrix Coach with {session?.user.email}. Their invite will show
+            up here for you to accept.
           </Body>
         </Card>
       ) : null}

@@ -63,7 +63,7 @@ function targetsOf(plan: NutritionPlan | null | undefined): Targets | null {
 }
 
 // A client's nutrition plan (which they see in the Voltrix app) and, once they have
-// joined the app, what they logged in their food diary. onUnsavedChange says whether
+// accepted the invite there, what they logged in their food diary. onUnsavedChange says whether
 // the plan editor holds changes that aren't saved yet.
 export function ClientNutrition({
   client,
@@ -291,7 +291,7 @@ export function ClientNutrition({
           <Body secondary style={{ fontSize: 15 }}>
             {client.user_id
               ? `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They see it in the Voltrix app.`
-              : `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They'll see it when they join the Voltrix app.`}
+              : `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They'll see it once they accept your invite in the Voltrix app.`}
           </Body>
           <Button title="Set a nutrition plan" onPress={() => setDraft(draftFrom(null))} />
         </View>
@@ -337,7 +337,7 @@ function PlanView({ plan, client, onEdit }: { plan: NutritionPlan; client: Clien
       <Body secondary style={{ fontSize: 13 }}>
         {client.user_id
           ? `${client.first_name} sees this plan in the Voltrix app.`
-          : `${client.first_name} will see this plan after joining the Voltrix app.`}
+          : `${client.first_name} will see this plan once they accept your invite in the Voltrix app.`}
       </Body>
       <Button title="Edit plan" variant="secondary" onPress={onEdit} />
     </View>

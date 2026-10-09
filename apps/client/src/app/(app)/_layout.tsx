@@ -32,6 +32,10 @@ export default function AppLayout() {
             contentStyle: { backgroundColor: '#000000' },
           }}
         />
+        <Stack.Screen
+          name="reel/[id]"
+          options={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: '#000000' } }}
+        />
         <Stack.Screen name="posts/new" options={{ title: 'New post', presentation: 'modal' }} />
         <Stack.Screen name="rules" options={{ title: 'Community rules' }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />

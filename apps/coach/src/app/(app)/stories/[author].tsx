@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
+import { LikersSheet } from '@/components/likers-sheet';
 import { PostMenu } from '@/components/post-menu';
 import { Spacing } from '@/constants/theme';
 import {
@@ -17,10 +18,12 @@ import {
   loadStories,
   markSeen,
   mediaUrl,
+  setLiked,
   timeAgo,
   type Story,
   type StoryGroup,
 } from '@/lib/posts';
+import { compactCount, loadCounts, type PostCounts } from '@/lib/social';
 
 // How long a photo story stays on screen.
 const PHOTO_MS = 5000;
@@ -48,6 +51,10 @@ export default function StoryViewer() {
   const [readyId, setReadyId] = useState<string | null>(null);
   const [held, setHeld] = useState(false);
   const [menuPost, setMenuPost] = useState<Story | null>(null);
+  // Likes on each story: whether this person liked it, and how many likes their own have.
+  const [counts, setCounts] = useState<Map<string, PostCounts>>(new Map());
+  // The own story whose "Liked by" list is open.
+  const [likersFor, setLikersFor] = useState<string | null>(null);
   // Bumped to play the current story again from the start.
   const [replay, setReplay] = useState(0);
   const elapsed = useRef({ id: '', ms: 0 });
@@ -61,13 +68,15 @@ export default function StoryViewer() {
         setSeen(seenBefore);
         setGroups(shown);
         setPosition({ group: 0, story: firstUnseen(shown[0], seenBefore) });
+        // Without the likes the stories still play.
+        loadCounts(shown.flatMap((g) => g.stories.map((st) => st.id))).then(setCounts, () => {});
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load stories.'));
   }, [author]);
 
   const group = groups?.[position.group];
   const story = group?.stories[position.story];
-  const paused = held || !!menuPost;
+  const paused = held || !!menuPost || !!likersFor;
   const fraction = progress.id === story?.id ? progress.fraction : 0;
 
   const storyId = story?.id;
@@ -118,6 +127,23 @@ export default function StoryViewer() {
     return () => clearInterval(timer);
   }, [photoRunning, storyId, replay]);
 
+  function setCount(id: string, changes: (current: PostCounts) => Partial<PostCounts>) {
+    setCounts((all) => {
+      const current = all.get(id) ?? { like_count: 0, comment_count: 0, liked_by_me: false };
+      return new Map(all).set(id, { ...current, ...changes(current) });
+    });
+  }
+
+  async function toggleLike(id: string) {
+    const liked = !counts.get(id)?.liked_by_me;
+    setCount(id, (c) => ({ liked_by_me: liked, like_count: Math.max(0, c.like_count + (liked ? 1 : -1)) }));
+    try {
+      await setLiked(id, liked);
+    } catch {
+      setCount(id, (c) => ({ liked_by_me: !liked, like_count: Math.max(0, c.like_count + (liked ? -1 : 1)) }));
+    }
+  }
+
   // Take a story or a person out of what is shown, after a delete, report or block.
   function removeFromView(post: { id: string; author_id: string }, why: 'deleted' | 'reported' | 'blocked') {
     setMenuPost(null);
@@ -158,6 +184,8 @@ export default function StoryViewer() {
 
   const url = mediaUrl(story.media_path);
   const name = authorName(group);
+  const liked = !!counts.get(story.id)?.liked_by_me;
+  const likes = counts.get(story.id)?.like_count ?? 0;
 
   return (
     <View style={styles.screen}>
@@ -228,7 +256,38 @@ export default function StoryViewer() {
         </View>
       </View>
 
+      <View style={[styles.bottom, { bottom: insets.bottom + Spacing.three }]} pointerEvents="box-none">
+        {group.is_mine ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`See who liked your story, ${likes} ${likes === 1 ? 'like' : 'likes'}`}
+            onPress={() => setLikersFor(story.id)}
+            hitSlop={8}
+            style={styles.likesPill}>
+            <Ionicons name="heart" size={18} color="#FF3B5C" />
+            <Text style={styles.likesText}>
+              {likes ? `${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : 'No likes yet'}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={liked ? 'Unlike story' : 'Like story'}
+            accessibilityState={{ selected: liked }}
+            onPress={() => toggleLike(story.id)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.heart, pressed && { transform: [{ scale: 0.92 }] }]}>
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={32} color={liked ? '#FF3B5C' : '#FFFFFF'} />
+          </Pressable>
+        )}
+      </View>
+
       <PostMenu post={menuPost} kind="story" onClose={() => setMenuPost(null)} onRemoved={removeFromView} />
+      <LikersSheet
+        postId={likersFor}
+        onClose={() => setLikersFor(null)}
+        onLoaded={(id, count) => setCount(id, () => ({ like_count: count }))}
+      />
     </View>
   );
 }
@@ -336,5 +395,35 @@ const styles = StyleSheet.create({
   time: {
     color: 'rgba(255,255,255,0.75)',
     fontSize: 14,
+  },
+  bottom: {
+    position: 'absolute',
+    left: Spacing.three,
+    right: Spacing.three,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  heart: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  likesPill: {
+    marginRight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  likesText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

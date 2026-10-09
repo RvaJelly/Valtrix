@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEventListener } from 'expo';
 import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '@/components/avatar';
+import { CommentsSheet } from '@/components/comments-sheet';
 import { PostMenu } from '@/components/post-menu';
+import { ReelView } from '@/components/reel-view';
+import { ShareSheet } from '@/components/share-sheet';
 import { Button } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { authorName, loadReels, mediaUrl, setLiked, sharedCount, timeAgo, type Reel } from '@/lib/posts';
+import { loadReels, setLiked, sharedCount, type Reel } from '@/lib/posts';
 import { listTrainers } from '@/lib/trainers';
 
 const PAGE = 20;
@@ -39,6 +39,8 @@ export default function Reels() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [menuReel, setMenuReel] = useState<Reel | null>(null);
+  const [commentsReel, setCommentsReel] = useState<Reel | null>(null);
+  const [shareReel, setShareReel] = useState<Reel | null>(null);
   // Trainers on Voltrix, so their name opens their profile.
   const [trainerIds, setTrainerIds] = useState<Set<string>>(new Set());
   const loadedAt = useRef(-1);
@@ -85,18 +87,22 @@ export default function Reels() {
     setLoadingMore(false);
   }
 
-  function change(id: string, changes: Partial<Reel>) {
-    setReels((current) => current?.map((r) => (r.id === id ? { ...r, ...changes } : r)) ?? null);
+  function change(id: string, changes: (reel: Reel) => Partial<Reel>) {
+    setReels((current) => current?.map((r) => (r.id === id ? { ...r, ...changes(r) } : r)) ?? null);
   }
 
   async function toggleLike(reel: Reel) {
     const liked = !reel.liked_by_me;
-    change(reel.id, { liked_by_me: liked, like_count: Math.max(0, reel.like_count + (liked ? 1 : -1)) });
+    change(reel.id, (r) => ({ liked_by_me: liked, like_count: Math.max(0, r.like_count + (liked ? 1 : -1)) }));
     try {
       await setLiked(reel.id, liked);
     } catch {
-      change(reel.id, { liked_by_me: reel.liked_by_me, like_count: reel.like_count });
+      change(reel.id, (r) => ({ liked_by_me: !liked, like_count: Math.max(0, r.like_count + (liked ? -1 : 1)) }));
     }
+  }
+
+  function countComments(postId: string, delta: number) {
+    change(postId, (r) => ({ comment_count: Math.max(0, r.comment_count + delta) }));
   }
 
   function removeFromView(post: { id: string; author_id: string }, why: 'deleted' | 'reported' | 'blocked') {
@@ -105,6 +111,17 @@ export default function Reels() {
       (current) =>
         current?.filter((r) => (why === 'blocked' ? r.author_id !== post.author_id : r.id !== post.id)) ?? null,
     );
+  }
+
+  // Someone was blocked from the comments: their reels go too, and so do the comments if it was the reel's author.
+  function blockedFromComments(personId: string) {
+    if (commentsReel?.author_id === personId) setCommentsReel(null);
+    removeFromView({ id: '', author_id: personId }, 'blocked');
+  }
+
+  function openAuthorFromComments(personId: string) {
+    setCommentsReel(null);
+    openTrainer(personId);
   }
 
   return (
@@ -116,7 +133,7 @@ export default function Reels() {
           data={reels}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
-            <ReelItem
+            <ReelView
               reel={item}
               height={height}
               topInset={insets.top}
@@ -124,6 +141,8 @@ export default function Reels() {
               muted={muted}
               onToggleMute={() => setMuted((m) => !m)}
               onLike={() => toggleLike(item)}
+              onComments={() => setCommentsReel(item)}
+              onShare={() => setShareReel(item)}
               onMenu={() => setMenuReel(item)}
               onAuthor={!item.is_mine && trainerIds.has(item.author_id) ? () => openTrainer(item.author_id) : undefined}
             />
@@ -169,119 +188,15 @@ export default function Reels() {
       </View>
 
       <PostMenu post={menuReel} kind="reel" onClose={() => setMenuReel(null)} onRemoved={removeFromView} />
-    </View>
-  );
-}
-
-function setPlayerMuted(player: VideoPlayer, muted: boolean) {
-  player.muted = muted;
-}
-
-function ReelItem({
-  reel,
-  height,
-  topInset,
-  playing,
-  muted,
-  onToggleMute,
-  onLike,
-  onMenu,
-  onAuthor,
-}: {
-  reel: Reel;
-  height: number;
-  topInset: number;
-  playing: boolean;
-  muted: boolean;
-  onToggleMute: () => void;
-  onLike: () => void;
-  onMenu: () => void;
-  // Set when the author is a trainer: their name opens their profile.
-  onAuthor?: () => void;
-}) {
-  const player = useVideoPlayer(mediaUrl(reel.media_path), (p) => {
-    p.loop = true;
-    p.muted = muted;
-  });
-  const [ready, setReady] = useState(false);
-  const name = authorName(reel);
-
-  useEventListener(player, 'statusChange', ({ status }) => setReady(status === 'readyToPlay'));
-
-  useEffect(() => {
-    setPlayerMuted(player, muted);
-  }, [player, muted]);
-
-  useEffect(() => {
-    if (playing) player.play();
-    else player.pause();
-  }, [playing, player]);
-
-  return (
-    <View style={{ height, backgroundColor: '#000000' }}>
-      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-      {!ready ? <ActivityIndicator color="#FFFFFF" style={StyleSheet.absoluteFill} /> : null}
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        accessibilityRole="button"
-        accessibilityLabel={muted ? 'Turn sound on' : 'Turn sound off'}
-        onPress={onToggleMute}
+      <CommentsSheet
+        reel={commentsReel}
+        onClose={() => setCommentsReel(null)}
+        onCountChange={countComments}
+        onBlocked={blockedFromComments}
+        isTrainer={(id) => trainerIds.has(id)}
+        onOpenAuthor={openAuthorFromComments}
       />
-
-      {muted ? (
-        <View style={[styles.mute, { top: topInset + 56 }]} pointerEvents="none">
-          <Ionicons name="volume-mute" size={16} color="#FFFFFF" />
-        </View>
-      ) : null}
-
-      <View style={styles.side}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={reel.liked_by_me ? 'Unlike' : 'Like'}
-          accessibilityState={{ selected: reel.liked_by_me }}
-          onPress={onLike}
-          hitSlop={8}
-          style={styles.action}>
-          <Ionicons
-            name={reel.liked_by_me ? 'heart' : 'heart-outline'}
-            size={32}
-            color={reel.liked_by_me ? '#FF3B5C' : '#FFFFFF'}
-          />
-          <Text style={styles.count}>{reel.like_count}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="More options"
-          onPress={onMenu}
-          hitSlop={8}
-          style={styles.action}>
-          <Ionicons name="ellipsis-horizontal" size={28} color="#FFFFFF" />
-        </Pressable>
-      </View>
-
-      <View style={styles.info} pointerEvents="box-none">
-        <Pressable
-          accessibilityRole={onAuthor ? 'button' : undefined}
-          accessibilityLabel={onAuthor ? `See ${name}'s profile` : undefined}
-          onPress={onAuthor}
-          disabled={!onAuthor}
-          pointerEvents={onAuthor ? 'auto' : 'none'}
-          hitSlop={6}
-          style={styles.author}>
-          <Avatar url={reel.author_avatar} name={name} size={36} />
-          <Text style={styles.name} numberOfLines={1}>
-            {reel.is_mine ? 'You' : name}
-          </Text>
-          <Text style={styles.time}>{timeAgo(reel.created_at)}</Text>
-        </Pressable>
-        {reel.caption ? (
-          <View pointerEvents="none">
-            <Text style={styles.caption} numberOfLines={3}>
-              {reel.caption}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      <ShareSheet reel={shareReel} onClose={() => setShareReel(null)} />
     </View>
   );
 }
@@ -328,61 +243,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: Spacing.two,
-  },
-  mute: {
-    position: 'absolute',
-    right: Spacing.three,
-    padding: 6,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  side: {
-    position: 'absolute',
-    right: Spacing.two,
-    bottom: Spacing.five,
-    alignItems: 'center',
-    gap: Spacing.four,
-  },
-  action: {
-    alignItems: 'center',
-    gap: 2,
-    minWidth: 48,
-  },
-  count: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    ...shadow,
-  },
-  info: {
-    position: 'absolute',
-    left: Spacing.three,
-    right: 80,
-    bottom: Spacing.four,
-    gap: Spacing.two,
-  },
-  author: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  name: {
-    flexShrink: 1,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    ...shadow,
-  },
-  time: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-    ...shadow,
-  },
-  caption: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    lineHeight: 21,
-    ...shadow,
   },
 });

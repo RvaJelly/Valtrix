@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
+import { ReelCard } from '@/components/reel-card';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
@@ -41,6 +42,8 @@ import {
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { ChatPhotoError, pickChatPhoto, type ChatPhoto } from '@/lib/chat-photo';
 import { confirm } from '@/lib/confirm';
+import { authorName, type Reel } from '@/lib/posts';
+import { isReelMessage, loadReelsByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 
 type Row = { type: 'message'; message: Message } | { type: 'day'; key: string; label: string };
@@ -75,6 +78,8 @@ export default function ChatScreen() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({});
+  // Reels sent in this chat, by id; null when one can't be shown any more.
+  const [reels, setReels] = useState<Record<string, Reel | null>>({});
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<ChatPhoto | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -194,6 +199,30 @@ export default function ChatScreen() {
       stale = true;
     };
   }, [missingPhotos]);
+
+  // Who posted each reel sent here, and its caption, for the cards in the chat.
+  const missingReels = useMemo(
+    () => [...new Set(messages.filter((m) => m.post_id && !(m.post_id in reels)).map((m) => m.post_id!))],
+    [messages, reels],
+  );
+  useEffect(() => {
+    if (!missingReels.length) return;
+    let stale = false;
+    loadReelsByIds(missingReels).then(
+      (found) => {
+        if (stale) return;
+        const next: Record<string, Reel | null> = {};
+        for (const id of missingReels) next[id] = found.find((r) => r.id === id) ?? null;
+        setReels((current) => ({ ...current, ...next }));
+      },
+      () => {
+        // Shown as loading; the next change in the chat tries again.
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  }, [missingReels]);
 
   // "typing…" in the header, shared on the chat's own private channel.
   const showTyping = useEffectEvent(() => {
@@ -423,9 +452,12 @@ export default function ChatScreen() {
                   message={item.message}
                   mine={item.message.sender_id === me}
                   url={item.message.media_path ? urls[item.message.media_path] : undefined}
+                  reel={item.message.post_id ? reels[item.message.post_id] : null}
                   onPress={(url) => {
                     if (item.message.pending === 'failed') retry(item.message);
                     else if (url) setViewing(url);
+                    else if (item.message.post_id && reels[item.message.post_id])
+                      router.push({ pathname: '/reel/[id]', params: { id: item.message.post_id } });
                   }}
                   onLongPress={() => remove(item.message)}
                 />
@@ -499,16 +531,23 @@ function Bubble({
   message,
   mine,
   url,
+  reel,
   onPress,
   onLongPress,
 }: {
   message: Message;
   mine: boolean;
   url?: string;
+  // For a reel sent in the chat: undefined while it loads, null when it is gone.
+  reel?: Reel | null;
   onPress: (url: string | undefined) => void;
   onLongPress: () => void;
 }) {
   const photo = message.kind === 'image' ? (url ?? message.local_uri) : undefined;
+  const sharedReel = isReelMessage(message);
+  const said = sharedReel
+    ? `shared a reel${reel ? ` by ${authorName(reel)}` : reel === null ? ' that is no longer available' : ''}`
+    : `said ${message.kind === 'image' ? 'a photo' : ''} ${message.body ?? ''}`;
   const status =
     message.pending === 'sending'
       ? 'Sending'
@@ -523,8 +562,12 @@ function Bubble({
         onPress={() => onPress(photo)}
         onLongPress={onLongPress}
         delayLongPress={350}
-        style={[styles.bubble, mine ? styles.mine : styles.theirs, photo ? styles.photoBubble : null]}
-        accessibilityLabel={`${mine ? 'You' : 'They'} said ${message.kind === 'image' ? 'a photo' : ''} ${message.body ?? ''}, ${timeOf(message.created_at)}${mine ? `, ${status}` : ''}`}>
+        style={[
+          styles.bubble,
+          mine ? styles.mine : styles.theirs,
+          photo || (sharedReel && reel !== null) ? styles.photoBubble : null,
+        ]}
+        accessibilityLabel={`${mine ? 'You' : 'They'} ${said}, ${timeOf(message.created_at)}${mine ? `, ${status}` : ''}`}>
         {message.kind === 'image' ? (
           photo ? (
             <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" transition={150} />
@@ -534,12 +577,13 @@ function Bubble({
             </View>
           )
         ) : null}
-        {message.body ? (
+        {sharedReel ? <ReelCard reel={message.post_id ? reel : null} mine={mine} /> : null}
+        {message.body && !sharedReel ? (
           <Text style={[styles.body, mine && styles.bodyMine, photo ? { paddingHorizontal: Spacing.one } : null]}>
             {message.body}
           </Text>
         ) : null}
-        <View style={[styles.meta, photo ? { paddingHorizontal: Spacing.one } : null]}>
+        <View style={[styles.meta, photo || (sharedReel && reel !== null) ? { paddingHorizontal: Spacing.one } : null]}>
           <Text style={[styles.time, mine && styles.timeMine]}>{timeOf(message.created_at)}</Text>
           {mine ? (
             <Ionicons

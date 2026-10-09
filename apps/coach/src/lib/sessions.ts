@@ -11,11 +11,15 @@ export type Session = {
   location: string | null;
   notes: string | null;
   status: SessionStatus;
-  clients: Pick<Client, 'first_name' | 'last_name'> | null;
+  // A video call in the apps instead of meeting in person.
+  online: boolean;
+  clients: Pick<Client, 'first_name' | 'last_name' | 'user_id'> | null;
 };
 
 export const SESSION_COLUMNS =
-  'id, client_id, title, starts_at, duration_minutes, location, notes, status, clients(first_name, last_name)';
+  'id, client_id, title, starts_at, duration_minutes, location, notes, status, online, clients(first_name, last_name, user_id)';
+
+export const ONLINE_LABEL = 'Online · Video call';
 
 export const SESSION_STATUS: Record<SessionStatus, string> = {
   scheduled: 'Booked',

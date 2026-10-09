@@ -43,7 +43,9 @@ export function buildReminders(sessions: Session[], minutes: number, now = new D
         sessionId: s.id,
         at: new Date(start.getTime() - minutes * 60_000),
         title: `${sessionName(s)} in ${leadLabel(minutes)}`,
-        body: [`Session at ${formatTime(start)}`, s.location].filter(Boolean).join(' · '),
+        body: [`Session at ${formatTime(start)}`, s.online ? 'Online video call' : s.location]
+          .filter(Boolean)
+          .join(' · '),
       };
     })
     .filter((r) => r.at > now);

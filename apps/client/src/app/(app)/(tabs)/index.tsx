@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
 import { TrainerCircle } from '@/components/trainer-circle';
@@ -12,7 +13,16 @@ import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
-import { addDays, endOf, formatDay, formatTime, loadSessions, trainerName, type Session } from '@/lib/sessions';
+import {
+  addDays,
+  endOf,
+  formatDay,
+  formatTime,
+  loadSessions,
+  ONLINE_LABEL,
+  trainerName,
+  type Session,
+} from '@/lib/sessions';
 import { listTrainers, loadTrainers, type PublicTrainer, type Trainer } from '@/lib/trainers';
 
 function greeting() {
@@ -44,12 +54,29 @@ type HomeData = {
 
 export default function Home() {
   const { session, profile, refreshProfile } = useAuth();
+  const navigation = useNavigation();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = profile?.full_name?.split(' ')[0];
   const isTrainer = profile?.role === 'trainer';
   const isClient = profile?.role === 'client';
+
+  // Settings moved off the tab bar, so it lives behind the gear in Home's header.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={12}
+          onPress={() => router.push('/settings')}
+          style={{ marginRight: Spacing.three }}>
+          <Ionicons name="settings-outline" size={26} color={Colors.text} />
+        </Pressable>
+      ),
+    });
+  }, [navigation]);
 
   const load = useCallback(async () => {
     try {
@@ -172,12 +199,19 @@ export default function Home() {
                   <Ionicons name="person" size={16} color={Colors.onAccent} />
                   <Text style={styles.nextMetaText}>{trainerName(next)}</Text>
                 </View>
+                {next.online ? (
+                  <View style={styles.nextMeta}>
+                    <Ionicons name="videocam" size={16} color={Colors.onAccent} />
+                    <Text style={styles.nextMetaText}>{ONLINE_LABEL}</Text>
+                  </View>
+                ) : null}
                 {next.location ? (
                   <View style={styles.nextMeta}>
                     <Ionicons name="location" size={16} color={Colors.onAccent} />
                     <Text style={styles.nextMetaText}>{next.location}</Text>
                   </View>
                 ) : null}
+                <JoinCall session={next} onAccent style={{ marginTop: Spacing.two }} />
               </View>
             ) : (
               <Card>
@@ -190,7 +224,9 @@ export default function Home() {
             <View style={{ gap: Spacing.two }}>
               <View style={styles.header}>
                 <Text style={[styles.section, { flex: 1 }]}>Coming up</Text>
-                <Pressable onPress={() => router.navigate('/sessions')} hitSlop={8}>
+                <Pressable
+                  onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
+                  hitSlop={8}>
                   <Text style={styles.link}>See all</Text>
                 </Pressable>
               </View>
@@ -260,7 +296,7 @@ export default function Home() {
         <View style={{ gap: Spacing.three }}>
           <View style={styles.header}>
             <Text style={[styles.section, { flex: 1 }]}>Trainers on Voltrix</Text>
-            <Pressable onPress={() => router.navigate('/trainers')} hitSlop={8}>
+            <Pressable onPress={() => router.push('/trainers')} hitSlop={8}>
               <Text style={styles.link}>See all</Text>
             </Pressable>
           </View>

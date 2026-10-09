@@ -1,12 +1,14 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { Button, ErrorText, TextField } from '@/components/ui';
+import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { supabase } from '@/lib/supabase';
+import { removeWorkoutVideos } from '@/lib/workout-videos';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Equipment, type Exercise, type MuscleGroup } from '@/lib/workouts';
 
 // Create a custom exercise, or edit one when an id is passed.
@@ -17,6 +19,9 @@ export default function ExerciseForm() {
   const [group, setGroup] = useState<MuscleGroup | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>('none');
   const [instructions, setInstructions] = useState('');
+  const [video, setVideo] = useState<string | null>(null);
+  // A video added to a new exercise is only kept once the exercise is saved.
+  const unsaved = useRef<{ path: string | null }>({ path: null });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,9 +39,30 @@ export default function ExerciseForm() {
         setGroup(e.muscle_group);
         setEquipment(e.equipment);
         setInstructions(e.instructions ?? '');
+        setVideo(e.video_path);
         setLoaded(true);
       });
   }, [id]);
+
+  // Leaving without saving a new exercise removes the video uploaded for it.
+  useEffect(() => {
+    const pending = unsaved.current;
+    return () => {
+      if (pending.path) removeWorkoutVideos([pending.path]);
+    };
+  }, []);
+
+  // An existing exercise saves its video straight away; a new one with the exercise.
+  async function changeVideo(path: string | null) {
+    if (id) {
+      const { error } = await supabase.from('exercises').update({ video_path: path }).eq('id', id);
+      if (error) return error.message;
+    } else {
+      unsaved.current.path = path;
+    }
+    setVideo(path);
+    return null;
+  }
 
   async function save() {
     setError(null);
@@ -51,9 +77,10 @@ export default function ExerciseForm() {
     };
     const { error } = id
       ? await supabase.from('exercises').update(values).eq('id', id)
-      : await supabase.from('exercises').insert(values);
+      : await supabase.from('exercises').insert({ ...values, video_path: video });
     setBusy(false);
     if (error) return setError(error.message);
+    unsaved.current.path = null;
     router.back();
   }
 
@@ -62,6 +89,7 @@ export default function ExerciseForm() {
     const { error } = await supabase.from('exercises').delete().eq('id', id);
     // 23503: still used in a workout (foreign key).
     if (error) return setError(error.code === '23503' ? 'Remove it from your workouts first.' : error.message);
+    await removeWorkoutVideos([video]);
     router.back();
   }
 
@@ -90,6 +118,10 @@ export default function ExerciseForm() {
           placeholder="Optional cues for your clients"
           style={{ minHeight: 100, paddingTop: Spacing.three, textAlignVertical: 'top' }}
         />
+        <View style={{ gap: Spacing.two }}>
+          <Text style={styles.label}>Demo video</Text>
+          <WorkoutVideo label="Demo video" path={video} onChange={changeVideo} title={name.trim() || 'Demo video'} />
+        </View>
         <ErrorText>{error}</ErrorText>
         <Button title={id ? 'Save changes' : 'Add exercise'} onPress={save} loading={busy} />
         {id ? <Button title="Delete exercise" variant="ghost" onPress={remove} /> : null}

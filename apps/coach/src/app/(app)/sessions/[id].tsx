@@ -2,9 +2,11 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { JoinCall } from '@/components/join-call';
 import { SessionForm } from '@/components/session-form';
 import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
+import { useChat } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { refreshReminders } from '@/lib/reminders';
 import { SESSION_COLUMNS, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
@@ -14,6 +16,7 @@ export default function SessionDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { chats } = useChat();
 
   useEffect(() => {
     supabase
@@ -61,6 +64,14 @@ export default function SessionDetail() {
         initial={session}
         day={new Date(session.starts_at)}
         submitLabel="Save changes"
+        top={
+          <JoinCall
+            session={session}
+            name={sessionName(session)}
+            avatar={chats.find((c) => c.chat_id === session.client_id)?.other_avatar}
+            onApp={!!session.clients?.user_id}
+          />
+        }
         onSubmit={async (input) => {
           const { error } = await supabase.from('sessions').update(input).eq('id', id);
           if (error) return error.message;

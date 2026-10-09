@@ -49,10 +49,12 @@ export async function replaceReminders(reminders: Reminder[]) {
   }
 }
 
-// Tapping a reminder opens the sessions list.
+// Tapping a reminder opens the sessions in the Plan tab.
 export function useOpenFromReminder() {
   const response = Notifications.useLastNotificationResponse();
   useEffect(() => {
-    if (response?.notification.request.content.data?.sessionId) router.navigate('/sessions');
+    if (response?.notification.request.content.data?.sessionId) {
+      router.navigate({ pathname: '/plan', params: { view: 'sessions' } });
+    }
   }, [response]);
 }

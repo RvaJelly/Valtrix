@@ -4,15 +4,17 @@ import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'rea
 import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
 import { Body, Button, Card, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
+import { useChat } from '@/lib/chat-live';
 import { fullName, initials, type Client } from '@/lib/clients';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
-import { addDays, dayKey, SESSION_COLUMNS, startOfDay, type Session } from '@/lib/sessions';
+import { addDays, dayKey, SESSION_COLUMNS, sessionName, startOfDay, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -35,6 +37,7 @@ type Stats = {
 
 export default function Home() {
   const { profile } = useAuth();
+  const { chats } = useChat();
   const navigation = useNavigation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [stories, setStories] = useState<{ groups: StoryGroup[]; seen: Set<string> } | null>(null);
@@ -197,7 +200,17 @@ export default function Home() {
             />
           </Card>
         ) : (
-          stats?.today.map((session) => <SessionRow key={session.id} session={session} />)
+          stats?.today.map((session) => (
+            <View key={session.id} style={{ gap: Spacing.two }}>
+              <SessionRow session={session} />
+              <JoinCall
+                session={session}
+                name={sessionName(session)}
+                avatar={chats.find((c) => c.chat_id === session.client_id)?.other_avatar}
+                onApp={!!session.clients?.user_id}
+              />
+            </View>
+          ))
         )}
       </View>
 

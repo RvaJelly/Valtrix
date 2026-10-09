@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 
 import { Body } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { endOf, formatDay, formatTime, SESSION_STATUS, trainerName, type Session } from '@/lib/sessions';
+import { endOf, formatDay, formatTime, ONLINE_LABEL, SESSION_STATUS, trainerName, type Session } from '@/lib/sessions';
 
 // One session in a list: time on the left, trainer and where on the right.
 export function SessionRow({ session, showDay }: { session: Session; showDay?: boolean }) {
@@ -24,7 +24,11 @@ export function SessionRow({ session, showDay }: { session: Session; showDay?: b
           {trainerName(session)}
         </Text>
         <Body secondary style={styles.small} numberOfLines={1}>
-          {[session.location, session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null]
+          {[
+            session.online ? ONLINE_LABEL : null,
+            session.location,
+            session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null,
+          ]
             .filter(Boolean)
             .join(' · ') || `${session.duration_minutes} min`}
         </Body>

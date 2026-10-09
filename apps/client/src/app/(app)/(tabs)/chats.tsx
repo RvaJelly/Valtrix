@@ -9,7 +9,7 @@ export default function Chats() {
       empty={{
         title: 'No chats yet',
         message: 'Once your trainer adds you in Voltrix Coach, you can message and call them here.',
-        action: <Button title="Find a trainer" variant="secondary" onPress={() => router.navigate('/trainers')} />,
+        action: <Button title="Find a trainer" variant="secondary" onPress={() => router.push('/trainers')} />,
       }}
     />
   );

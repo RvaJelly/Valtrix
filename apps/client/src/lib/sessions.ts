@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 
 export type SessionStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
-// A session with one of the client's trainers, as the my_sessions function returns it.
+// A session with one of the client's trainers, as the my_sessions_v2 function returns it.
 export type Session = {
   id: string;
   starts_at: string;
@@ -11,11 +11,18 @@ export type Session = {
   status: SessionStatus;
   trainer_name: string | null;
   business_name: string | null;
+  // A video call in the apps instead of meeting in person.
+  online: boolean;
+  // The client's link with the trainer, which is also the chat to call in.
+  client_id: string;
+  trainer_avatar: string | null;
 };
+
+export const ONLINE_LABEL = 'Online · Video call';
 
 // The signed-in client's sessions from one time up to another.
 export async function loadSessions(from: Date, to: Date) {
-  const { data, error } = await supabase.rpc('my_sessions', {
+  const { data, error } = await supabase.rpc('my_sessions_v2', {
     range_start: from.toISOString(),
     range_end: to.toISOString(),
   });

@@ -7,6 +7,7 @@ import { Avatar } from '@/components/avatar';
 import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { useChat } from '@/lib/chat-live';
 import { displayName, distanceLabel, listTrainers, loadTrainers, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer's public profile.
@@ -14,6 +15,7 @@ export default function TrainerProfile() {
   // km is how far away they are, when the client came from the list sorted by distance.
   const { id, km } = useLocalSearchParams<{ id: string; km?: string }>();
   const { session } = useAuth();
+  const { chats } = useChat();
   const [trainer, setTrainer] = useState<PublicTrainer | null | undefined>(undefined);
   // The chat with this trainer, when they are the signed-in client's trainer.
   const [chatId, setChatId] = useState<string | null>(null);
@@ -21,8 +23,23 @@ export default function TrainerProfile() {
   useEffect(() => {
     Promise.all([listTrainers(), loadTrainers()])
       .then(([all, mine]) => {
-        setTrainer(all.find((t) => t.id === id) ?? null);
-        setChatId(mine.find((t) => t.trainer_id === id)?.client_id ?? null);
+        const link = mine.find((t) => t.trainer_id === id);
+        // The list only has trainers on an active plan with a business name. The client's
+        // own trainer always shows, with their name and the Message and Call buttons.
+        const own: PublicTrainer | null = link
+          ? {
+              id: link.trainer_id,
+              full_name: link.trainer_name,
+              business_name: link.business_name,
+              avatar_url: null,
+              specialties: [],
+              bio: null,
+              city: null,
+              years_experience: null,
+            }
+          : null;
+        setTrainer(all.find((t) => t.id === id) ?? own);
+        setChatId(link?.client_id ?? null);
       })
       .catch(() => setTrainer(null));
   }, [id]);
@@ -39,6 +56,8 @@ export default function TrainerProfile() {
   const isMe = trainer.id === session?.user.id;
   const isMine = !!chatId;
   const name = displayName(trainer);
+  // The chat has the trainer's photo when the list doesn't.
+  const avatar = trainer.avatar_url ?? chats.find((c) => c.chat_id === chatId)?.other_avatar ?? null;
   const firstName = trainer.full_name?.split(' ')[0] ?? name;
   const facts = [
     trainer.city,
@@ -50,7 +69,7 @@ export default function TrainerProfile() {
     <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: name }} />
       <View style={styles.hero}>
-        <Avatar url={trainer.avatar_url} name={name} size={132} />
+        <Avatar url={avatar} name={name} size={132} />
         <Text style={styles.name}>{name}</Text>
         {trainer.full_name && trainer.business_name ? (
           <Body secondary style={{ textAlign: 'center' }}>
@@ -78,7 +97,7 @@ export default function TrainerProfile() {
               onPress={() =>
                 router.push({
                   pathname: '/chat/[id]',
-                  params: { id: chatId, name, avatar: trainer.avatar_url ?? '' },
+                  params: { id: chatId, name, avatar: avatar ?? '' },
                 })
               }
             />
@@ -90,7 +109,7 @@ export default function TrainerProfile() {
               onPress={() =>
                 router.push({
                   pathname: '/call',
-                  params: { chat: chatId, video: '0', name, avatar: trainer.avatar_url ?? '' },
+                  params: { chat: chatId, video: '0', name, avatar: avatar ?? '' },
                 })
               }
             />

@@ -5,7 +5,7 @@
 // Commands (app -> page): start {role, video, iceServers, previewTop}, signal {data},
 //   offer, mute {on}, camera {on}, flip, stop.
 // Events (page -> app): loaded, media {ok, error}, signal {data}, state {state},
-//   remote {video}.
+//   remote {video}, flip {ok}.
 
 export type CallCommand =
   | {
@@ -32,7 +32,8 @@ export type CallPageEvent =
   | { type: 'media'; ok: boolean; error?: string }
   | { type: 'signal'; data: CallSignal }
   | { type: 'state'; state: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed' }
-  | { type: 'remote'; video: boolean };
+  | { type: 'remote'; video: boolean }
+  | { type: 'flip'; ok: boolean };
 
 export const CALL_PAGE_HTML = `<!doctype html>
 <html>
@@ -58,7 +59,7 @@ export const CALL_PAGE_HTML = `<!doctype html>
   var remoteVideo = document.getElementById('remote');
   var localVideo = document.getElementById('local');
   var pc = null, local = null, role = 'caller', wantVideo = false, iceServers = [];
-  var pendingIce = [], remoteSet = false, facing = 'user', stopped = false;
+  var pendingIce = [], remoteSet = false, facing = 'user', stopped = false, flipping = false;
 
   function send(event) {
     var text = JSON.stringify(event);
@@ -171,22 +172,38 @@ export const CALL_PAGE_HTML = `<!doctype html>
     }
   }
 
+  function openCamera(side) {
+    return navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: side, width: { ideal: 640 }, height: { ideal: 480 } } })
+      .then(function (stream) { return stream.getVideoTracks()[0] || null; })
+      .catch(function () { return null; });
+  }
+
+  // Most Android phones can only have one camera open, so the one in use is let go
+  // first. If the other camera won't open, the first one comes back.
   async function flip() {
-    if (!local || !wantVideo || !pc) return;
-    facing = facing === 'user' ? 'environment' : 'user';
-    try {
-      var fresh = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } } });
-      var track = fresh.getVideoTracks()[0];
-      var old = local.getVideoTracks()[0];
-      var sender = pc.getSenders().find(function (s) { return s.track && s.track.kind === 'video'; });
-      if (sender) await sender.replaceTrack(track);
-      if (old) { local.removeTrack(old); old.stop(); }
-      local.addTrack(track);
-      localVideo.srcObject = local;
-      localVideo.classList.toggle('mirror', facing === 'user');
-    } catch (error) {
-      facing = facing === 'user' ? 'environment' : 'user';
+    if (!local || !wantVideo || !pc || flipping) return;
+    flipping = true;
+    var old = local.getVideoTracks()[0];
+    var enabled = old ? old.enabled : true;
+    var sender = pc.getSenders().find(function (s) { return s.track && s.track.kind === 'video'; });
+    if (old) { local.removeTrack(old); old.stop(); }
+    var side = facing === 'user' ? 'environment' : 'user';
+    var track = await openCamera(side);
+    if (!track) {
+      send({ type: 'flip', ok: false });
+      side = facing;
+      track = await openCamera(side);
     }
+    flipping = false;
+    if (stopped) { if (track) track.stop(); return; }
+    if (!track) return;
+    facing = side;
+    track.enabled = enabled;
+    if (sender) await sender.replaceTrack(track).catch(function () {});
+    local.addTrack(track);
+    localVideo.srcObject = local;
+    localVideo.classList.toggle('mirror', facing === 'user');
   }
 
   function stop() {

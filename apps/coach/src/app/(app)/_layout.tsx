@@ -19,6 +19,8 @@ export default function AppLayout() {
           headerTitleStyle: { fontWeight: '700' },
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
+          // Screen readers say "Back" (not the name of the tabs group, "(tabs)").
+          headerBackTitle: 'Back',
           contentStyle: { backgroundColor: Colors.background },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

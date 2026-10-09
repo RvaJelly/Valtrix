@@ -36,6 +36,13 @@ function firstUnseen(group: StoryGroup, seen: Set<string>) {
   return index < 0 ? 0 : index;
 }
 
+// Back to where the stories were opened from, or Home when there is nothing to go
+// back to (a reloaded page or a link).
+function close() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
+}
+
 // Full-screen stories, like Instagram: tap the right side for the next one, the
 // left side to go back, and hold to pause. Plays on through the next people's stories.
 export default function StoryViewer() {
@@ -100,7 +107,7 @@ export default function StoryViewer() {
     } else if (position.group + 1 < groups.length) {
       setPosition({ group: position.group + 1, story: firstUnseen(groups[position.group + 1], seen) });
     } else {
-      router.back();
+      close();
     }
   }
 
@@ -169,11 +176,11 @@ export default function StoryViewer() {
     if (index < 0) {
       // That person has nothing left to show; carry on with the next person.
       const after = groups.slice(position.group + 1).find((g) => remaining.some((r) => r.author_id === g.author_id));
-      if (!after) return router.back();
+      if (!after) return close();
       index = remaining.findIndex((r) => r.author_id === after.author_id);
       storyIndex = 0;
     } else if (storyIndex >= remaining[index].stories.length) {
-      if (index + 1 >= remaining.length) return router.back();
+      if (index + 1 >= remaining.length) return close();
       index += 1;
       storyIndex = 0;
     }
@@ -259,7 +266,7 @@ export default function StoryViewer() {
             onPress={() => setMenuPost(story)}>
             <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={() => router.back()}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={close}>
             <Ionicons name="close" size={30} color="#FFFFFF" />
           </Pressable>
         </View>
@@ -332,7 +339,7 @@ function VideoStory({
     else player.play();
   }, [paused, player]);
 
-  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />;
+  return <VideoView player={player} style={styles.video} contentFit="contain" nativeControls={false} />;
 }
 
 function CloseButton({ top }: { top: number }) {
@@ -341,7 +348,7 @@ function CloseButton({ top }: { top: number }) {
       accessibilityRole="button"
       accessibilityLabel="Close"
       hitSlop={10}
-      onPress={() => router.back()}
+      onPress={close}
       style={{ position: 'absolute', top: top + Spacing.three, right: Spacing.three }}>
       <Ionicons name="close" size={30} color="#FFFFFF" />
     </Pressable>
@@ -353,6 +360,15 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  // A width and height, not just the four edges: on the web the video is a <video> tag,
+  // which otherwise keeps its own size and shows only its top-left corner.
+  video: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
   },
   center: {
     alignItems: 'center',

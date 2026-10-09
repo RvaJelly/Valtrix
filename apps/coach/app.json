@@ -20,7 +20,14 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "output": "single",
@@ -54,6 +61,7 @@
       [
         "expo-audio",
         {
+          "enableBackgroundPlayback": false,
           "microphonePermission": "Allow Voltrix Coach to use your microphone for voice and video calls and so your videos have sound."
         }
       ],
@@ -77,7 +85,8 @@
         {
           "photosPermission": "Allow Voltrix Coach to use your photos so you can share stories, reels, workout videos and chat photos and add a profile photo.",
           "savePhotosPermission": "Allow Voltrix Coach to save workout videos to your phone.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
         }
       ]
     ],

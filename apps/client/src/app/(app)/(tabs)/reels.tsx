@@ -1,8 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useIsFocused } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  AppState,
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CommentsSheet } from '@/components/comments-sheet';
@@ -12,6 +22,7 @@ import { ShareSheet } from '@/components/share-sheet';
 import { Button } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { loadReels, setLiked, sharedCount, type Reel } from '@/lib/posts';
+import { loadCounts, type PostCounts } from '@/lib/social';
 import { listTrainers } from '@/lib/trainers';
 
 const PAGE = 20;
@@ -43,7 +54,12 @@ export default function Reels() {
   const [shareReel, setShareReel] = useState<Reel | null>(null);
   // Trainers on Voltrix, so their name opens their profile.
   const [trainerIds, setTrainerIds] = useState<Set<string>>(new Set());
+  const list = useRef<FlatList<Reel>>(null);
+  // How many posts this phone had shared when the feed loaded, and the reel on screen.
   const loadedAt = useRef(-1);
+  const onScreen = useRef(0);
+  // Set when the feed loads again, to start from its first reel.
+  const toTop = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -52,20 +68,76 @@ export default function Reels() {
       setReels(first);
       setHasMore(first.length >= PAGE);
       setActive(0);
+      onScreen.current = 0;
+      toTop.current = true;
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load reels.');
     }
   }, []);
 
-  // Load the first time, and again after this phone shares something.
-  useFocusEffect(
-    useCallback(() => {
-      if (loadedAt.current === sharedCount()) return;
+  function updateCounts(counts: Map<string, PostCounts>) {
+    setReels(
+      (current) =>
+        current?.map((r) => {
+          const c = counts.get(r.id);
+          return c ? { ...r, like_count: c.like_count, comment_count: c.comment_count, liked_by_me: c.liked_by_me } : r;
+        }) ?? null,
+    );
+  }
+
+  // Each time the tab (or the app) is opened again, show what changed meanwhile. At the
+  // first reel the feed loads again, so new reels come in on top. Further down only the
+  // likes and comments are updated, so the reel being watched stays where it is.
+  const catchUp = useEffectEvent(async () => {
+    if (loadedAt.current !== sharedCount() || !reels) {
+      // The first time, after this phone shares something, or after it failed.
       loadedAt.current = sharedCount();
-      load();
-    }, [load]),
-  );
+      return load();
+    }
+    try {
+      if (onScreen.current === 0) {
+        const fresh = await loadReels();
+        if (onScreen.current === 0) {
+          toTop.current = true;
+          setReels(fresh);
+          setHasMore(fresh.length >= PAGE);
+          setActive(0);
+        } else {
+          updateCounts(new Map(fresh.map((r) => [r.id, r])));
+        }
+      } else {
+        updateCounts(await loadCounts(reels.map((r) => r.id)));
+      }
+    } catch {
+      // The feed stays as it was; pulling down (or Refresh on a computer) tries again.
+    }
+  });
+
+  useEffect(() => {
+    if (!focused) return;
+    // Just after the tab appears, so switching tabs stays quick.
+    const timer = setTimeout(() => catchUp(), 0);
+    return () => clearTimeout(timer);
+  }, [focused]);
+
+  const backInApp = useEffectEvent(() => {
+    if (focused) catchUp();
+  });
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') backInApp();
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Done once the new list is drawn: a browser otherwise keeps the reel that was on
+  // screen in view when new ones appear above it.
+  useEffect(() => {
+    if (!toTop.current) return;
+    toTop.current = false;
+    list.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [reels]);
 
   async function refresh() {
     setRefreshing(true);
@@ -130,6 +202,7 @@ export default function Reels() {
 
       {reels && reels.length && height ? (
         <FlatList
+          ref={list}
           data={reels}
           keyExtractor={(r) => r.id}
           renderItem={({ item, index }) => (
@@ -152,6 +225,7 @@ export default function Reels() {
           scrollEventThrottle={32}
           onScroll={(e) => {
             const index = Math.round(e.nativeEvent.contentOffset.y / height);
+            onScreen.current = index;
             if (index !== active) setActive(index);
           }}
           getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
@@ -182,9 +256,27 @@ export default function Reels() {
 
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]} pointerEvents="box-none">
         <Text style={styles.title}>Reels</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Post a reel" hitSlop={10} onPress={newReel}>
-          <Ionicons name="camera-outline" size={28} color="#FFFFFF" />
-        </Pressable>
+        <View style={styles.headerButtons}>
+          {/* Phones pull down to refresh; a mouse can't, so computers get a button. */}
+          {Platform.OS === 'web' && reels ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Refresh reels"
+              hitSlop={10}
+              onPress={refresh}
+              disabled={refreshing}
+              style={styles.headerButton}>
+              {refreshing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Ionicons name="refresh" size={26} color="#FFFFFF" />
+              )}
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Post a reel" hitSlop={10} onPress={newReel}>
+            <Ionicons name="camera-outline" size={28} color="#FFFFFF" />
+          </Pressable>
+        </View>
       </View>
 
       <PostMenu post={menuReel} kind="reel" onClose={() => setMenuReel(null)} onRemoved={removeFromView} />
@@ -221,6 +313,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.two,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.four,
+  },
+  headerButton: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: '#FFFFFF',

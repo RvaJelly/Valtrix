@@ -15,6 +15,9 @@ export type Call = CallInfo & {
   caller_avatar: string | null;
   callee_name: string;
   callee_avatar: string | null;
+  // Only in the answer to "accept": whether this tap answered the call (false when the
+  // same person already answered it on another device).
+  answered_here?: boolean;
 };
 
 export type CallAction = 'accept' | 'decline' | 'cancel' | 'missed' | 'end';

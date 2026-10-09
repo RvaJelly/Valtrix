@@ -67,7 +67,7 @@ export function ReelView({
 
   return (
     <View style={{ height, backgroundColor: '#000000' }}>
-      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      <VideoView player={player} style={styles.video} contentFit="cover" nativeControls={false} />
       {!ready ? <ActivityIndicator color="#FFFFFF" style={StyleSheet.absoluteFill} /> : null}
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -164,6 +164,15 @@ function Action({
 const shadow = { textShadowColor: 'rgba(0,0,0,0.75)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } };
 
 const styles = StyleSheet.create({
+  // A width and height, not just the four edges: on the web the video is a <video> tag,
+  // which otherwise keeps its own size and shows only its top-left corner.
+  video: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+  },
   mute: {
     position: 'absolute',
     right: Spacing.three,

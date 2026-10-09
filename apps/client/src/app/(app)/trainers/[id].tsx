@@ -37,7 +37,7 @@ export default function TrainerProfile() {
     (current: Current) =>
       Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => null)])
         .then(([all, mine, invites]) => {
-          // A newer load started while this one was stuck: its answer is fresher.
+          // A newer load has shown its answer already, so this one's is older.
           if (!current()) return;
           const link = mine.find((t) => t.trainer_id === id);
           const asked = invites?.find((t) => t.trainer_id === id) ?? null;
@@ -64,7 +64,7 @@ export default function TrainerProfile() {
         })
         // Only the first load shows "not found"; a failed reload keeps what is on screen.
         .catch(() => {
-          if (current()) setTrainer((shown) => (shown === undefined ? null : shown));
+          if (current(false)) setTrainer((shown) => (shown === undefined ? null : shown));
         }),
     [id],
   );

@@ -255,7 +255,8 @@ function MyTrainers() {
             setFailed(false);
           },
           () => {
-            if (current()) setFailed(true);
+            // A failure leaves the list to an older load that may still answer.
+            if (current(false)) setFailed(true);
           },
         ),
       ),

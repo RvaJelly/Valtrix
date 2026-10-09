@@ -132,10 +132,16 @@ export default function Home() {
       loadStories().catch(() => null),
       loadSeen(),
     ]);
-    // A newer load started while this one was stuck: its answer is fresher.
+    const failed = 'Could not load everything. Check your internet connection.';
+    // Nothing came back: say so, but leave the screen to an older load that may still answer.
+    if (!trainers && !invites && !sessions && !everyone && !stories) {
+      if (current(false)) setError(failed);
+      return false;
+    }
+    // A newer load has shown its answer already, so this one's is older.
     if (!current()) return false;
     setNow(new Date());
-    setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
+    setError(trainers && sessions ? null : failed);
     setData((old) => ({
       // A trainer who added the client twice shows once.
       trainers:

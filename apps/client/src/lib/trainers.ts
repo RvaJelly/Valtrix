@@ -155,9 +155,12 @@ export async function acceptInvite(clientId: string) {
   if (error) throw error;
 }
 
+// How many invites it declined: 0 when there was nothing left to decline (withdrawn,
+// archived, or answered on another phone).
 export async function declineInvite(clientId: string) {
-  const { error } = await supabase.rpc('decline_trainer_invite', { p_client: clientId });
+  const { data, error } = await supabase.rpc('decline_trainer_invite', { p_client: clientId });
   if (error) throw error;
+  return (data as number | null) ?? 0;
 }
 
 // Unlinks the client from the trainer. The trainer keeps their own notes.

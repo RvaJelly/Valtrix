@@ -5,7 +5,7 @@ import { Avatar } from '@/components/avatar';
 import { Body, Button, Card, ErrorText } from '@/components/ui';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
-import { confirm } from '@/lib/confirm';
+import { confirm, notice } from '@/lib/confirm';
 import { refreshReminders } from '@/lib/reminders';
 import { acceptInvite, declineInvite, trainerTitle, type Invite } from '@/lib/trainers';
 
@@ -19,6 +19,16 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
   const firstName = invite.trainer_name?.split(' ')[0] || name;
   const business = invite.trainer_name && invite.business_name ? invite.business_name : null;
 
+  // Withdrawn, archived or answered on another phone while this card was on screen. The
+  // card goes when the screen loads again, so the notice says why.
+  function gone() {
+    notice(
+      `${firstName}'s invite is no longer available`,
+      'It may have been withdrawn, or answered on another device.',
+    );
+    onAnswered();
+  }
+
   async function accept() {
     setError(null);
     setBusy('accept');
@@ -29,12 +39,10 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
       refreshReminders();
       onAnswered();
     } catch (e) {
-      // Answered on another phone, or withdrawn or archived while this card was on screen.
-      // Database errors are plain objects, not Errors.
-      const gone = (e as { code?: string } | null)?.code === '22023';
-      setError(gone ? 'This invite is no longer available.' : 'Could not accept. Check your connection and try again.');
       setBusy(null);
-      if (gone) onAnswered();
+      // Database errors are plain objects, not Errors.
+      if ((e as { code?: string } | null)?.code === '22023') gone();
+      else setError('Could not accept. Check your connection and try again.');
     }
   }
 
@@ -48,8 +56,11 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
     setError(null);
     setBusy('decline');
     try {
-      await declineInvite(invite.client_id);
-      onAnswered();
+      if (await declineInvite(invite.client_id)) onAnswered();
+      else {
+        setBusy(null);
+        gone();
+      }
     } catch {
       setError('Could not decline. Check your connection and try again.');
       setBusy(null);

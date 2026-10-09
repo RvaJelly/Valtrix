@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -9,6 +9,7 @@ import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
+import { serial } from '@/lib/serial';
 import {
   displayName,
   distanceLabel,
@@ -32,7 +33,7 @@ export default function TrainerProfile() {
   // This trainer's invite, while it waits for a yes or no.
   const [invite, setInvite] = useState<Invite | null>(null);
 
-  const load = useCallback(
+  const loadOnce = useCallback(
     () =>
       Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => [] as Invite[])])
         .then(([all, mine, invites]) => {
@@ -61,6 +62,8 @@ export default function TrainerProfile() {
         .catch(() => setTrainer((shown) => (shown === undefined ? null : shown))),
     [id],
   );
+  // One load at a time, so a slow older answer can't bring back an answered invite.
+  const load = useMemo(() => serial(loadOnce), [loadOnce]);
 
   useEffect(() => {
     load();

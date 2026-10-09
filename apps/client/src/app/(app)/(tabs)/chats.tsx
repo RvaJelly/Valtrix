@@ -1,20 +1,24 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { ChatList } from '@/components/chat-list';
 import { Button } from '@/components/ui';
 import { useChatEvents } from '@/lib/chat-live';
+import { serial } from '@/lib/serial';
 import { loadInvites, trainerTitle, type Invite } from '@/lib/trainers';
 
 export default function Chats() {
   // A trainer's invite waiting on Home: the chat starts once it is accepted.
   const [invites, setInvites] = useState<Invite[]>([]);
 
-  const load = useCallback(() => {
-    loadInvites().then(setInvites, () => {});
-  }, []);
+  // One load at a time, so a slow older answer can't bring back an answered invite.
+  const load = useMemo(() => serial(() => loadInvites().then(setInvites)), []);
 
-  useFocusEffect(load);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
   // News sent while the connection was down is missed, so load again when it is back.
   useChatEvents((event) => {
     if (event.type === 'link' || event.type === 'reconnected') load();

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -18,6 +18,7 @@ import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { removeMyChatPhotos } from '@/lib/chat';
 import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
 import { leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
+import { serial } from '@/lib/serial';
 import { supabase } from '@/lib/supabase';
 import { leaveTrainer, loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
 
@@ -243,14 +244,17 @@ function MyTrainers() {
   const [leaving, setLeaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(
+  // One load at a time, so a slow older answer can't bring back a trainer the person left.
+  const load = useMemo(
     () =>
-      loadTrainers(true).then(
-        (list) => {
-          setTrainers(list);
-          setFailed(false);
-        },
-        () => setFailed(true),
+      serial(() =>
+        loadTrainers(true).then(
+          (list) => {
+            setTrainers(list);
+            setFailed(false);
+          },
+          () => setFailed(true),
+        ),
       ),
     [],
   );

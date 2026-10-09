@@ -57,7 +57,8 @@ export default function TrainerProfile() {
           setChatId(link?.client_id ?? null);
           setInvite(asked);
         })
-        .catch(() => setTrainer(null)),
+        // Only the first load shows "not found"; a failed reload keeps what is on screen.
+        .catch(() => setTrainer((shown) => (shown === undefined ? null : shown))),
     [id],
   );
 
@@ -65,9 +66,10 @@ export default function TrainerProfile() {
     load();
   }, [load]);
 
-  // Answered on another phone, or the trainer sent or withdrew the invite.
+  // Answered on another phone, or the trainer sent or withdrew the invite. News sent while
+  // the connection was down is missed, so load again when it is back.
   useChatEvents((event) => {
-    if (event.type === 'link') load();
+    if (event.type === 'link' || event.type === 'reconnected') load();
   });
 
   if (trainer === undefined) return <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;

@@ -15,8 +15,9 @@ export default function Chats() {
   }, []);
 
   useFocusEffect(load);
+  // News sent while the connection was down is missed, so load again when it is back.
   useChatEvents((event) => {
-    if (event.type === 'link') load();
+    if (event.type === 'link' || event.type === 'reconnected') load();
   });
 
   const first = invites[0];

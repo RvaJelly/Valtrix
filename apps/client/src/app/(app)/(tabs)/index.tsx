@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -96,9 +96,18 @@ export default function Home() {
     });
   }, [navigation]);
 
+  // Loads overlap (focus, coming back to the app, live news). Only the newest one's results
+  // are shown, so an older load that finishes last can't bring back an answered invite.
+  const loads = useRef(0);
+  // A load asked to refresh reminders; done by whichever load finishes newest.
+  const wantReminders = useRef(false);
+  const linkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Each part loads on its own, so stories and trainers still show when the sessions
   // can't be loaded, and a failed refresh keeps what was already on screen.
   const load = useCallback(async (reminders = true) => {
+    const mine = ++loads.current;
+    if (reminders) wantReminders.current = true;
     const start = new Date();
     const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
     const [trainers, invites, sessions, everyone, stories, seen] = await Promise.all([
@@ -109,6 +118,7 @@ export default function Home() {
       loadStories().catch(() => null),
       loadSeen(),
     ]);
+    if (mine !== loads.current) return;
     setNow(new Date());
     setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
     setData((old) => ({
@@ -127,13 +137,32 @@ export default function Home() {
       seen,
     }));
     // A newly linked trainer may have sessions booked already.
-    if (reminders && trainers && sessions) refreshReminders();
+    if (wantReminders.current && trainers && sessions) {
+      wantReminders.current = false;
+      refreshReminders();
+    }
   }, []);
 
-  // A trainer invited this person, or an invite or link changed on another phone.
+  // A trainer invited this person, or an invite or link changed on another phone. One
+  // answer can send several pieces of news at once, so load once they have stopped.
   useChatEvents((event) => {
-    if (event.type === 'link') load();
+    if (event.type === 'link') {
+      if (linkTimer.current) clearTimeout(linkTimer.current);
+      linkTimer.current = setTimeout(() => {
+        linkTimer.current = null;
+        load();
+      }, 250);
+    } else if (event.type === 'reconnected') {
+      // News sent while the connection was down is missed.
+      load(false);
+    }
   });
+  useEffect(
+    () => () => {
+      if (linkTimer.current) clearTimeout(linkTimer.current);
+    },
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {

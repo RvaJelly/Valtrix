@@ -259,9 +259,10 @@ function MyTrainers() {
     load();
   }, [load]);
 
-  // Joined or left on another phone.
+  // Joined or left on another phone. News sent while the connection was down is missed, so
+  // load again when it is back.
   useChatEvents((event) => {
-    if (event.type === 'link') load();
+    if (event.type === 'link' || event.type === 'reconnected') load();
   });
 
   // A trainer who added the person twice is still one trainer, shown as active if either is.

@@ -51,9 +51,10 @@ export default function Clients() {
     }, [load]),
   );
 
-  // A client accepted, declined or left: their state changes here straight away.
+  // A client accepted, declined or left: their state changes here straight away. News sent
+  // while the connection was down is missed, so load again when it is back.
   useChatEvents((event) => {
-    if (event.type === 'link') load();
+    if (event.type === 'link' || event.type === 'reconnected') load();
   });
 
   async function refresh() {

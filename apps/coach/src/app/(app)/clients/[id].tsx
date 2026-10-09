@@ -71,9 +71,10 @@ export default function ClientDetail() {
 
   useFocusEffect(load);
   useRefreshOnReturn(load);
-  // The client accepted, declined or left just now.
+  // The client accepted, declined or left just now, or the connection is back after news
+  // may have been missed.
   useChatEvents((event) => {
-    if (event.type === 'link' && event.client_id === id) load();
+    if ((event.type === 'link' && event.client_id === id) || event.type === 'reconnected') load();
   });
 
   async function setStatus(status: ClientStatus) {

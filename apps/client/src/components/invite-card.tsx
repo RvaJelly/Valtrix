@@ -29,8 +29,12 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
       refreshReminders();
       onAnswered();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not accept. Check your connection and try again.');
+      // Answered on another phone, or withdrawn or archived while this card was on screen.
+      // Database errors are plain objects, not Errors.
+      const gone = (e as { code?: string } | null)?.code === '22023';
+      setError(gone ? 'This invite is no longer available.' : 'Could not accept. Check your connection and try again.');
       setBusy(null);
+      if (gone) onAnswered();
     }
   }
 
@@ -46,8 +50,8 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
     try {
       await declineInvite(invite.client_id);
       onAnswered();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not decline. Check your connection and try again.');
+    } catch {
+      setError('Could not decline. Check your connection and try again.');
       setBusy(null);
     }
   }

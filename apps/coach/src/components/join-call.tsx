@@ -50,7 +50,7 @@ export function JoinCall({
   session: Pick<Session, 'online' | 'status' | 'starts_at' | 'duration_minutes' | 'client_id'>;
   name: string;
   avatar?: string | null;
-  // Whether the client has joined the Voltrix app, so there is someone to call.
+  // Whether the client accepted the invite in the Voltrix app, so there is someone to call.
   onApp: boolean;
 }) {
   const now = useNow();
@@ -60,7 +60,7 @@ export function JoinCall({
   if (!onApp) {
     return (
       <Body secondary style={{ fontSize: 14 }}>
-        {name} isn&apos;t on the Voltrix app yet, so you can&apos;t call them here.
+        You can call {name} here once they accept your invite in the Voltrix app.
       </Body>
     );
   }

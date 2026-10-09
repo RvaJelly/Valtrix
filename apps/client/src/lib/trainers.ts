@@ -1,13 +1,25 @@
 import type { Coords } from '@/lib/location';
 import { supabase } from '@/lib/supabase';
 
-// A trainer the signed-in client is linked to.
+// A trainer the signed-in client is linked to (they accepted the trainer's invite).
 export type Trainer = {
   client_id: string;
   trainer_id: string;
   trainer_name: string | null;
   business_name: string | null;
   client_status: 'active' | 'paused';
+  trainer_avatar: string | null;
+  joined_at: string | null;
+};
+
+// A trainer who added the client's email in Voltrix Coach and is waiting for a yes or no.
+export type Invite = {
+  client_id: string;
+  trainer_id: string;
+  trainer_name: string | null;
+  business_name: string | null;
+  trainer_avatar: string | null;
+  invited_at: string;
 };
 
 // A trainer's public profile, as every client can see it.
@@ -119,10 +131,38 @@ export function displayName(t: { full_name: string | null; business_name: string
   return t.full_name || t.business_name || 'Trainer';
 }
 
-// Link the client to any trainer who saved their email, then list their trainers.
+// The trainers the client accepted.
 export async function loadTrainers() {
-  await supabase.rpc('claim_my_invites');
-  const { data, error } = await supabase.rpc('my_trainers');
+  const { data, error } = await supabase.rpc('my_trainers_v2');
   if (error) throw error;
   return (data ?? []) as Trainer[];
+}
+
+// Trainers waiting for the client to accept or decline, newest first. Nobody is linked
+// (or sees anything of the client's) until the client accepts.
+export async function loadInvites() {
+  const { data, error } = await supabase.rpc('my_invites');
+  if (error) throw error;
+  return (data ?? []) as Invite[];
+}
+
+export async function acceptInvite(clientId: string) {
+  const { error } = await supabase.rpc('accept_trainer_invite', { p_client: clientId });
+  if (error) throw error;
+}
+
+export async function declineInvite(clientId: string) {
+  const { error } = await supabase.rpc('decline_trainer_invite', { p_client: clientId });
+  if (error) throw error;
+}
+
+// Unlinks the client from the trainer. The trainer keeps their own notes.
+export async function leaveTrainer(clientId: string) {
+  const { error } = await supabase.rpc('leave_trainer', { p_client: clientId });
+  if (error) throw error;
+}
+
+// The name on an invite or a trainer row: the trainer's own name, else their business.
+export function trainerTitle(t: { trainer_name: string | null; business_name: string | null }) {
+  return t.trainer_name || t.business_name || 'Your trainer';
 }

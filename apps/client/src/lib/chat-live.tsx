@@ -21,13 +21,16 @@ import { supabase } from '@/lib/supabase';
 
 // Keeps the chat list and unread count up to date while the app is open, and
 // opens the incoming call screen when someone calls. Everything arrives on the
-// person's private inbox channel, which only the database can send to.
+// person's private inbox channel, which only the database can send to. 'link'
+// news says a trainer invite was sent, answered or withdrawn, or a link started
+// or ended, so screens showing invites and clients can load again.
 
 export type ChatEvent =
   | { type: 'message'; message: Message }
   | { type: 'message_deleted'; id: string; chat_id: string }
   | { type: 'read'; chat_id: string; reader_id: string; read_at: string }
   | { type: 'call'; call: Call }
+  | { type: 'link'; client_id: string; invite_status: string }
   | { type: 'reconnected' };
 
 type ChatState = {
@@ -143,6 +146,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
           refreshSoon();
         })
         .on('broadcast', { event: 'call' }, ({ payload }) => onCall(payload as Call))
+        .on('broadcast', { event: 'link' }, ({ payload }) => {
+          emit({ type: 'link', client_id: payload.client_id, invite_status: payload.invite_status });
+          refreshSoon();
+        })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') onConnected();
           else setLive(false);

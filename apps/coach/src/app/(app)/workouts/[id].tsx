@@ -7,6 +7,7 @@ import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/componen
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { goBack } from '@/lib/nav';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
 import { removeWorkoutVideos } from '@/lib/workout-videos';
@@ -18,7 +19,7 @@ import {
   type WorkoutExercise,
 } from '@/lib/workouts';
 
-type Editable = Pick<WorkoutExercise, 'sets' | 'reps' | 'weight' | 'rest_seconds'>;
+type Editable = Pick<WorkoutExercise, 'sets' | 'reps' | 'weight' | 'weight_unit' | 'rest_seconds'>;
 
 export default function WorkoutEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,6 +28,10 @@ export default function WorkoutEditor() {
   const [items, setItems] = useState<WorkoutExercise[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { settings } = useSettings();
+
+  // A weight keeps the unit it was written in, so switching Settings > Weight units
+  // doesn't change what clients already see. New weights use the current setting.
+  const unitOf = (item: WorkoutExercise) => (item.weight ? (item.weight_unit ?? settings.units) : settings.units);
 
   const load = useCallback(async () => {
     const [w, rows] = await Promise.all([
@@ -93,7 +98,11 @@ export default function WorkoutEditor() {
   }
 
   async function remove(itemId: string) {
-    const video = items.find((it) => it.id === itemId)?.video_path;
+    const item = items.find((it) => it.id === itemId);
+    const video = item?.video_path;
+    const what = `${item?.exercises.name ?? 'It'} comes out of this workout`;
+    const message = video ? `${what}, and its demo video is deleted.` : `${what}.`;
+    if (!(await confirm('Remove exercise?', message, 'Remove'))) return;
     setItems((list) => list.filter((it) => it.id !== itemId));
     const { error } = await supabase.from('workout_exercises').delete().eq('id', itemId);
     if (error) setError(error.message);
@@ -106,7 +115,7 @@ export default function WorkoutEditor() {
     const { error } = await supabase.from('workouts').delete().eq('id', id);
     if (error) return setError(error.message);
     await removeWorkoutVideos([workout?.video_path, ...items.map((it) => it.video_path)]);
-    router.back();
+    goBack('/programs');
   }
 
   if (!workout) {
@@ -186,12 +195,12 @@ export default function WorkoutEditor() {
                   }}
                 />
                 <SmallField
-                  label={`Weight (${settings.units})`}
+                  label={`Weight (${unitOf(item)})`}
                   initial={item.weight ?? ''}
                   placeholder="–"
                   onSave={(v) => {
                     const weight = v.trim().slice(0, 30) || null;
-                    saveItem(item.id, { weight });
+                    saveItem(item.id, { weight, weight_unit: weight ? unitOf(item) : null });
                     return weight ?? '';
                   }}
                 />

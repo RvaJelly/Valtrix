@@ -57,6 +57,9 @@ export type WorkoutExercise = {
   sets: number;
   reps: string;
   weight: string | null;
+  // The unit the weight was written in. Empty for weights saved before units were kept,
+  // which read in the trainer's current unit.
+  weight_unit: 'kg' | 'lb' | null;
   rest_seconds: number | null;
   notes: string | null;
   // A demo for this exercise in this workout. Without one, the exercise's own demo shows.
@@ -65,4 +68,4 @@ export type WorkoutExercise = {
 };
 
 export const WORKOUT_EXERCISE_COLUMNS =
-  'id, workout_id, exercise_id, position, sets, reps, weight, rest_seconds, notes, video_path, exercises(name, muscle_group, equipment, video_path)';
+  'id, workout_id, exercise_id, position, sets, reps, weight, weight_unit, rest_seconds, notes, video_path, exercises(name, muscle_group, equipment, video_path)';

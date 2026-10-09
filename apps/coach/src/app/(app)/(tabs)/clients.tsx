@@ -92,6 +92,13 @@ export default function Clients() {
           <ErrorText>{error}</ErrorText>
         </View>
       }
+      ListEmptyComponent={
+        clients && search.trim() ? (
+          <Body secondary style={{ textAlign: 'center', marginTop: Spacing.four }}>
+            No clients match “{search.trim()}”.
+          </Body>
+        ) : null
+      }
       ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
       renderItem={({ item }) => (
         <Pressable

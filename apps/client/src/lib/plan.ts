@@ -24,7 +24,7 @@ export type PlanItem = {
   exercise_count: number;
   // The days (YYYY-MM-DD) it was ticked off this week.
   done_on: string[];
-  // The units the trainer writes weights in, from their own app settings.
+  // The trainer's current weight units, for weights saved without their own unit.
   trainer_units: 'kg' | 'lb';
 };
 
@@ -39,6 +39,8 @@ export type PlanExercise = {
   sets: number;
   reps: string;
   weight: string | null;
+  // The unit the trainer wrote the weight in.
+  weight_unit: 'kg' | 'lb' | null;
   rest_seconds: number | null;
   notes: string | null;
   video_path: string | null;
@@ -150,9 +152,14 @@ export async function loadPlan(today = new Date()) {
 }
 
 export async function loadPlanWorkout(planItemId: string) {
-  const { data, error } = await supabase.rpc('my_plan_workout', { p_item: planItemId });
+  let { data, error } = await supabase.rpc('my_plan_workout_v2', { p_item: planItemId });
+  // PGRST202: a database without the newer function yet. Its weights read in the trainer's units.
+  if (error?.code === 'PGRST202') ({ data, error } = await supabase.rpc('my_plan_workout', { p_item: planItemId }));
   if (error) throw error;
-  return (data ?? []) as PlanExercise[];
+  return ((data ?? []) as PlanExercise[]).map((ex) => ({
+    ...ex,
+    weight_unit: ex.weight_unit === 'kg' || ex.weight_unit === 'lb' ? ex.weight_unit : null,
+  }));
 }
 
 // Ticks a workout off for a day (the phone's own date).

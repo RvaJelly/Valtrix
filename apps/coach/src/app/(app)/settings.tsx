@@ -100,6 +100,9 @@ export default function Settings() {
               Weight units
             </Body>
             <Segmented options={UNITS} value={settings.units} onChange={(units) => update({ units })} />
+            <Body secondary style={styles.small}>
+              For new weights. Weights you already wrote keep their unit.
+            </Body>
           </Card>
         </Section>
 

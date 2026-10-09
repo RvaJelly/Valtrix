@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
-import { Body, Card, ErrorText } from '@/components/ui';
+import { Body, Button, Card, ErrorText } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import {
   daysLabel,
@@ -40,22 +40,39 @@ export default function Plan() {
   const [when, setWhen] = useState<When>('upcoming');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // The day the plan was loaded for: its ticks and "Today" belong to that day.
+  const loadedFor = useRef('');
 
+  // The plan and the sessions load on their own, so one failing doesn't hide the other,
+  // and a failed refresh keeps what was already on screen.
   const load = useCallback(async () => {
-    try {
-      const now = new Date();
-      const [items, list] = await Promise.all([loadPlan(now), loadSessions(addDays(now, -DAYS), addDays(now, DAYS))]);
-      setPlan(items);
-      setSessions(list);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load your plan.');
-    }
+    const now = new Date();
+    loadedFor.current = dayKey(now);
+    const [items, list] = await Promise.all([
+      loadPlan(now).catch(() => null),
+      loadSessions(addDays(now, -DAYS), addDays(now, DAYS)).catch(() => null),
+    ]);
+    if (items) setPlan(items);
+    if (list) setSessions(list);
+    setError(items && list ? null : 'Could not load your plan. Check your internet connection.');
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       load();
+      // Tabs stay open in the background: load again when the app comes back, and when
+      // the date moves on (past midnight) while this tab shows.
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') load();
+      });
+      const timer = setInterval(() => {
+        if (dayKey(new Date()) !== loadedFor.current) load();
+      }, 60_000);
+      return () => {
+        sub.remove();
+        clearInterval(timer);
+      };
     }, [load]),
   );
 
@@ -63,6 +80,12 @@ export default function Plan() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  }
+
+  async function retry() {
+    setRetrying(true);
+    await load();
+    setRetrying(false);
   }
 
   return (
@@ -87,7 +110,13 @@ export default function Plan() {
         })}
       </View>
 
-      <ErrorText>{error}</ErrorText>
+      {/* A web page can't be pulled down to refresh, so there's always a button. */}
+      {error ? (
+        <View style={{ gap: Spacing.two }}>
+          <ErrorText>{error}</ErrorText>
+          <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
+        </View>
+      ) : null}
       {tab === 'workouts' ? (
         plan ? (
           <Workouts plan={plan} />

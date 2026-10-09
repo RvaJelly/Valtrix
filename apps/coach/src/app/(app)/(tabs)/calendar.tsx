@@ -22,10 +22,13 @@ import { supabase } from '@/lib/supabase';
 export default function CalendarScreen() {
   const navigation = useNavigation();
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
-  const [sessions, setSessions] = useState<Session[] | null>(null);
+  // The sessions of one week, kept with the week they belong to.
+  const [loaded, setLoaded] = useState<{ week: string; list: Session[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const weekStart = startOfWeek(selected);
   const weekKey = dayKey(weekStart);
+  // Another week's sessions never stand in for this one while it loads.
+  const sessions = loaded?.week === weekKey ? loaded.list : null;
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(selected), i)), [selected]);
   const today = startOfDay(new Date());
 
@@ -46,6 +49,8 @@ export default function CalendarScreen() {
   // Load the visible week whenever the screen is shown or the week changes.
   useFocusEffect(
     useCallback(() => {
+      // A late answer for a week no longer shown must not replace the shown week's sessions.
+      let current = true;
       const start = fromDayKey(weekKey);
       supabase
         .from('sessions')
@@ -54,10 +59,14 @@ export default function CalendarScreen() {
         .lt('starts_at', addDays(start, 7).toISOString())
         .order('starts_at')
         .then(({ data, error }) => {
+          if (!current) return;
           if (error) return setError(error.message);
           setError(null);
-          setSessions(data as unknown as Session[]);
+          setLoaded({ week: weekKey, list: data as unknown as Session[] });
         });
+      return () => {
+        current = false;
+      };
     }, [weekKey]),
   );
 

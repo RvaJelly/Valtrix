@@ -1,4 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -8,7 +8,9 @@ import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
+import { goBack } from '@/lib/nav';
 import { refreshReminders } from '@/lib/reminders';
+import { saveError } from '@/lib/save-error';
 import { SESSION_COLUMNS, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -16,6 +18,8 @@ export default function SessionDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The change being saved, so a second tap on a slow connection does nothing.
+  const [busy, setBusy] = useState<SessionStatus | 'delete' | null>(null);
   const { chats } = useChat();
 
   useEffect(() => {
@@ -32,18 +36,29 @@ export default function SessionDetail() {
   }, [id]);
 
   async function setStatus(status: SessionStatus) {
+    if (busy) return;
+    setBusy(status);
+    setError(null);
     const { error } = await supabase.from('sessions').update({ status }).eq('id', id);
-    if (error) return setError(error.message);
+    if (error) {
+      setBusy(null);
+      return setError(error.message);
+    }
     refreshReminders();
-    router.back();
+    goBack('/calendar');
   }
 
   async function remove() {
-    if (!(await confirm('Delete session?', 'It will be removed from your calendar.', 'Delete'))) return;
+    if (busy || !(await confirm('Delete session?', 'It will be removed from your calendar.', 'Delete'))) return;
+    setBusy('delete');
+    setError(null);
     const { error } = await supabase.from('sessions').delete().eq('id', id);
-    if (error) return setError(error.message);
+    if (error) {
+      setBusy(null);
+      return setError(error.message);
+    }
     refreshReminders();
-    router.back();
+    goBack('/calendar');
   }
 
   if (!session) {
@@ -74,9 +89,9 @@ export default function SessionDetail() {
         }
         onSubmit={async (input) => {
           const { error } = await supabase.from('sessions').update(input).eq('id', id);
-          if (error) return error.message;
+          if (error) return saveError(error);
           refreshReminders();
-          router.back();
+          goBack('/calendar');
           return null;
         }}>
         <View style={{ gap: Spacing.three, marginTop: Spacing.two }}>
@@ -85,18 +100,48 @@ export default function SessionDetail() {
               <Body secondary style={{ textAlign: 'center' }}>
                 Marked as {SESSION_STATUS[session.status].toLowerCase()}.
               </Body>
-              <Button title="Mark as booked again" variant="secondary" onPress={() => setStatus('scheduled')} />
+              <Button
+                title="Mark as booked again"
+                variant="secondary"
+                onPress={() => setStatus('scheduled')}
+                loading={busy === 'scheduled'}
+                disabled={!!busy}
+              />
             </>
           ) : (
             <>
-              <Button title="Mark as done" variant="secondary" onPress={() => setStatus('completed')} />
+              <Button
+                title="Mark as done"
+                variant="secondary"
+                onPress={() => setStatus('completed')}
+                loading={busy === 'completed'}
+                disabled={!!busy}
+              />
               {isPast ? (
-                <Button title="Client didn’t show" variant="secondary" onPress={() => setStatus('no_show')} />
+                <Button
+                  title="Client didn’t show"
+                  variant="secondary"
+                  onPress={() => setStatus('no_show')}
+                  loading={busy === 'no_show'}
+                  disabled={!!busy}
+                />
               ) : null}
-              <Button title="Cancel session" variant="secondary" onPress={() => setStatus('cancelled')} />
+              <Button
+                title="Cancel session"
+                variant="secondary"
+                onPress={() => setStatus('cancelled')}
+                loading={busy === 'cancelled'}
+                disabled={!!busy}
+              />
             </>
           )}
-          <Button title="Delete session" variant="ghost" onPress={remove} />
+          <Button
+            title="Delete session"
+            variant="ghost"
+            onPress={remove}
+            loading={busy === 'delete'}
+            disabled={!!busy}
+          />
           {error ? <Body style={{ color: Colors.danger }}>{error}</Body> : null}
         </View>
       </SessionForm>

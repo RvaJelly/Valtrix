@@ -25,6 +25,7 @@ import {
   weekProgress,
   type PlanItem,
 } from '@/lib/plans';
+import { useRefreshOnReturn } from '@/lib/refresh-on-return';
 import { addDays, dayKey, startOfWeek } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -74,12 +75,14 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     setTicks(byItem);
   }, [clientId]);
 
-  // Reload when coming back, for example after building a new workout.
+  // Reload when coming back, for example after building a new workout, and when the app
+  // or browser window comes back, so ticks the client made meanwhile show.
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
+  useRefreshOnReturn(load);
 
   async function add(workout: WorkoutChoice, weekdays: number[], note: string | null) {
     const position = (items ?? []).reduce((max, i) => Math.max(max, i.position + 1), 0);

@@ -133,7 +133,13 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
           ))}
         </View>
         {who === NO_CLIENT ? (
-          <TextField label="What is it?" value={title} onChangeText={setTitle} placeholder="For example: Group class" />
+          <TextField
+            label="What is it?"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="For example: Group class"
+            maxLength={120}
+          />
         ) : null}
 
         <Text style={styles.label}>Day</Text>
@@ -189,12 +195,14 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
           value={location}
           onChangeText={setLocation}
           placeholder={online && who !== NO_CLIENT ? 'Optional' : 'Optional, for example: Main gym'}
+          maxLength={200}
         />
         <TextField
           label="Notes"
           value={notes}
           onChangeText={setNotes}
           placeholder="Optional"
+          maxLength={2000}
           multiline
           style={{ minHeight: 80, paddingTop: Spacing.three, textAlignVertical: 'top' }}
         />

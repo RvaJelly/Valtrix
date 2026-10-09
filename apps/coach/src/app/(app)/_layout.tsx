@@ -8,6 +8,10 @@ import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
 import { useSettings } from '@/lib/settings';
 
+// A screen opened straight from a link, a notification or a page reload on the web still
+// has the tabs under it, so it gets a back arrow and the tab bar is one tap away.
+export const unstable_settings = { anchor: '(tabs)' };
+
 export default function AppLayout() {
   return (
     <ChatProvider>
@@ -21,7 +25,8 @@ export default function AppLayout() {
           headerBackButtonDisplayMode: 'minimal',
           contentStyle: { backgroundColor: Colors.background },
         }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Screen readers call the back arrow "Go back" instead of "(tabs), back". */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
         <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
         <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />

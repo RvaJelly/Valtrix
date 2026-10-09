@@ -23,6 +23,8 @@ export default function AppLayout() {
           headerTitleStyle: { fontWeight: '700' },
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
+          // Screen readers say "Back" (not the name of the tabs group, "(tabs)").
+          headerBackTitle: 'Back',
           contentStyle: { backgroundColor: Colors.background },
         }}>
         {/* Screen readers call the back arrow "Go back" instead of "(tabs), back". */}

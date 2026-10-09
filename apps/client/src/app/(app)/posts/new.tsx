@@ -9,7 +9,7 @@ import { CommunityRules } from '@/components/community-rules';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { MAX_VIDEO_SECONDS, MediaError, pickMedia, type PickedMedia } from '@/lib/media';
+import { MediaError, pickMedia, REEL_LENGTH_HINT, type PickedMedia } from '@/lib/media';
 import { acceptRules, createPost, hasAcceptedRules } from '@/lib/posts';
 
 const CAPTION_MAX = 2200;
@@ -52,7 +52,8 @@ export default function NewPost() {
     setBusy('sharing');
     try {
       await createPost(session.user.id, kind, media, kind === 'reel' ? caption : null);
-      router.back();
+      if (router.canGoBack()) router.back();
+      else router.replace(kind === 'reel' ? '/reels' : '/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not share it. Try again.');
       setBusy(null);
@@ -86,7 +87,7 @@ export default function NewPost() {
               </View>
               <Body secondary style={{ textAlign: 'center' }}>
                 {kind === 'reel'
-                  ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds. Everyone on Voltrix can watch them.`
+                  ? `${REEL_LENGTH_HINT} Everyone on Voltrix can watch them.`
                   : 'Your story shows on everyone’s Home for 24 hours, then disappears.'}
               </Body>
             </View>

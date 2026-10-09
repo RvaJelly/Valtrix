@@ -19,13 +19,24 @@ export type PickedMedia = {
 export const MAX_VIDEO_SECONDS = 60;
 // The largest file the storage accepts.
 const MAX_BYTES = 50 * 1024 * 1024;
+
+// iPhones shrink a video to a medium size before it uploads, so a whole minute fits in
+// 50 MB. Android phones send the clip as it was filmed, and a full-quality phone clip
+// passes 50 MB after about half a minute.
+export const REEL_LENGTH_HINT =
+  Platform.OS === 'android'
+    ? 'Reels are short videos, about 30 seconds.'
+    : Platform.OS === 'ios'
+      ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds.`
+      : `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds and 50 MB.`;
 // Photos are shrunk to this width, which is what Instagram uses too.
 const PHOTO_WIDTH = 1080;
 
+// MP4 and MOV play on every phone. iPhones can't play WebM (what Chrome records on a
+// computer), so those are turned away.
 const VIDEO_TYPES: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
-  'video/webm': 'webm',
 };
 
 export class MediaError extends Error {}
@@ -44,6 +55,10 @@ export async function pickMedia(kind: 'story' | 'reel', from: 'camera' | 'librar
     mediaTypes: kind === 'reel' ? ['videos'] : ['images', 'videos'],
     videoMaxDuration: MAX_VIDEO_SECONDS,
     quality: 1,
+    // On iPhones: film at medium quality, and make a chosen video a 960x540 MP4 (H.264,
+    // which every phone plays), so a minute stays under 50 MB.
+    videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+    videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
     // iPhones save HEIC photos and HEVC videos; ask for ones every phone can show.
     preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
   };
@@ -91,7 +106,7 @@ async function prepareVideo(asset: ImagePicker.ImagePickerAsset): Promise<Picked
     throw new MediaError(`Videos can be up to ${MAX_VIDEO_SECONDS} seconds. This one is ${Math.round(seconds)}.`);
   }
   const mimeType = asset.mimeType && asset.mimeType in VIDEO_TYPES ? asset.mimeType : guessVideoType(asset);
-  if (!mimeType) throw new MediaError('This type of video is not supported. Try an MP4 video.');
+  if (!mimeType) throw new MediaError('Please use an MP4 or MOV video, so it plays on every phone.');
   if (asset.fileSize && asset.fileSize > MAX_BYTES) throw tooBig();
 
   const bytes = await fetch(asset.uri).then((r) => r.arrayBuffer());
@@ -109,14 +124,17 @@ async function prepareVideo(asset: ImagePicker.ImagePickerAsset): Promise<Picked
 }
 
 function tooBig() {
-  return new MediaError('This video is too big to share (over 50 MB). Try a shorter clip.');
+  return new MediaError(
+    Platform.OS === 'android'
+      ? 'This video is too big to share (over 50 MB). Try a shorter clip, about 30 seconds.'
+      : 'This video is too big to share (over 50 MB). Try a shorter clip.',
+  );
 }
 
 function guessVideoType(asset: ImagePicker.ImagePickerAsset) {
   const name = (asset.fileName ?? asset.uri).toLowerCase();
   if (name.endsWith('.mp4') || name.endsWith('.m4v')) return 'video/mp4';
   if (name.endsWith('.mov')) return 'video/quicktime';
-  if (name.endsWith('.webm')) return 'video/webm';
   // Phones record MP4 when nothing says otherwise.
   return asset.mimeType ? null : 'video/mp4';
 }

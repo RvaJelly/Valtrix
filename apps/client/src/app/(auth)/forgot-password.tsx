@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +7,12 @@ import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
 import { Spacing, themed } from '@/constants/theme';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
+
+// Also works when this page was opened from a link, with nothing to go back to.
+function backToSignIn() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/sign-in');
+}
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -50,6 +57,7 @@ export default function ForgotPassword() {
               <Button title="Send reset link" onPress={send} loading={busy} />
             </>
           )}
+          <Button title="Back to sign in" variant={sent ? 'primary' : 'ghost'} onPress={backToSignIn} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

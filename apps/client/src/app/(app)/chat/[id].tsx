@@ -8,6 +8,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -85,6 +86,8 @@ export default function ChatScreen() {
   const [viewing, setViewing] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
   const [active, setActive] = useState(AppState.currentState === 'active');
+  // While the keyboard is up it covers the phone's bottom bar, so the message box needs no room for it.
+  const [keyboardUp, setKeyboardUp] = useState(false);
 
   const typingChannel = useRef<RealtimeChannel | null>(null);
   const lastTypingSent = useRef(0);
@@ -117,6 +120,16 @@ export default function ChatScreen() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => setActive(state === 'active'));
     return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const shown = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const hidden = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
   }, []);
 
   async function loadOlder() {
@@ -417,7 +430,9 @@ export default function ChatScreen() {
         ) : null}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* 'padding' on Android too: the app draws edge to edge, so Android doesn't make the
+          screen smaller for the keyboard, and the message box would sit behind it. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         {loading ? (
           <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />
         ) : (
@@ -472,7 +487,8 @@ export default function ChatScreen() {
           </Pressable>
         ) : null}
 
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, Spacing.two) }]}>
+        <View
+          style={[styles.composer, { paddingBottom: keyboardUp ? Spacing.two : Math.max(insets.bottom, Spacing.two) }]}>
           {photo ? (
             <View style={styles.photoReady}>
               <Image source={{ uri: photo.uri }} style={styles.photoThumb} contentFit="cover" />

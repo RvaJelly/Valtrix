@@ -29,7 +29,9 @@ function planLabel(t: Trainer) {
     case 'trial':
       return `Trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left`;
     default:
-      return 'Trial ended, not paying';
+      // The trial only starts once a card is added, so no end date means it never started.
+      if (t.subscription_expires_at) return 'Plan ended, not paying';
+      return t.trial_ends_at ? 'Trial ended, not paying' : 'No trial yet';
   }
 }
 

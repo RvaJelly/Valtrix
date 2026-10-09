@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, Text, View } from 'react-native';
+import { AppState, Modal, Platform, Pressable, Text, View } from 'react-native';
+import { FullWindowOverlay } from 'react-native-screens';
 
 import { Logo } from '@/components/logo';
 import { Body, Button } from '@/components/ui';
@@ -44,7 +45,7 @@ export function AppLock() {
   }, [active, setLocked]);
 
   if (!active) return null;
-  return (
+  const cover = (
     <View style={styles.cover}>
       <Logo style={{ width: 200 }} />
       <Body secondary style={{ textAlign: 'center' }}>
@@ -58,6 +59,19 @@ export function AppLock() {
       </View>
     </View>
   );
+  // The lock must cover everything, including sheets, video players and screens that
+  // slide up, which sit above the rest of the app. On iPhone a full-window overlay goes
+  // on top of them; on Android a Modal is a window of its own, shown above any open one
+  // (and the Back button can't close it).
+  if (Platform.OS === 'ios') return <FullWindowOverlay>{cover}</FullWindowOverlay>;
+  if (Platform.OS === 'android') {
+    return (
+      <Modal visible animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={() => {}}>
+        {cover}
+      </Modal>
+    );
+  }
+  return cover;
 }
 
 const styles = themed(() => ({

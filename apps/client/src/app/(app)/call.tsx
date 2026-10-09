@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { requestRecordingPermissionsAsync } from 'expo-audio';
 import * as ImagePicker from 'expo-image-picker';
+import { useKeepAwake } from 'expo-keep-awake';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentProps } from 'react';
@@ -52,6 +53,18 @@ function close() {
   else router.replace('/');
 }
 
+// The same login can be open on two devices (a phone and a computer): both ring, and
+// whichever answers first takes the call.
+const ANSWERED_ELSEWHERE = 'Answered on another device.';
+
+// Keeps the screen on, so a voice call doesn't go quiet or drop when the screen would
+// turn off. Shown only while the call rings or is going. A browser may say no to keeping
+// the screen on; that is not an error worth showing.
+function StayAwake() {
+  useKeepAwake(undefined, { suppressDeactivateWarnings: true });
+  return null;
+}
+
 // A voice or video call, like WhatsApp: calling someone, or someone calling you.
 export default function CallScreen() {
   const params = useLocalSearchParams<{
@@ -75,6 +88,8 @@ export default function CallScreen() {
   const [seconds, setSeconds] = useState(0);
   const [pageOn, setPageOn] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  // A short note in place of the call time, like "Couldn't switch camera."
+  const [notice, setNotice] = useState<string | null>(null);
 
   const page = useRef<CallViewHandle>(null);
   const channel = useRef<RealtimeChannel | null>(null);
@@ -254,6 +269,11 @@ export default function CallScreen() {
       send('signal', event.data);
     } else if (event.type === 'remote') {
       setRemoteVideo(event.video);
+    } else if (event.type === 'flip') {
+      if (!event.ok) {
+        setNotice('Couldn’t switch camera.');
+        later(() => setNotice(null), 3000);
+      }
     } else if (event.type === 'state') {
       if (event.state === 'connected') {
         stopHello();
@@ -280,6 +300,12 @@ export default function CallScreen() {
     }
   }
 
+  // A call that rang here and ended without being answered here.
+  function missedText() {
+    const id = callId.current;
+    return id && knownCall(id)?.answered_at ? ANSWERED_ELSEWHERE : 'Missed call.';
+  }
+
   // Updates from the database: answered, declined, ended on the other phone...
   useChatEvents((event) => {
     if (event.type !== 'call' || event.call.id !== callId.current) return;
@@ -288,8 +314,11 @@ export default function CallScreen() {
     if (next.status === 'accepted' && phaseNow.current === 'ringing-out') {
       stopTone();
       go('connecting');
+    } else if (next.status === 'accepted' && incoming && phaseNow.current === 'ringing-in') {
+      // Answered on this person's other device: stop ringing here.
+      finish(ANSWERED_ELSEWHERE);
     } else if (isOver(next.status) && !hangingUp.current) {
-      if (incoming && phaseNow.current === 'ringing-in') finish('Missed call.');
+      if (incoming && phaseNow.current === 'ringing-in') finish(next.answered_at ? ANSWERED_ELSEWHERE : 'Missed call.');
       else if (next.status === 'declined') finish(`${next.callee_name} declined the call.`);
       else if (next.status === 'busy') finish(`${next.callee_name} is on another call.`);
       else if (next.status === 'missed') finish('No answer.');
@@ -306,11 +335,14 @@ export default function CallScreen() {
         current = await fetchCall(id);
         if (current) setCall((c) => c ?? current);
       }
-      if (!current || isOver(current.status)) return finish(current ? 'Missed call.' : 'This call has ended.');
+      if (!current || isOver(current.status)) {
+        return finish(current ? (current.answered_at ? ANSWERED_ELSEWHERE : 'Missed call.') : 'This call has ended.');
+      }
+      if (current.status === 'accepted') return finish(ANSWERED_ELSEWHERE);
       playTone('incoming');
       later(
         () => {
-          if (phaseNow.current === 'ringing-in') finish('Missed call.');
+          if (phaseNow.current === 'ringing-in') finish(missedText());
         },
         (RING_SECONDS + 10) * 1000,
       );
@@ -391,10 +423,19 @@ export default function CallScreen() {
       updateCall(id, 'decline').catch(() => {});
       return finish(problem, 3500);
     }
+    // Already answered on another device (that news can arrive while this one asks).
+    if (knownCall(id)?.status === 'accepted') return finish(ANSWERED_ELSEWHERE);
     try {
       const answered = await updateCall(id, 'accept');
       setCall(answered);
-      if (answered.status !== 'accepted') return finish(answered.status === 'ended' ? 'Call ended.' : 'Missed call.');
+      if (answered.status !== 'accepted') {
+        return finish(
+          answered.status === 'ended' ? (answered.answered_at ? ANSWERED_ELSEWHERE : 'Call ended.') : 'Missed call.',
+        );
+      }
+      // The database says whether this tap is what answered it. Joining as well would
+      // add a third device to the call, and hanging up there would end it for everyone.
+      if (answered.answered_here === false) return finish(ANSWERED_ELSEWHERE);
     } catch {
       return finish('Could not answer. Check your internet and try again.', 3000);
     }
@@ -435,7 +476,7 @@ export default function CallScreen() {
             : phase === 'connected'
               ? reconnecting
                 ? 'Reconnecting…'
-                : formatSeconds(seconds)
+                : (notice ?? formatSeconds(seconds))
               : (endText ?? 'Call ended.');
 
   // Video calls show the cameras; voice calls (and video before it connects) show the person's photo.
@@ -445,6 +486,7 @@ export default function CallScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: false }} />
       <StatusBar style="light" />
+      {phase !== 'ended' ? <StayAwake /> : null}
       {pageOn ? <CallView ref={page} onEvent={onPageEvent} /> : null}
 
       <View style={[styles.top, { paddingTop: insets.top + Spacing.five }, !showFace && styles.topOverVideo]}>

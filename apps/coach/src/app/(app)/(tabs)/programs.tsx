@@ -81,6 +81,22 @@ export default function Programs() {
       ListHeaderComponent={
         <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
           {libraryLink}
+          <Text style={styles.section}>Nutrition</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/nutrition/check')}
+            style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+            <View style={[styles.icon, { backgroundColor: Colors.surfaceRaised }]}>
+              <Ionicons name="nutrition" size={22} color={Colors.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>Check a food</Text>
+              <Body secondary style={{ fontSize: 14 }}>
+                Scan or search to see calories, protein, carbs and fat
+              </Body>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+          </Pressable>
           <ErrorText>{error}</ErrorText>
           {workouts && workouts.length > 0 ? <Text style={styles.section}>Your workouts</Text> : null}
         </View>

@@ -112,7 +112,11 @@ export default function Home() {
     setNow(new Date());
     setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
     setData((old) => ({
-      trainers: trainers ?? old?.trainers ?? null,
+      // A trainer who added the client twice shows once.
+      trainers:
+        trainers?.filter((t, i) => trainers.findIndex((x) => x.trainer_id === t.trainer_id) === i) ??
+        old?.trainers ??
+        null,
       invites: invites ?? old?.invites ?? [],
       everyone: everyone ?? old?.everyone ?? [],
       sessions: sessions

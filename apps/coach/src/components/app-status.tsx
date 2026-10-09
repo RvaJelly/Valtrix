@@ -11,11 +11,12 @@ const ICONS: Record<AppStatus, ComponentProps<typeof Ionicons>['name']> = {
   declined: 'close-circle-outline',
   joined: 'checkmark-circle',
   left: 'exit-outline',
+  gone: 'exit-outline',
 };
 
 function colorOf(status: AppStatus) {
   if (status === 'joined') return Colors.accentText;
-  if (status === 'declined' || status === 'left') return Colors.danger;
+  if (status === 'declined' || status === 'left' || status === 'gone') return Colors.danger;
   if (status === 'invited') return Colors.text;
   return Colors.textSecondary;
 }

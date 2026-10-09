@@ -15,6 +15,7 @@ import { confirm } from '@/lib/confirm';
 import {
   appStatusOf,
   CLIENT_COLUMNS,
+  clientWithEmail,
   fullName,
   inviteAgain,
   type AppStatus,
@@ -103,6 +104,20 @@ export default function ClientDetail() {
         initial={client}
         submitLabel="Save changes"
         onSubmit={async (input) => {
+          const same =
+            input.email?.toLowerCase() !== client.email?.trim().toLowerCase()
+              ? await clientWithEmail(input.email, id)
+              : null;
+          if (
+            same &&
+            !(await confirm(
+              `You already have ${fullName(same)}`,
+              `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them twice. Save anyway?`,
+              'Save anyway',
+            ))
+          ) {
+            return null;
+          }
           const { error } = await supabase.from('clients').update(input).eq('id', id);
           if (error) return saveError(error);
           setClient((c) => (c ? { ...c, ...input } : c));
@@ -186,6 +201,10 @@ function explain(status: AppStatus, client: Client) {
       return `${name} said no to your invite, so you're not linked. You can send it again later.`;
     case 'left':
       return `${name} left, so you no longer see their food diary, plan ticks, chat or calls. Your notes, sessions and plans stay here.`;
+    case 'gone':
+      return client.email
+        ? `The person who joined as this client left, and isn't on Voltrix with ${client.email} now. If their email changed, put the new one above to invite them again. To invite someone else, add them as a new client: this chat and history stay with the person who left.`
+        : `The person who joined as this client left. Put the email they use on Voltrix above to invite them again, or add someone else as a new client.`;
     default:
       return client.email
         ? `Ask ${name} to download the Voltrix app and sign up with ${client.email}. Your invite will be waiting there for them to accept.`

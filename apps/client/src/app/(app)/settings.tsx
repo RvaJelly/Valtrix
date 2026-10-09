@@ -234,7 +234,8 @@ function ProfilePhoto({
   );
 }
 
-// The trainers the person accepted, each with Leave.
+// The trainers the person accepted, each with Leave. Trainers who archived the person are
+// listed too: they see the food diary and chat again if they make the person active.
 function MyTrainers() {
   const { refresh } = useChat();
   const [trainers, setTrainers] = useState<Trainer[] | null>(null);
@@ -244,7 +245,7 @@ function MyTrainers() {
 
   const load = useCallback(
     () =>
-      loadTrainers().then(
+      loadTrainers(true).then(
         (list) => {
           setTrainers(list);
           setFailed(false);
@@ -263,8 +264,12 @@ function MyTrainers() {
     if (event.type === 'link') load();
   });
 
-  // A trainer who added the person twice is still one trainer.
-  const list = trainers?.filter((t, i) => trainers.findIndex((x) => x.trainer_id === t.trainer_id) === i);
+  // A trainer who added the person twice is still one trainer, shown as active if either is.
+  const list = trainers
+    ? [...trainers]
+        .sort((a, b) => Number(a.client_status === 'archived') - Number(b.client_status === 'archived'))
+        .filter((t, i, all) => all.findIndex((x) => x.trainer_id === t.trainer_id) === i)
+    : null;
 
   async function leave(trainer: Trainer) {
     const name = trainerTitle(trainer);
@@ -302,29 +307,37 @@ function MyTrainers() {
         </Body>
       ) : null}
       {list?.map((trainer) => (
-        <View key={trainer.trainer_id} style={styles.blockedRow}>
-          <Avatar url={trainer.trainer_avatar} name={trainerTitle(trainer)} size={40} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.linkLabel} numberOfLines={1}>
-              {trainerTitle(trainer)}
-            </Text>
-            {trainer.trainer_name && trainer.business_name ? (
-              <Body secondary style={styles.small} numberOfLines={1}>
-                {trainer.business_name}
-              </Body>
-            ) : null}
+        <View key={trainer.trainer_id} style={{ gap: Spacing.two }}>
+          <View style={styles.blockedRow}>
+            <Avatar url={trainer.trainer_avatar} name={trainerTitle(trainer)} size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.linkLabel} numberOfLines={1}>
+                {trainerTitle(trainer)}
+              </Text>
+              {trainer.trainer_name && trainer.business_name ? (
+                <Body secondary style={styles.small} numberOfLines={1}>
+                  {trainer.business_name}
+                </Body>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Leave ${trainerTitle(trainer)}`}
+              onPress={() => leave(trainer)}
+              disabled={!!leaving}
+              hitSlop={8}
+              style={[styles.unblock, leaving === trainer.trainer_id && { opacity: 0.5 }]}>
+              <Text style={[styles.unblockText, { color: Colors.danger }]}>
+                {leaving === trainer.trainer_id ? 'Leaving…' : 'Leave'}
+              </Text>
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Leave ${trainerTitle(trainer)}`}
-            onPress={() => leave(trainer)}
-            disabled={!!leaving}
-            hitSlop={8}
-            style={[styles.unblock, leaving === trainer.trainer_id && { opacity: 0.5 }]}>
-            <Text style={[styles.unblockText, { color: Colors.danger }]}>
-              {leaving === trainer.trainer_id ? 'Leaving…' : 'Leave'}
-            </Text>
-          </Pressable>
+          {trainer.client_status === 'archived' ? (
+            <Body secondary style={styles.small}>
+              {trainer.trainer_name?.split(' ')[0] || trainerTitle(trainer)} archived you for now, so they don&apos;t
+              see your food diary or chat. They will again if they make you active. Leave if you don&apos;t want that.
+            </Body>
+          ) : null}
         </View>
       ))}
       {list?.length ? (

@@ -2,12 +2,14 @@ import type { Coords } from '@/lib/location';
 import { supabase } from '@/lib/supabase';
 
 // A trainer the signed-in client is linked to (they accepted the trainer's invite).
+// 'archived' means the trainer archived them: nothing is shared until the trainer makes
+// them active again.
 export type Trainer = {
   client_id: string;
   trainer_id: string;
   trainer_name: string | null;
   business_name: string | null;
-  client_status: 'active' | 'paused';
+  client_status: 'active' | 'paused' | 'archived';
   trainer_avatar: string | null;
   joined_at: string | null;
 };
@@ -131,11 +133,13 @@ export function displayName(t: { full_name: string | null; business_name: string
   return t.full_name || t.business_name || 'Trainer';
 }
 
-// The trainers the client accepted.
-export async function loadTrainers() {
+// The trainers the client accepted. Ones who archived the client are left out, unless
+// withArchived (Settings lists them too, so the client can leave them).
+export async function loadTrainers(withArchived = false) {
   const { data, error } = await supabase.rpc('my_trainers_v2');
   if (error) throw error;
-  return (data ?? []) as Trainer[];
+  const list = (data ?? []) as Trainer[];
+  return withArchived ? list : list.filter((t) => t.client_status !== 'archived');
 }
 
 // Trainers waiting for the client to accept or decline, newest first. Nobody is linked

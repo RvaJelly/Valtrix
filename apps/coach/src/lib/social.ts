@@ -28,11 +28,14 @@ export const COMMENT_MAX = 500;
 export const COMMENTS_PER_PAGE = 50;
 
 // The text of a chat message that shares a reel. The database sets it, and the chat
-// list shows it as the preview. A message with this text and no reel is a reel that was deleted.
+// list shows it as the preview.
 export const REEL_MESSAGE = '🎬 Reel';
 
-export function isReelMessage(message: { kind: string; body: string | null; post_id?: string | null }) {
-  return message.kind === 'text' && (!!message.post_id || message.body === REEL_MESSAGE);
+// A message that shares a reel. The database sets shared_reel, and it stays true when the
+// reel is deleted (post_id is then cleared), so the chat can say it is no longer available.
+// A message someone types that happens to read "🎬 Reel" is just text.
+export function isReelMessage(message: { kind: string; post_id?: string | null; shared_reel?: boolean }) {
+  return message.kind === 'text' && (!!message.post_id || !!message.shared_reel);
 }
 
 // 999, 1.2K, 12K, 1.2M
@@ -42,17 +45,25 @@ export function compactCount(n: number) {
   return `${n < 10_000_000 ? (Math.floor(n / 100_000) / 10).toString() : Math.floor(n / 1_000_000)}M`;
 }
 
+// post_counts takes up to 100 posts at a time.
+const COUNTS_BATCH = 100;
+
 export async function loadCounts(postIds: string[]): Promise<Map<string, PostCounts>> {
   const counts = new Map<string, PostCounts>();
-  if (!postIds.length) return counts;
-  const { data, error } = await supabase.rpc('post_counts', { p_ids: postIds.slice(0, 100) });
-  if (error) throw error;
-  for (const row of (data ?? []) as (PostCounts & { post_id: string })[]) {
-    counts.set(row.post_id, {
-      like_count: Number(row.like_count),
-      comment_count: Number(row.comment_count),
-      liked_by_me: !!row.liked_by_me,
-    });
+  const ids = [...new Set(postIds)];
+  // Lots of stories (everyone's from the last day) can be more than one batch.
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += COUNTS_BATCH) batches.push(ids.slice(i, i + COUNTS_BATCH));
+  const results = await Promise.all(batches.map((batch) => supabase.rpc('post_counts', { p_ids: batch })));
+  for (const { data, error } of results) {
+    if (error) throw error;
+    for (const row of (data ?? []) as (PostCounts & { post_id: string })[]) {
+      counts.set(row.post_id, {
+        like_count: Number(row.like_count),
+        comment_count: Number(row.comment_count),
+        liked_by_me: !!row.liked_by_me,
+      });
+    }
   }
   return counts;
 }
@@ -94,7 +105,11 @@ export async function deleteComment(id: string) {
 
 export async function reportComment(id: string, reason: ReportReason) {
   const { error } = await supabase.from('comment_reports').insert({ comment_id: id, reason });
-  if (error && error.code !== '23505') throw error;
+  // Reported twice (a retry after a slow network): the first one arrived.
+  if (!error || error.code === '23505') return;
+  // Deleted meanwhile, or no longer something this person can see (for example after a block).
+  if (error.code === '42501' || error.code === '23503') throw new Error("This comment can't be reported any more.");
+  throw error;
 }
 
 // Who liked one of your own posts, newest first.

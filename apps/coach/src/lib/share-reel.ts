@@ -7,6 +7,15 @@ import { mediaUrl, type Reel } from '@/lib/posts';
 
 export type ShareResult = 'shared' | 'copied' | 'cancelled';
 
+// The browser wouldn't copy the link; the sheet shows it so it can be copied by hand.
+export class CopyFailedError extends Error {
+  url: string;
+  constructor(url: string) {
+    super("Couldn't copy the link");
+    this.url = url;
+  }
+}
+
 const TYPES: Record<string, { mime: string; uti: string }> = {
   mp4: { mime: 'video/mp4', uti: 'public.mpeg-4' },
   mov: { mime: 'video/quicktime', uti: 'com.apple.quicktime-movie' },
@@ -21,7 +30,12 @@ export function canShareLink() {
 // Shares a reel to other apps (WhatsApp, Instagram and so on). On a phone the video is
 // saved to the app's cache first so the other app gets the video itself, not a link.
 // On the web the browser's share sheet gets the video's link, or the link is copied.
-export async function shareReelToApps(reel: Pick<Reel, 'id' | 'media_path' | 'caption'>): Promise<ShareResult> {
+// stillWanted is checked once the video has downloaded: the person may have closed the
+// share sheet meanwhile, and the phone's share menu shouldn't pop up out of nowhere.
+export async function shareReelToApps(
+  reel: Pick<Reel, 'id' | 'media_path' | 'caption'>,
+  stillWanted: () => boolean = () => true,
+): Promise<ShareResult> {
   const url = mediaUrl(reel.media_path);
   if (Platform.OS === 'web') return shareLinkOnWeb(url, reel.caption);
 
@@ -41,6 +55,7 @@ export async function shareReelToApps(reel: Pick<Reel, 'id' | 'media_path' | 'ca
       throw e;
     }
   }
+  if (!stillWanted()) return 'cancelled';
   await Sharing.shareAsync(file.uri, { mimeType: type.mime, UTI: type.uti, dialogTitle: 'Share reel' });
   return 'shared';
 }
@@ -55,6 +70,8 @@ async function shareLinkOnWeb(url: string, caption: string | null): Promise<Shar
       // Some browsers refuse; copying the link still works.
     }
   }
-  await Clipboard.setStringAsync(url);
+  // On the web this answers false (rather than failing) when the browser won't copy.
+  const copied = await Clipboard.setStringAsync(url).catch(() => false);
+  if (!copied) throw new CopyFailedError(url);
   return 'copied';
 }

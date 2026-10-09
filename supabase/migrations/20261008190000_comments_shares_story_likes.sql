@@ -131,12 +131,17 @@ grant select, delete on public.post_comments to authenticated;
 grant insert (id, post_id, body) on public.post_comments to authenticated;
 grant insert (comment_id, reason) on public.comment_reports to authenticated;
 
--- People see their own comments and every comment on their own posts (to remove them).
+-- People see their own comments and the comments on their own posts (to remove them),
+-- apart from comments by people blocked either way: a blocked person can't read the
+-- words of the person who blocked them, even on their own reel.
 create policy post_comments_select on public.post_comments
   for select to authenticated
   using (
     author_id = (select auth.uid())
-    or exists (select 1 from public.posts p where p.id = post_id and p.author_id = (select auth.uid()))
+    or (
+      exists (select 1 from public.posts p where p.id = post_id and p.author_id = (select auth.uid()))
+      and public.can_see_author(author_id)
+    )
     or (select public.is_admin())
   );
 
@@ -144,18 +149,45 @@ create policy post_comments_insert_own on public.post_comments
   for insert to authenticated
   with check (author_id = (select auth.uid()) and (select public.can_comment_on(post_id)));
 
--- People remove their own comments; a reel's author can remove any comment on it.
--- (posts only shows people their own posts, so the check below finds only those.)
+-- People remove their own comments; a reel's author can remove any comment on it that
+-- they can see. (posts only shows people their own posts, so the check below finds only those.)
 create policy post_comments_delete on public.post_comments
   for delete to authenticated
   using (
     author_id = (select auth.uid())
-    or exists (select 1 from public.posts p where p.id = post_id and p.author_id = (select auth.uid()))
+    or (
+      exists (select 1 from public.posts p where p.id = post_id and p.author_id = (select auth.uid()))
+      and public.can_see_author(author_id)
+    )
     or (select public.is_admin())
   );
 
+-- Can the signed-in person report this comment? Only someone else's comment on a reel
+-- they can see, from someone not blocked either way. A comment that is already hidden
+-- can still be reported (it may still be on their screen).
+create function public.can_report_comment(p_comment uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.post_comments c
+     where c.id = p_comment
+       and auth.uid() is not null
+       and c.author_id <> auth.uid()
+       and public.can_see_author(c.author_id)
+       and public.can_see_post(c.post_id)
+  );
+$$;
+
+revoke execute on function public.can_report_comment(uuid) from public, anon;
+grant execute on function public.can_report_comment(uuid) to authenticated;
+
 create policy comment_reports_insert_own on public.comment_reports
-  for insert to authenticated with check (reporter_id = (select auth.uid()));
+  for insert to authenticated
+  with check (reporter_id = (select auth.uid()) and public.can_report_comment(comment_id));
 
 -- A post's comments, newest first, 50 at a time. Pass the oldest created_at you have to get more.
 -- Hidden comments, comments the person reported and comments from people blocked
@@ -300,12 +332,16 @@ grant execute on function public.reels_by_ids(uuid[]) to authenticated;
 -- ---------- Sending a reel in a chat ----------
 
 -- A chat message can point at a reel; the apps show it as a card that opens the reel.
--- If the reel is deleted later the link is cleared and the apps say it is no longer available.
+-- If the reel is deleted later the link is cleared, and shared_reel (which stays true)
+-- tells the apps to say it is no longer available. A typed message that happens to
+-- read "🎬 Reel" has shared_reel false, so it shows as normal text.
 alter table public.messages
-  add column post_id uuid references public.posts (id) on delete set null;
+  add column post_id uuid references public.posts (id) on delete set null,
+  add column shared_reel boolean not null default false;
 
 create index messages_post_idx on public.messages (post_id) where post_id is not null;
 
+-- shared_reel is set by the trigger below only.
 grant insert (post_id) on public.messages to authenticated;
 
 -- Only a reel the sender can see (not hidden, no block either way, not reported by
@@ -319,6 +355,7 @@ set search_path = ''
 as $$
 begin
   if new.post_id is null then
+    new.shared_reel := false;
     return new;
   end if;
   if new.kind <> 'text' then
@@ -338,6 +375,7 @@ begin
   end if;
   new.body := '🎬 Reel';
   new.media_path := null;
+  new.shared_reel := true;
   return new;
 end;
 $$;

@@ -68,8 +68,17 @@ export default function StoryViewer() {
         setSeen(seenBefore);
         setGroups(shown);
         setPosition({ group: 0, story: firstUnseen(shown[0], seenBefore) });
-        // Without the likes the stories still play.
-        loadCounts(shown.flatMap((g) => g.stories.map((st) => st.id))).then(setCounts, () => {});
+        // Without the likes the stories still play. A story liked or unliked before the
+        // counts arrive keeps what was tapped (the counts may have been worked out before it).
+        loadCounts(shown.flatMap((g) => g.stories.map((st) => st.id))).then(
+          (loaded) =>
+            setCounts((current) => {
+              const next = new Map(loaded);
+              for (const [id, c] of current) next.set(id, c);
+              return next;
+            }),
+          () => {},
+        );
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load stories.'));
   }, [author]);

@@ -76,6 +76,7 @@ export default function ReelScreen() {
           reel={reel}
           height={height}
           topInset={insets.top}
+          bottomInset={insets.bottom}
           playing={focused && !menuOpen}
           muted={muted}
           onToggleMute={() => setMuted((m) => !m)}

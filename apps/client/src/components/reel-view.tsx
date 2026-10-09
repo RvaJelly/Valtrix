@@ -13,6 +13,9 @@ type Props = {
   reel: Reel;
   height: number;
   topInset: number;
+  // Space taken by the phone's own bar at the bottom (home indicator or Back/Home buttons).
+  // 0 on the Reels tab, where the tab bar already keeps clear of it.
+  bottomInset?: number;
   playing: boolean;
   muted: boolean;
   onToggleMute: () => void;
@@ -34,6 +37,7 @@ export function ReelView({
   reel,
   height,
   topInset,
+  bottomInset = 0,
   playing,
   muted,
   onToggleMute,
@@ -78,7 +82,7 @@ export function ReelView({
         </View>
       ) : null}
 
-      <View style={styles.side}>
+      <View style={[styles.side, { bottom: bottomInset + Spacing.four }]}>
         <Action
           icon={reel.liked_by_me ? 'heart' : 'heart-outline'}
           color={reel.liked_by_me ? '#FF3B5C' : '#FFFFFF'}
@@ -97,7 +101,7 @@ export function ReelView({
         <Action icon="ellipsis-horizontal" label="More options" onPress={onMenu} />
       </View>
 
-      <View style={styles.info} pointerEvents="box-none">
+      <View style={[styles.info, { bottom: bottomInset + Spacing.four }]} pointerEvents="box-none">
         <Pressable
           accessibilityRole={onAuthor ? 'button' : undefined}
           accessibilityLabel={onAuthor ? `See ${name}'s profile` : undefined}
@@ -170,7 +174,6 @@ const styles = StyleSheet.create({
   side: {
     position: 'absolute',
     right: Spacing.two,
-    bottom: Spacing.four,
     alignItems: 'center',
     gap: Spacing.three,
   },
@@ -197,7 +200,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing.three,
     right: 84,
-    bottom: Spacing.four,
     gap: Spacing.two,
   },
   author: {

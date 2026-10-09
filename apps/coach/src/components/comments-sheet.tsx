@@ -3,6 +3,7 @@ import { useEffect, useState, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -66,6 +67,18 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shownFor, setShownFor] = useState<string | null>(null);
+  // While the keyboard is up it covers the phone's bottom bar, so the box needs no room for it.
+  const [keyboardUp, setKeyboardUp] = useState(false);
+
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const shown = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const hidden = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
 
   // Start fresh each time the sheet opens for a reel.
   if (postId !== shownFor) {
@@ -250,7 +263,10 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
 
   return (
     <Modal visible={!!reel} transparent animationType="slide" onRequestClose={chosen ? () => setChosen(null) : onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* On Android the sheet's window is edge-to-edge, so the system doesn't shrink it for the
+          keyboard: padding lifts the sheet by however much the keyboard covers (none if it
+          was shrunk after all). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close comments" />
         <View style={[styles.sheet, { height: sheetHeight }]}>
           <View style={styles.header}>
@@ -309,7 +325,11 @@ export function CommentsSheet({ reel, onClose, onCountChange, onBlocked, isTrain
             />
           )}
 
-          <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, Spacing.two) }]}>
+          <View
+            style={[
+              styles.composer,
+              { paddingBottom: keyboardUp ? Spacing.two : Math.max(insets.bottom, Spacing.two) },
+            ]}>
             {remaining <= 50 ? (
               <Text style={[styles.left, remaining <= 0 && { color: Colors.danger }]}>
                 {remaining} {remaining === 1 ? 'letter' : 'letters'} left

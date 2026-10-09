@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -17,26 +17,57 @@ import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import type { ChatSummary } from '@/lib/chat';
 import { useChat } from '@/lib/chat-live';
 import type { Reel } from '@/lib/posts';
-import { canShareLink, shareReelToApps } from '@/lib/share-reel';
+import { canShareLink, CopyFailedError, shareReelToApps } from '@/lib/share-reel';
 import { sendReelInChat } from '@/lib/social';
 
 type SendState = 'sending' | 'sent' | 'failed';
-type Status = { kind: 'busy' | 'done' | 'error'; text: string };
+// link: shown so it can be copied by hand when copying didn't work.
+type Status = { kind: 'busy' | 'done' | 'error'; text: string; link?: string };
 
 // Share a reel: send it to someone you chat with, or to other apps like WhatsApp.
 export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () => void }) {
-  const { chats, ready } = useChat();
+  const { chats, ready, refresh } = useChat();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [sent, setSent] = useState<Record<string, SendState>>({});
   const [status, setStatus] = useState<Status | null>(null);
+  const [chatsFailed, setChatsFailed] = useState(false);
   const [shownFor, setShownFor] = useState<string | null>(null);
+  // Counts share attempts; closing the sheet bumps it so a video still downloading isn't shared.
+  const shareAttempt = useRef(0);
+  const open = !!reel;
 
   // Start fresh each time the sheet opens for a reel.
   if ((reel?.id ?? null) !== shownFor) {
     setShownFor(reel?.id ?? null);
     setSent({});
     setStatus(null);
+    setChatsFailed(false);
+  }
+
+  // The chat list may never have loaded (for example the phone was offline when the app
+  // opened). Try again now, and say so if it still can't.
+  useEffect(() => {
+    if (!open || ready) return;
+    let stale = false;
+    refresh().then((list) => {
+      if (!stale && !list) setChatsFailed(true);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [open, ready, refresh]);
+
+  function retryChats() {
+    setChatsFailed(false);
+    refresh().then((list) => {
+      if (!list) setChatsFailed(true);
+    });
+  }
+
+  function close() {
+    shareAttempt.current += 1;
+    onClose();
   }
 
   async function send(chat: ChatSummary) {
@@ -57,20 +88,29 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
 
   async function shareOut() {
     if (!reel || status?.kind === 'busy') return;
+    shareAttempt.current += 1;
+    const attempt = shareAttempt.current;
+    const stillWanted = () => shareAttempt.current === attempt;
     setStatus({ kind: 'busy', text: Platform.OS === 'web' ? 'Opening…' : 'Getting the video ready…' });
     try {
-      const result = await shareReelToApps(reel);
+      const result = await shareReelToApps(reel, stillWanted);
+      if (!stillWanted()) return;
       setStatus(result === 'copied' ? { kind: 'done', text: 'Link copied' } : null);
-    } catch {
-      setStatus({ kind: 'error', text: "Couldn't share the video. Check your internet and try again." });
+    } catch (e) {
+      if (!stillWanted()) return;
+      setStatus(
+        e instanceof CopyFailedError
+          ? { kind: 'error', text: "Couldn't copy the link. You can copy it from here:", link: e.url }
+          : { kind: 'error', text: "Couldn't share the video. Check your internet and try again." },
+      );
     }
   }
 
   const linkOnly = !canShareLink();
 
   return (
-    <Modal visible={!!reel} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
+    <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
+      <Pressable style={styles.backdrop} onPress={close} accessibilityLabel="Close" />
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
         <View style={styles.handle} />
         <Text style={styles.title} accessibilityRole="header">
@@ -78,7 +118,18 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
         </Text>
 
         <Text style={styles.section}>Send in chat</Text>
-        {!ready ? (
+        {!ready && chatsFailed ? (
+          <View style={styles.failed}>
+            <Text style={[styles.note, { flex: 1 }]}>Couldn&apos;t load your chats.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={retryChats}
+              hitSlop={6}
+              style={({ pressed }) => [styles.retry, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+          </View>
+        ) : !ready ? (
           <ActivityIndicator color={Colors.accentText} style={{ marginVertical: Spacing.three }} />
         ) : chats.length ? (
           <ScrollView style={{ maxHeight: height * 0.4 }}>
@@ -113,10 +164,15 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
             <Text style={[styles.statusText, status.kind === 'error' && { color: Colors.danger }]}>{status.text}</Text>
           </View>
         ) : null}
+        {status?.link ? (
+          <Text selectable style={styles.link} accessibilityLabel={`Reel link: ${status.link}`}>
+            {status.link}
+          </Text>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
-          onPress={onClose}
+          onPress={close}
           style={({ pressed }) => [styles.done, pressed && { backgroundColor: Colors.surfaceRaised }]}>
           <Text style={styles.doneText}>Done</Text>
         </Pressable>
@@ -197,6 +253,33 @@ const styles = themed(() => ({
     fontSize: 15,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,
+  },
+  failed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingRight: Spacing.two,
+  },
+  retry: {
+    minHeight: 44,
+    paddingHorizontal: Spacing.three,
+    justifyContent: 'center',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  retryText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  link: {
+    color: Colors.text,
+    fontSize: 14,
+    marginHorizontal: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Radius.small,
+    backgroundColor: Colors.surface,
   },
   row: {
     flexDirection: 'row',

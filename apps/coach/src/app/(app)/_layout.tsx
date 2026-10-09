@@ -23,11 +23,11 @@ export default function AppLayout() {
           headerTitleStyle: { fontWeight: '700' },
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
-          // Screen readers say "Back" (not the name of the tabs group, "(tabs)").
+          // Screen readers say "Back", not "(tabs), back" (the tabs group's name). The (tabs)
+          // screen's title below is set to 'Back' for the same reason.
           headerBackTitle: 'Back',
           contentStyle: { backgroundColor: Colors.background },
         }}>
-        {/* Screen readers call the back arrow "Go back" instead of "(tabs), back". */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
         <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
         <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />

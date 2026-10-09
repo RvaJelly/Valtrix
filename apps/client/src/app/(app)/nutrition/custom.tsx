@@ -6,8 +6,8 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } fro
 import { FoodSheet } from '@/components/food-sheet';
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { dayKey, isBarcode, isDayKey, isMeal, mealForNow, mealLabel, type Food } from '@/lib/food';
-import { addToDiary, saveMyFood } from '@/lib/nutrition';
+import { dayKey, isBarcode, isDayKey, isMeal, mealForNow, mealLabel } from '@/lib/food';
+import { addToDiary, saveMyFood, type SavedFood } from '@/lib/nutrition';
 
 type Basis = '100g' | '100ml' | 'serving';
 
@@ -54,7 +54,9 @@ export default function CustomFood() {
   const [servingSize, setServingSize] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState<Food | null>(null);
+  // What this form saved, kept after Cancel so saving again changes it instead of adding a copy.
+  const [saved, setSaved] = useState<SavedFood | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const liquid = basis === '100ml';
   const measure = liquid ? 'ml' : 'g';
@@ -78,19 +80,23 @@ export default function CustomFood() {
     setError(null);
     setBusy(true);
     try {
-      const food = await saveMyFood({
-        barcode: code || null,
-        name: name.trim().slice(0, 200),
-        brand: brand.trim().slice(0, 200) || null,
-        per: basis === 'serving' ? 'serving' : '100g',
-        kcal: Math.round(kcal * 10) / 10,
-        protein: macros[0],
-        carbs: macros[1],
-        fat: macros[2],
-        serving_size: size,
-        liquid,
-      });
+      const food = await saveMyFood(
+        {
+          barcode: code || null,
+          name: name.trim().slice(0, 200),
+          brand: brand.trim().slice(0, 200) || null,
+          per: basis === 'serving' ? 'serving' : '100g',
+          kcal: Math.round(kcal * 10) / 10,
+          protein: macros[0],
+          carbs: macros[1],
+          fat: macros[2],
+          serving_size: size,
+          liquid,
+        },
+        saved,
+      );
       setSaved(food);
+      setAdding(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save your food. Try again.');
     }
@@ -224,13 +230,13 @@ export default function CustomFood() {
 
       <FoodSheet
         mode="add"
-        food={saved}
+        food={adding && saved ? saved.food : null}
         actionLabel={`Add to ${mealLabel(meal)}`}
-        onClose={() => setSaved(null)}
+        onClose={() => setAdding(false)}
         onSubmit={async (amount, unit) => {
           if (!saved) return;
-          await addToDiary(saved, amount, unit, meal, day);
-          setSaved(null);
+          await addToDiary(saved.food, amount, unit, meal, day);
+          setAdding(false);
           router.dismissTo('/nutrition');
         }}
       />

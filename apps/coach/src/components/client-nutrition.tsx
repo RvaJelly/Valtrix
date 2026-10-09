@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native';
 
 import { DaySummary } from '@/components/day-summary';
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
@@ -138,6 +139,7 @@ export function ClientNutrition({ client }: { client: Client }) {
     ? kcalFromMacros(whole(draft.protein) ?? 0, whole(draft.carbs) ?? 0, whole(draft.fat) ?? 0)
     : 0;
   const draftKcal = draft ? whole(draft.kcal) : null;
+  const emptyMeals = draft ? draft.meals.filter((m) => !m.food.trim()).length : 0;
 
   return (
     <>
@@ -242,6 +244,13 @@ export function ClientNutrition({ client }: { client: Client }) {
             maxLength={4000}
             style={{ minHeight: 88, paddingTop: Spacing.three, textAlignVertical: 'top' }}
           />
+          {emptyMeals ? (
+            <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
+              {emptyMeals === 1
+                ? 'The meal with nothing in “What to eat” won’t be saved.'
+                : 'Meals with nothing in “What to eat” won’t be saved.'}
+            </Body>
+          ) : null}
           <ErrorText>{error}</ErrorText>
           <Button title="Save plan" onPress={save} loading={saving} />
           <Button
@@ -324,27 +333,49 @@ function PlanView({ plan, client, onEdit }: { plan: NutritionPlan; client: Clien
 }
 
 function FoodDiary({ client, targets }: { client: Client; targets: Targets | null }) {
-  const [day, setDay] = useState(() => dayKey(new Date()));
+  // The date on the phone, checked again when the page shows or the app comes back.
+  const [today, setToday] = useState(() => dayKey(new Date()));
+  // The day picked with the arrows; null is today, whichever day that is.
+  const [picked, setPicked] = useState<string | null>(null);
+  const day = picked ?? today;
   const [data, setData] = useState<{ day: string; entries: DiaryEntry[] } | null>(null);
   const [failedDay, setFailedDay] = useState<string | null>(null);
 
-  // The shown day and the six before it, for the week strip.
-  useEffect(() => {
-    let alive = true;
-    loadClientDiary(client.id, shiftDay(day, -6), day).then(
-      (entries) => {
-        if (alive) setData({ day, entries });
-      },
-      () => {
-        if (alive) setFailedDay(day);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [client.id, day]);
+  useFocusEffect(
+    useCallback(() => {
+      const check = () => setToday(dayKey(new Date()));
+      check();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') check();
+      });
+      return () => subscription.remove();
+    }, []),
+  );
 
-  const today = dayKey(new Date());
+  // The shown day and the six before it, for the week strip. Loaded again each time the
+  // page shows, so food the client logged since then appears.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      loadClientDiary(client.id, shiftDay(day, -6), day).then(
+        (entries) => {
+          if (alive) setData({ day, entries });
+        },
+        () => {
+          if (alive) setFailedDay(day);
+        },
+      );
+      return () => {
+        alive = false;
+      };
+    }, [client.id, day]),
+  );
+
+  // Going back to today's date follows today from then on.
+  function go(key: string) {
+    setPicked(key === today ? null : key);
+  }
+
   const week = Array.from({ length: 7 }, (_, i) => shiftDay(day, i - 6));
   const shown = data?.day === day ? data.entries : null;
   const onDay = (shown ?? []).filter((e) => e.day === day);
@@ -356,22 +387,22 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Day before"
-          onPress={() => setDay(shiftDay(day, -1))}
+          onPress={() => go(shiftDay(day, -1))}
           hitSlop={8}
           style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
           <Ionicons name="chevron-back" size={22} color={Colors.text} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={day === today ? 'Today' : `${dayTitle(day)}. Go to today`}
-          onPress={() => setDay(today)}
+          accessibilityLabel={day === today ? 'Today' : `${dayTitle(day, fromDayKey(today))}. Go to today`}
+          onPress={() => setPicked(null)}
           style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.dayTitle}>{dayTitle(day)}</Text>
+          <Text style={styles.dayTitle}>{dayTitle(day, fromDayKey(today))}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Day after"
-          onPress={() => setDay(shiftDay(day, 1))}
+          onPress={() => go(shiftDay(day, 1))}
           hitSlop={8}
           style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
           <Ionicons name="chevron-forward" size={22} color={Colors.text} />
@@ -396,8 +427,8 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
                   key={key}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={`${dayTitle(key)}: ${logged ? formatKcal(kcal) : 'nothing logged'}`}
-                  onPress={() => setDay(key)}
+                  accessibilityLabel={`${dayTitle(key, fromDayKey(today))}: ${logged ? formatKcal(kcal) : 'nothing logged'}`}
+                  onPress={() => go(key)}
                   style={[styles.weekDay, selected && { backgroundColor: Colors.accent }]}>
                   <Text style={[styles.weekName, selected && { color: Colors.onAccent }]}>{weekday}</Text>
                   <Text style={[styles.weekKcal, selected && { color: Colors.onAccent }]} numberOfLines={1}>

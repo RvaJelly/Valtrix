@@ -327,6 +327,19 @@ function macrosFrom(n: Nutriments, per: '100g' | 'serving'): Macros | null {
 
 const LIQUID = /\d\s*(ml|cl|l)\b/i;
 
+// "Bokomo, Weet-Bix" -> "Bokomo". Search gives brands as tags ("xx:white-star"), so
+// those are turned back into words ("White Star").
+function brandName(brands: string | null) {
+  const first = brands?.split(',')[0].trim();
+  if (!first) return null;
+  const tag = first.match(/^(?:[a-z]{2}:)?([a-z0-9]+(?:-[a-z0-9]+)*)$/);
+  if (!tag) return first;
+  return tag[1]
+    .split('-')
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function parseProduct(p: Record<string, unknown>, code: string | null): Food | null {
   const name = text(p.product_name) ?? text(p.product_name_en) ?? text(p.generic_name);
   const barcode = text(p.code) ?? code;
@@ -335,12 +348,10 @@ function parseProduct(p: Record<string, unknown>, code: string | null): Food | n
   const servingSize = toNumber(p.serving_quantity);
   const servingLabel = text(p.serving_size);
   const servingMacros = macrosFrom(n, 'serving');
-  const brand = text(p.brands);
   return {
     barcode: barcode && isBarcode(barcode) ? barcode : null,
     name: name ?? 'Unnamed product',
-    // "Bokomo, Weet-Bix" -> "Bokomo"
-    brand: brand ? brand.split(',')[0].trim() : null,
+    brand: brandName(text(p.brands)),
     image: text(p.image_front_small_url),
     liquid: p.serving_quantity_unit === 'ml' || LIQUID.test(servingLabel ?? '') || LIQUID.test(text(p.quantity) ?? ''),
     per100: macrosFrom(n, '100g'),
@@ -360,6 +371,20 @@ export async function lookupBarcode(code: string): Promise<Food | null> {
   if (status === 404 || data.status === 0) return null;
   if (status >= 400 || !data.product) throw new FoodError(TROUBLE);
   return parseProduct(data.product, code);
+}
+
+// Search results leave out serving sizes and pictures, so a product from a search is
+// opened from its own page. If that page can't be reached, the search result still
+// works when it has calories.
+export async function fullProduct(item: Food): Promise<Food> {
+  if (item.source !== 'off' || !item.barcode) return item;
+  try {
+    const full = await lookupBarcode(item.barcode);
+    return full && (hasNutrition(full) || !hasNutrition(item)) ? full : item;
+  } catch (e) {
+    if (hasNutrition(item)) return item;
+    throw e;
+  }
 }
 
 // Lucene characters in what people type would confuse the search.
@@ -404,6 +429,9 @@ export async function searchFoods(query: string): Promise<Food[]> {
     rows.push(...world.value.map((hit) => ({ hit, local: SOUTH_AFRICA.test(JSON.stringify(hit.countries ?? '')) })));
   }
   if (local.status === 'rejected' && world.status === 'rejected') {
+    // A slow connection would only keep people waiting longer for the older search.
+    const slow = [local.reason, world.reason].find((e) => e instanceof FoodError && e.message === SLOW);
+    if (slow) throw slow;
     // The newer search is down: try the older one before giving up.
     try {
       rows = (await legacySearch(terms)).map((hit) => ({

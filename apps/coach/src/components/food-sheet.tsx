@@ -37,17 +37,32 @@ type Props = {
   footer?: ReactNode;
 };
 
+type Shown = { food: Food; initial?: Props['initial']; key: string };
+
 // A food's calories per 100 g and per serving, with an amount picker and what it adds up to.
 export function FoodSheet({ food, onClose, ...rest }: Props) {
+  // The same food can come back as a new object, so it is told apart by what it shows.
+  const key = food ? `${food.source}|${food.barcode}|${food.name}|${rest.initial?.amount}|${rest.initial?.unit}` : null;
+  // The last food stays on the sheet while it slides away, so it doesn't empty out first.
+  // Each opening starts afresh, even for the same food.
+  const [last, setLast] = useState<{ key: string | null; opened: number; shown: Shown | null }>({
+    key: null,
+    opened: 0,
+    shown: null,
+  });
+  if (key !== last.key) {
+    const opened = key ? last.opened + 1 : last.opened;
+    setLast({
+      key,
+      opened,
+      shown: food && key ? { food, initial: rest.initial, key: `${opened}|${key}` } : last.shown,
+    });
+  }
+  const shown = last.shown;
   return (
     <Sheet visible={!!food} onClose={onClose}>
-      {food ? (
-        <FoodDetails
-          key={`${food.source}|${food.barcode}|${food.name}|${rest.initial?.amount}|${rest.initial?.unit}`}
-          food={food}
-          onClose={onClose}
-          {...rest}
-        />
+      {shown ? (
+        <FoodDetails key={shown.key} {...rest} food={shown.food} initial={shown.initial} onClose={onClose} />
       ) : null}
     </Sheet>
   );
@@ -146,8 +161,8 @@ function FoodDetails({
       </View>
 
       <View style={styles.facts}>
-        <Fact title={`Per 100 ${baseUnit(food)}`} macros={food.per100} />
-        {/* A diary entry in grams doesn't know its serving size, so don't show an empty box for it. */}
+        {/* A diary entry knows only the unit it was logged in, so don't show an empty box for the other. */}
+        {food.per100 || mode !== 'edit' ? <Fact title={`Per 100 ${baseUnit(food)}`} macros={food.per100} /> : null}
         {serving || mode !== 'edit' ? (
           <Fact title={serving ? servingLabel(food) : 'Per serving'} macros={serving} />
         ) : null}

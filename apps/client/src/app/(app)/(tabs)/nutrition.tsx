@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useRef, useState, type ComponentProps } from 'react';
+import { ActivityIndicator, AppState, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { DaySummary } from '@/components/day-summary';
 import { FoodSheet } from '@/components/food-sheet';
 import { Sheet } from '@/components/sheet';
-import { ErrorText } from '@/components/ui';
+import { Button, EmptyState, ErrorText } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import {
   dayKey,
@@ -43,12 +43,20 @@ function targetsOf(plan: NutritionPlan | undefined): Targets | null {
 
 // The food diary: what the client ate each day against their trainer's targets.
 export default function Nutrition() {
-  const [day, setDay] = useState(() => dayKey(new Date()));
-  const [diary, setDiary] = useState<{ day: string; entries: DiaryEntry[] } | null>(null);
+  // The date on the phone. It moves on at midnight and when the app comes back the next day.
+  const [today, setToday] = useState(() => dayKey(new Date()));
+  // The day picked with the arrows; null is today, whichever day that is.
+  const [picked, setPicked] = useState<string | null>(null);
+  const day = picked ?? today;
+  // Foods by day, so a slow answer for one day can't take the place of another.
+  const [diaries, setDiaries] = useState<Record<string, DiaryEntry[]>>({});
+  const [failedDay, setFailedDay] = useState<string | null>(null);
   const [plans, setPlans] = useState<NutritionPlan[]>([]);
   const [trainer, setTrainer] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // The newest request for each day; older answers for that day are out of date.
+  const requests = useRef({ count: 0, latest: new Map<string, number>() });
   // The meal stays set while the sheet slides away, so its title doesn't change.
   const [adding, setAdding] = useState<{ meal: Meal; open: boolean; next?: AddOption } | null>(null);
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
@@ -56,12 +64,16 @@ export default function Nutrition() {
   const [openPlans, setOpenPlans] = useState<string[]>([]);
 
   const loadDiary = useCallback(async (key: string) => {
+    const r = requests.current;
+    const ask = ++r.count;
+    r.latest.set(key, ask);
     try {
       const entries = await loadDay(key);
-      setDiary({ day: key, entries });
-      setError(null);
+      if (r.latest.get(key) !== ask) return;
+      setDiaries((d) => ({ ...d, [key]: entries }));
+      setFailedDay((f) => (f === key ? null : f));
     } catch {
-      setError('Could not load your food diary. Pull down to try again.');
+      if (r.latest.get(key) === ask) setFailedDay(key);
     }
   }, []);
 
@@ -83,15 +95,44 @@ export default function Nutrition() {
     }, [loadMore]),
   );
 
+  // Tabs stay open in the background, so check the date while this one shows and
+  // whenever the app comes back.
+  useFocusEffect(
+    useCallback(() => {
+      const check = () => setToday(dayKey(new Date()));
+      check();
+      const timer = setInterval(check, 60000);
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') check();
+      });
+      return () => {
+        clearInterval(timer);
+        subscription.remove();
+      };
+    }, []),
+  );
+
   async function refresh() {
     setRefreshing(true);
     await Promise.all([loadDiary(day), loadMore()]);
     setRefreshing(false);
   }
 
-  const entries = diary?.day === day ? diary.entries : null;
+  async function retry() {
+    setRetrying(true);
+    await loadDiary(day);
+    setRetrying(false);
+  }
+
+  // Going back to today's date follows today from then on.
+  function go(key: string) {
+    setPicked(key === today ? null : key);
+  }
+
+  const entries = diaries[day] ?? null;
+  const failed = failedDay === day;
   const targets = targetsOf(plans.find((p) => targetsOf(p)));
-  const todayKey = dayKey(new Date());
+  const title = dayTitle(day, fromDayKey(today));
 
   function openAdd(option: AddOption, meal: Meal) {
     const params = { meal, day };
@@ -111,13 +152,13 @@ export default function Nutrition() {
 
   async function saveAmount(entry: DiaryEntry, amount: number) {
     const updated = await changeAmount(entry, amount);
-    setDiary((d) => (d ? { ...d, entries: d.entries.map((e) => (e.id === updated.id ? updated : e)) } : d));
+    setDiaries((d) => ({ ...d, [entry.day]: (d[entry.day] ?? []).map((e) => (e.id === updated.id ? updated : e)) }));
     setEditing(null);
   }
 
   async function remove(entry: DiaryEntry) {
     await removeFromDiary(entry.id);
-    setDiary((d) => (d ? { ...d, entries: d.entries.filter((e) => e.id !== entry.id) } : d));
+    setDiaries((d) => ({ ...d, [entry.day]: (d[entry.day] ?? []).filter((e) => e.id !== entry.id) }));
     setEditing(null);
   }
 
@@ -130,17 +171,17 @@ export default function Nutrition() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Day before"
-            onPress={() => setDay(shiftDay(day, -1))}
+            onPress={() => go(shiftDay(day, -1))}
             hitSlop={8}
             style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
             <Ionicons name="chevron-back" size={24} color={Colors.text} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={day === todayKey ? 'Today' : `${dayTitle(day)}. Go to today`}
-            onPress={() => setDay(todayKey)}
+            accessibilityLabel={day === today ? 'Today' : `${title}. Go to today`}
+            onPress={() => setPicked(null)}
             style={styles.dayLabel}>
-            <Text style={styles.dayTitle}>{dayTitle(day)}</Text>
+            <Text style={styles.dayTitle}>{title}</Text>
             <Text style={styles.daySub}>
               {fromDayKey(day).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
             </Text>
@@ -148,17 +189,30 @@ export default function Nutrition() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Day after"
-            onPress={() => setDay(shiftDay(day, 1))}
+            onPress={() => go(shiftDay(day, 1))}
             hitSlop={8}
             style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
             <Ionicons name="chevron-forward" size={24} color={Colors.text} />
           </Pressable>
         </View>
 
-        <ErrorText>{error}</ErrorText>
+        {/* A web page can't be pulled down to refresh, so there's always a button. */}
+        {failed && entries ? (
+          <View style={{ gap: Spacing.two }}>
+            <ErrorText>Could not refresh your food diary. Check your internet connection.</ErrorText>
+            <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
+          </View>
+        ) : null}
         {entries ? (
           <DaySummary totals={totalsOf(entries)} targets={targets} />
-        ) : error ? null : (
+        ) : failed ? (
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Your food diary could not be loaded"
+            message="Check your internet connection and try again."
+            action={<Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />}
+          />
+        ) : (
           <ActivityIndicator color={Colors.accentText} style={{ marginVertical: Spacing.five }} />
         )}
 

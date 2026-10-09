@@ -156,14 +156,23 @@ export type MyFoodInput = {
   liquid: boolean;
 };
 
+// One of the person's own foods as it was saved, so saving the same form again changes it.
+export type SavedFood = { id: string; barcode: string | null; created: boolean; food: Food };
+
+const SAVE_FAILED = 'Could not save your food. Check your internet connection and try again.';
+
 // Saves a food the person typed in. A barcode they saved before is updated, so the
-// next scan of it finds the new numbers.
-export async function saveMyFood(input: MyFoodInput) {
-  const existing = input.barcode
-    ? await supabase.from('custom_foods').select('id').eq('barcode', input.barcode).maybeSingle()
-    : null;
-  if (existing?.error) throw new Error('Could not save your food. Check your internet connection and try again.');
+// next scan of it finds the new numbers. Pass what the form saved last time (when they
+// went back to fix a number) so it is changed instead of saved twice.
+export async function saveMyFood(input: MyFoodInput, before?: SavedFood | null): Promise<SavedFood> {
   const { barcode, ...changes } = input;
+  const existing =
+    before && before.barcode === barcode
+      ? { data: { id: before.id }, error: null }
+      : barcode
+        ? await supabase.from('custom_foods').select('id').eq('barcode', barcode).maybeSingle()
+        : null;
+  if (existing?.error) throw new Error(SAVE_FAILED);
   const { data, error } = existing?.data
     ? await supabase.from('custom_foods').update(changes).eq('id', existing.data.id).select(MY_FOOD_COLUMNS).single()
     : await supabase
@@ -171,8 +180,14 @@ export async function saveMyFood(input: MyFoodInput) {
         .insert({ ...changes, barcode })
         .select(MY_FOOD_COLUMNS)
         .single();
-  if (error) throw new Error('Could not save your food. Check your internet connection and try again.');
-  return fromMyFood(data as MyFoodRow);
+  if (error) throw new Error(SAVE_FAILED);
+  const row = data as MyFoodRow;
+  const created = existing?.data ? before?.id === row.id && before.created : true;
+  // The barcode changed since the last save: the food this form added before is replaced.
+  if (before?.created && before.id !== row.id) {
+    await supabase.from('custom_foods').delete().eq('id', before.id);
+  }
+  return { id: row.id, barcode: row.barcode, created, food: fromMyFood(row) };
 }
 
 // ---------- Plans from trainers ----------

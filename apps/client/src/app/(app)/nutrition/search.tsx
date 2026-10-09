@@ -19,10 +19,10 @@ import {
   dayKey,
   FOOD_CREDIT,
   FoodError,
+  fullProduct,
   hasNutrition,
   isDayKey,
   isMeal,
-  lookupBarcode,
   mealForNow,
   mealLabel,
   searchFoods,
@@ -78,16 +78,15 @@ export default function SearchFood() {
     });
   }
 
-  // Search results can be missing details that the full product page has.
+  // Products from a search open from their full product page, which has the serving size.
   async function open(item: Food, key: string) {
     setError(null);
-    if (hasNutrition(item)) return setFood(item);
-    if (!item.barcode) return enterYourself(item);
+    if (item.source !== 'off' || !item.barcode) return hasNutrition(item) ? setFood(item) : enterYourself(item);
     setOpening(key);
     try {
-      const full = await lookupBarcode(item.barcode);
-      if (full && hasNutrition(full)) setFood(full);
-      else enterYourself(full ?? item);
+      const full = await fullProduct(item);
+      if (hasNutrition(full)) setFood(full);
+      else enterYourself(full);
     } catch (e) {
       setError(e instanceof FoodError ? e.message : "Couldn't open that one. Try again.");
     }

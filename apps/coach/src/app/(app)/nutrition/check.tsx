@@ -15,7 +15,7 @@ import {
 import { FoodRow, FoodSheet } from '@/components/food-sheet';
 import { Body, ErrorText } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { FOOD_CREDIT, FoodError, hasNutrition, lookupBarcode, searchFoods, type Food } from '@/lib/food';
+import { FOOD_CREDIT, FoodError, fullProduct, searchFoods, type Food } from '@/lib/food';
 
 // Look up any food's calories, protein, carbs and fat, by barcode or by name.
 export default function CheckFood() {
@@ -39,13 +39,13 @@ export default function CheckFood() {
     setSearching(false);
   }
 
-  // Search results can be missing details that the full product page has.
+  // Products open from their full product page, which has the serving size.
   async function open(item: Food, index: number) {
     setError(null);
-    if (hasNutrition(item) || !item.barcode) return setFood(item);
+    if (!item.barcode) return setFood(item);
     setOpening(index);
     try {
-      setFood((await lookupBarcode(item.barcode)) ?? item);
+      setFood(await fullProduct(item));
     } catch (e) {
       setError(e instanceof FoodError ? e.message : "Couldn't open that one. Try again.");
     }

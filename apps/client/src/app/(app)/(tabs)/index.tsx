@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
-import { serial } from '@/lib/serial';
+import { serial, type Current } from '@/lib/serial';
 import {
   addDays,
   endOf,
@@ -71,17 +71,18 @@ type HomeData = {
 // time, in order: an older answer can't bring back an invite a newer one removed. A load
 // asked to refresh reminders leaves that to the next load that gets the sessions (a newly
 // linked trainer may have sessions booked already).
-function loadsInOrder(loadOnce: () => Promise<boolean>) {
+// `now` starts a fresh load straight away when the person asked for it (see serial).
+function loadsInOrder(loadOnce: (current: Current) => Promise<boolean>) {
   let wantReminders = false;
-  const inOrder = serial(async () => {
-    if ((await loadOnce()) && wantReminders) {
+  const inOrder = serial(async (current) => {
+    if ((await loadOnce(current)) && wantReminders) {
       wantReminders = false;
       refreshReminders();
     }
   });
-  return (reminders = true) => {
+  return (reminders = true, now = false) => {
     if (reminders) wantReminders = true;
-    return inOrder();
+    return inOrder(now);
   };
 }
 
@@ -119,8 +120,8 @@ export default function Home() {
 
   // Each part loads on its own, so stories and trainers still show when the sessions
   // can't be loaded, and a failed refresh keeps what was already on screen. True when the
-  // trainers and sessions loaded.
-  const loadOnce = useCallback(async () => {
+  // trainers and sessions loaded and were shown.
+  const loadOnce = useCallback(async (current: Current) => {
     const start = new Date();
     const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
     const [trainers, invites, sessions, everyone, stories, seen] = await Promise.all([
@@ -131,6 +132,8 @@ export default function Home() {
       loadStories().catch(() => null),
       loadSeen(),
     ]);
+    // A newer load started while this one was stuck: its answer is fresher.
+    if (!current()) return false;
     setNow(new Date());
     setError(trainers && sessions ? null : 'Could not load everything. Check your internet connection.');
     setData((old) => ({
@@ -152,6 +155,8 @@ export default function Home() {
   }, []);
 
   const load = useMemo(() => loadsInOrder(loadOnce), [loadOnce]);
+  // An invite was answered here: load now, without waiting for a stuck load.
+  const answered = useCallback(() => load(true, true), [load]);
 
   // A trainer invited this person, or an invite or link changed on another phone. One
   // answer can send several pieces of news at once, so load once they have stopped.
@@ -193,13 +198,13 @@ export default function Home() {
 
   async function refresh() {
     setRefreshing(true);
-    await Promise.all([load(), profile ? null : refreshProfile()]);
+    await Promise.all([load(true, true), profile ? null : refreshProfile()]);
     setRefreshing(false);
   }
 
   async function retry() {
     setRetrying(true);
-    await load();
+    await load(true, true);
     setRetrying(false);
   }
 
@@ -242,7 +247,7 @@ export default function Home() {
       {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
 
       {data?.invites.map((invite) => (
-        <InviteCard key={invite.client_id} invite={invite} onAnswered={load} />
+        <InviteCard key={invite.client_id} invite={invite} onAnswered={answered} />
       ))}
 
       {data?.trainers && data.trainers.length === 0 && !data.invites.length && isTrainer ? (

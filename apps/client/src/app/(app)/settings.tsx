@@ -247,13 +247,16 @@ function MyTrainers() {
   // One load at a time, so a slow older answer can't bring back a trainer the person left.
   const load = useMemo(
     () =>
-      serial(() =>
+      serial((current) =>
         loadTrainers(true).then(
           (list) => {
+            if (!current()) return;
             setTrainers(list);
             setFailed(false);
           },
-          () => setFailed(true),
+          () => {
+            if (current()) setFailed(true);
+          },
         ),
       ),
     [],
@@ -292,7 +295,7 @@ function MyTrainers() {
       // The chat goes from Chats, and reminders for their sessions stop.
       refresh();
       refreshReminders();
-      await load();
+      await load(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not leave. Check your connection and try again.');
     }

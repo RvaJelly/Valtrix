@@ -9,7 +9,7 @@ import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
-import { serial } from '@/lib/serial';
+import { serial, type Current } from '@/lib/serial';
 import {
   displayName,
   distanceLabel,
@@ -34,11 +34,13 @@ export default function TrainerProfile() {
   const [invite, setInvite] = useState<Invite | null>(null);
 
   const loadOnce = useCallback(
-    () =>
-      Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => [] as Invite[])])
+    (current: Current) =>
+      Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => null)])
         .then(([all, mine, invites]) => {
+          // A newer load started while this one was stuck: its answer is fresher.
+          if (!current()) return;
           const link = mine.find((t) => t.trainer_id === id);
-          const asked = invites.find((t) => t.trainer_id === id) ?? null;
+          const asked = invites?.find((t) => t.trainer_id === id) ?? null;
           // The list only has trainers on an active plan with a business name. The client's
           // own trainer, or one who invited them, always shows.
           const known = link ?? asked;
@@ -54,16 +56,22 @@ export default function TrainerProfile() {
                 years_experience: null,
               }
             : null;
-          setTrainer(all.find((t) => t.id === id) ?? own);
+          // A trainer known only from their invite stays while the invites can't be loaded.
+          setTrainer((shown) => all.find((t) => t.id === id) ?? own ?? (invites ? null : (shown ?? null)));
           setChatId(link?.client_id ?? null);
-          setInvite(asked);
+          // When the invites couldn't be loaded, the invite on screen stays.
+          setInvite((shown) => (invites ? asked : shown));
         })
         // Only the first load shows "not found"; a failed reload keeps what is on screen.
-        .catch(() => setTrainer((shown) => (shown === undefined ? null : shown))),
+        .catch(() => {
+          if (current()) setTrainer((shown) => (shown === undefined ? null : shown));
+        }),
     [id],
   );
   // One load at a time, so a slow older answer can't bring back an answered invite.
   const load = useMemo(() => serial(loadOnce), [loadOnce]);
+  // The invite was answered here: load now, without waiting for a stuck load.
+  const answered = useCallback(() => load(true), [load]);
 
   useEffect(() => {
     load();
@@ -120,7 +128,7 @@ export default function TrainerProfile() {
         ) : null}
       </View>
 
-      {invite && !isMine ? <InviteCard invite={invite} onAnswered={load} /> : null}
+      {invite && !isMine ? <InviteCard invite={invite} onAnswered={answered} /> : null}
 
       {chatId && !isMe ? (
         <View style={{ flexDirection: 'row', gap: Spacing.two }}>

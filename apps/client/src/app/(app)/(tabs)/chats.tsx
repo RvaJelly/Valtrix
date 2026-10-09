@@ -12,7 +12,15 @@ export default function Chats() {
   const [invites, setInvites] = useState<Invite[]>([]);
 
   // One load at a time, so a slow older answer can't bring back an answered invite.
-  const load = useMemo(() => serial(() => loadInvites().then(setInvites)), []);
+  const load = useMemo(
+    () =>
+      serial((current) =>
+        loadInvites().then((list) => {
+          if (current()) setInvites(list);
+        }),
+      ),
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {

@@ -5,6 +5,8 @@ import { Pressable, Text } from 'react-native';
 
 import { Body } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
+import { currentCall, ringingCalls } from '@/lib/calls';
 import type { Session } from '@/lib/sessions';
 
 // Both people can join an online session's video call from this long before it
@@ -27,6 +29,17 @@ function useNow(everyMs = 15_000) {
   return now;
 }
 
+// Both people often tap Join at the start. When the other one is already calling,
+// this opens their call to answer, instead of a second call that would cut it off.
+async function join(myId: string | undefined, params: { chat: string; video: string; name: string; avatar: string }) {
+  const ringing = myId ? await ringingCalls(myId).catch(() => []) : [];
+  // Their call may have opened on its own screen in the meantime.
+  if (currentCall()) return;
+  const calling = ringing.find((c) => c.chat_id === params.chat);
+  if (calling) router.push({ pathname: '/call', params: { id: calling.id, incoming: '1' } });
+  else router.push({ pathname: '/call', params });
+}
+
 // "Join video call" for an online session with a client, while it is on.
 export function JoinCall({
   session,
@@ -41,6 +54,8 @@ export function JoinCall({
   onApp: boolean;
 }) {
   const now = useNow();
+  const { session: signedIn } = useAuth();
+  const [joining, setJoining] = useState(false);
   if (!session.client_id || !canJoin(session, now)) return null;
   if (!onApp) {
     return (
@@ -49,12 +64,17 @@ export function JoinCall({
       </Body>
     );
   }
-  const chat = session.client_id;
+  const params = { chat: session.client_id, video: '1', name, avatar: avatar ?? '' };
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Join video call with ${name}`}
-      onPress={() => router.push({ pathname: '/call', params: { chat, video: '1', name, avatar: avatar ?? '' } })}
+      disabled={joining}
+      onPress={async () => {
+        setJoining(true);
+        await join(signedIn?.user.id, params);
+        setJoining(false);
+      }}
       style={({ pressed }) => [styles.button, { backgroundColor: pressed ? Colors.accentPressed : Colors.accent }]}>
       <Ionicons name="videocam" size={22} color={Colors.onAccent} />
       <Text style={styles.text}>Join video call</Text>

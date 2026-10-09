@@ -24,6 +24,8 @@ export type PlanItem = {
   exercise_count: number;
   // The days (YYYY-MM-DD) it was ticked off this week.
   done_on: string[];
+  // The units the trainer writes weights in, from their own app settings.
+  trainer_units: 'kg' | 'lb';
 };
 
 // One exercise in a planned workout, as my_plan_workout returns it.
@@ -116,11 +118,22 @@ export function weekProgress(items: PlanItem[]) {
   );
 }
 
-// What's on today: workouts for today's weekday, and "any day" ones not yet done
-// this week (or done today, so they stay with their tick).
+// What's on a day: workouts planned for that weekday, "any day" ones not yet done
+// this week, and anything ticked off that day (so it stays with its tick, also
+// when it was done on a different day than planned).
 export function dueOn(item: PlanItem, day: Date) {
+  if (item.done_on.includes(dayKey(day))) return true;
   if (item.weekdays.length) return item.weekdays.includes(isoWeekday(day));
-  return item.done_on.length === 0 || item.done_on.includes(dayKey(day));
+  return item.done_on.length === 0;
+}
+
+// The weekday workouts shown on a day of the week: the ones planned for it, and
+// ones ticked off that day although they were planned for another day.
+export function weekdayItems(plan: PlanItem[], day: Date) {
+  const key = dayKey(day);
+  return plan.filter(
+    (item) => item.weekdays.length > 0 && (item.weekdays.includes(isoWeekday(day)) || item.done_on.includes(key)),
+  );
 }
 
 // The plan from all the client's trainers, with this week's ticks.
@@ -132,6 +145,7 @@ export async function loadPlan(today = new Date()) {
     ...item,
     weekdays: item.weekdays ?? [],
     done_on: item.done_on ?? [],
+    trainer_units: item.trainer_units === 'lb' ? ('lb' as const) : ('kg' as const),
   }));
 }
 

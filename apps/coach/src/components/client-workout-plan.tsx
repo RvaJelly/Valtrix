@@ -112,23 +112,28 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     return true;
   }
 
-  // Swaps two workouts. Positions follow the list order, which also tidies up any ties.
+  // Swaps two workouts, then numbers the whole list in its new order. Removing a
+  // workout leaves a gap in the numbers, so only renumbering every row keeps the
+  // saved order (and the client's) the same as on screen.
   async function move(index: number, direction: -1 | 1) {
     if (!items) return;
     const other = index + direction;
     if (other < 0 || other >= items.length) return;
-    const a = items[index];
-    const b = items[other];
-    const next = [...items];
-    next[index] = { ...b, position: index };
-    next[other] = { ...a, position: other };
+    const swapped = [...items];
+    swapped[index] = items[other];
+    swapped[other] = items[index];
+    const next = swapped.map((item, position) => ({ ...item, position }));
+    const changed = next.filter((item) => items.find((i) => i.id === item.id)?.position !== item.position);
     setItems(next);
-    const results = await Promise.all([
-      supabase.from('plan_items').update({ position: other }).eq('id', a.id),
-      supabase.from('plan_items').update({ position: index }).eq('id', b.id),
-    ]);
+    const results = await Promise.all(
+      changed.map((item) => supabase.from('plan_items').update({ position: item.position }).eq('id', item.id)),
+    );
     const failed = results.find((r) => r.error);
-    if (failed) setError(failed.error!.message);
+    if (failed) {
+      // Show the order that was really saved.
+      await load();
+      setError(failed.error!.message);
+    }
   }
 
   const progress = items ? weekProgress(items, ticks) : null;

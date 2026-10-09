@@ -31,9 +31,25 @@ function restLabel(seconds: number) {
   return rest ? `${minutes}:${String(rest).padStart(2, '0')} min` : `${minutes} min`;
 }
 
-// Trainers write weights as free text. Plain numbers get the client's units.
-function weightLabel(weight: string, units: string) {
-  return /^\d+([.,]\d+)?(\s*[-–]\s*\d+([.,]\d+)?)?$/.test(weight.trim()) ? `${weight.trim()} ${units}` : weight;
+type Units = 'kg' | 'lb';
+const LB_PER_KG = 2.20462;
+
+// Trainers write weights as free text ("40", "20-25", "light band"), with plain
+// numbers in their own units. Those get the trainer's unit, plus about how much that
+// is in the client's unit when the two differ.
+function weightLabel(weight: string, trainerUnits: Units, myUnits: Units): { value: string; also?: string } {
+  const text = weight.trim();
+  const numbers = /^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?$/.exec(text);
+  if (!numbers) return { value: weight };
+  const value = `${text} ${trainerUnits}`;
+  if (trainerUnits === myUnits) return { value };
+  const convert = (n: string) => {
+    const amount = Number(n.replace(',', '.'));
+    // Whole pounds, or kilograms to the nearest half.
+    return myUnits === 'lb' ? Math.round(amount * LB_PER_KG) : Math.round((amount / LB_PER_KG) * 2) / 2;
+  };
+  const converted = [numbers[1], numbers[2]].filter((n): n is string => !!n).map(convert);
+  return { value, also: `≈ ${converted.join('–')} ${myUnits}` };
 }
 
 // One workout from the client's plan: its exercises with sets, reps, weight, rest,
@@ -138,7 +154,9 @@ export default function PlanWorkout() {
             <View style={styles.stats}>
               <Stat label="Sets" value={String(ex.sets)} />
               <Stat label="Reps" value={ex.reps} />
-              {ex.weight ? <Stat label="Weight" value={weightLabel(ex.weight, settings.units)} /> : null}
+              {ex.weight ? (
+                <Stat label="Weight" {...weightLabel(ex.weight, item.trainer_units, settings.units)} />
+              ) : null}
               {ex.rest_seconds != null ? <Stat label="Rest" value={restLabel(ex.rest_seconds)} /> : null}
             </View>
             {ex.notes ? <Body style={{ fontSize: 15 }}>{ex.notes}</Body> : null}
@@ -185,12 +203,17 @@ export default function PlanWorkout() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, also }: { label: string; value: string; also?: string }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue} numberOfLines={1}>
         {value}
       </Text>
+      {also ? (
+        <Text style={styles.statAlso} numberOfLines={1}>
+          {also}
+        </Text>
+      ) : null}
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -280,6 +303,11 @@ const styles = themed(() => ({
     color: Colors.text,
     fontSize: 16,
     fontWeight: '800',
+  },
+  statAlso: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   statLabel: {
     color: Colors.textSecondary,

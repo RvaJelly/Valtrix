@@ -14,11 +14,24 @@ const MAX_SECONDS = MAX_VIDEO_MINUTES * 60;
 // The biggest file the Supabase free plan takes.
 const MAX_BYTES = 50 * 1024 * 1024;
 
+// MP4 and MOV play and save on every phone. iPhones can't play WebM (what Chrome
+// records on a computer), so those are turned away.
 const VIDEO_TYPES: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
-  'video/webm': 'webm',
 };
+
+// iPhones shrink a video to a medium size before it uploads, so 3 minutes fits in
+// 50 MB. Android phones send the clip as it was filmed, and a full-quality phone
+// clip passes 50 MB after about half a minute.
+export const VIDEO_HINT =
+  Platform.OS === 'android'
+    ? 'short clips work best, about 30 seconds'
+    : Platform.OS === 'ios'
+      ? `up to ${MAX_VIDEO_MINUTES} minutes`
+      : `up to ${MAX_VIDEO_MINUTES} minutes and 50 MB`;
+// The same, as a sentence for the "Add a video" question on phones.
+export const VIDEO_TIP = `${VIDEO_HINT[0].toUpperCase()}${VIDEO_HINT.slice(1)}.`;
 
 export class VideoError extends Error {}
 
@@ -30,7 +43,9 @@ export type PickedVideo = {
 
 function tooBig() {
   return new VideoError(
-    'This video is a bit too big to upload (over 50 MB). Try a shorter clip, or record it again at a lower quality.',
+    Platform.OS === 'android'
+      ? 'This video is a bit too big to upload (over 50 MB). Try a shorter clip, about 30 seconds.'
+      : 'This video is a bit too big to upload (over 50 MB). Try a shorter clip, or record it again at a lower quality.',
   );
 }
 
@@ -43,7 +58,6 @@ function guessType(asset: ImagePicker.ImagePickerAsset) {
   const name = (asset.fileName ?? asset.uri).toLowerCase();
   if (name.endsWith('.mp4') || name.endsWith('.m4v')) return 'video/mp4';
   if (name.endsWith('.mov')) return 'video/quicktime';
-  if (name.endsWith('.webm')) return 'video/webm';
   // Phones record MP4 when nothing says otherwise.
   return asset.mimeType ? null : 'video/mp4';
 }
@@ -55,6 +69,9 @@ export async function pickWorkoutVideo(from: 'camera' | 'library'): Promise<Pick
     videoMaxDuration: MAX_SECONDS,
     // Medium keeps a 3 minute iPhone recording well under 50 MB.
     videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+    // A video chosen on an iPhone is made into a medium-size MP4 too (H.264, which
+    // every phone plays), instead of the full-size original.
+    videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality,
     // iPhones save HEVC videos; ask for ones every phone can play.
     preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
   };
@@ -84,7 +101,7 @@ export async function pickWorkoutVideo(from: 'camera' | 'library'): Promise<Pick
     );
   }
   const mimeType = asset.mimeType && asset.mimeType in VIDEO_TYPES ? asset.mimeType : guessType(asset);
-  if (!mimeType) throw new VideoError('This type of video is not supported. Try an MP4 video.');
+  if (!mimeType) throw new VideoError('Please use an MP4 or MOV video, so it plays on every phone.');
   if (asset.fileSize && asset.fileSize > MAX_BYTES) throw tooBig();
 
   const bytes = await fetch(asset.uri).then((r) => r.arrayBuffer());

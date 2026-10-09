@@ -7,10 +7,11 @@ import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import {
-  MAX_VIDEO_MINUTES,
   pickWorkoutVideo,
   removeWorkoutVideos,
   uploadWorkoutVideo,
+  VIDEO_HINT,
+  VIDEO_TIP,
   VideoError,
 } from '@/lib/workout-videos';
 
@@ -30,7 +31,7 @@ type Props = {
 function askSource(): Promise<'camera' | 'library' | null> {
   if (Platform.OS === 'web') return Promise.resolve('library');
   return new Promise((resolve) =>
-    Alert.alert('Add a video', `Up to ${MAX_VIDEO_MINUTES} minutes.`, [
+    Alert.alert('Add a video', VIDEO_TIP, [
       { text: 'Record a video', onPress: () => resolve('camera') },
       { text: 'Choose from your phone', onPress: () => resolve('library') },
       { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
@@ -42,7 +43,7 @@ function askSource(): Promise<'camera' | 'library' | null> {
 // plan can watch it in the Voltrix app and save it to their phone.
 export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) {
   const { session } = useAuth();
-  const [busy, setBusy] = useState<'uploading' | 'removing' | null>(null);
+  const [busy, setBusy] = useState<'preparing' | 'uploading' | 'removing' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const shown = path ?? fallback?.path ?? null;
@@ -53,9 +54,15 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
     setError(null);
     const from = await askSource();
     if (!from) return;
+    // A phone can take a while to get a chosen video ready after the picker closes.
+    // (A browser's file chooser may never say it was closed, so not there.)
+    if (Platform.OS !== 'web') setBusy('preparing');
     try {
       const video = await pickWorkoutVideo(from);
-      if (!video) return;
+      if (!video) {
+        setBusy(null);
+        return;
+      }
       setBusy('uploading');
       const uploaded = await uploadWorkoutVideo(userId, video);
       const problem = await onChange(uploaded);
@@ -85,11 +92,11 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
 
   return (
     <View style={{ gap: Spacing.two }}>
-      {busy === 'uploading' ? (
+      {busy === 'preparing' || busy === 'uploading' ? (
         <View style={styles.row}>
           <ActivityIndicator color={Colors.accentText} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Uploading video…</Text>
+            <Text style={styles.label}>{busy === 'preparing' ? 'Getting the video ready…' : 'Uploading video…'}</Text>
             <Text style={styles.note}>Keep Voltrix Coach open until it&apos;s done.</Text>
           </View>
         </View>
@@ -110,7 +117,13 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
               </Text>
             </View>
           </Pressable>
-          <SmallButton label="Replace" accessibilityLabel="Replace video" onPress={add} />
+          {path ? (
+            <SmallButton label="Replace" accessibilityLabel="Replace video" onPress={add} />
+          ) : (
+            // Only the fallback (the exercise's own demo) shows: this adds one for here, and
+            // leaves the exercise's video as it is.
+            <SmallButton label="Use another video" accessibilityLabel="Add a video for this workout" onPress={add} />
+          )}
           {path ? (
             <SmallButton
               label="Remove"
@@ -131,7 +144,7 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
           <View style={{ flex: 1 }}>
             <Text style={[styles.label, { color: Colors.accentText }]}>Add video</Text>
             <Text style={styles.note}>
-              {label}, up to {MAX_VIDEO_MINUTES} minutes
+              {label}, {VIDEO_HINT}
             </Text>
           </View>
         </Pressable>

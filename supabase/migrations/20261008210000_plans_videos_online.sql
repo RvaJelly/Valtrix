@@ -185,7 +185,9 @@ create policy plan_completions_delete_own on public.plan_completions
   for delete to authenticated using (user_id = (select auth.uid()));
 
 -- The signed-in client's plan from all their trainers, with the days each workout
--- was ticked off between two dates (at most about two months apart).
+-- was ticked off between two dates (at most about two months apart). Trainers write
+-- weights as plain numbers in their own units (kg or lb, from their app settings),
+-- so the client app is told which.
 create function public.my_plan(p_from date, p_to date)
 returns table (
   plan_item_id uuid,
@@ -202,7 +204,8 @@ returns table (
   note text,
   "position" int,
   exercise_count int,
-  done_on date[]
+  done_on date[],
+  trainer_units text
 )
 language sql
 stable
@@ -215,7 +218,8 @@ as $$
          (select count(*)::int from public.workout_exercises we where we.workout_id = w.id),
          coalesce((select array_agg(d.done_on order by d.done_on)
                      from public.plan_completions d
-                    where d.plan_item_id = pi.id and d.done_on between p_from and p_to), '{}')
+                    where d.plan_item_id = pi.id and d.done_on between p_from and p_to), '{}'),
+         case when p.preferences->>'units' = 'lb' then 'lb' else 'kg' end
     from public.plan_items pi
     join public.clients c on c.id = pi.client_id
     join public.workouts w on w.id = pi.workout_id
@@ -311,9 +315,10 @@ grant execute on function public.my_sessions_v2(timestamptz, timestamptz) to aut
 -- ---------- Video files ----------
 
 -- Up to 50 MB each, the most the Supabase free plan allows per file. Private: people
--- get a short-lived link to watch or save a video.
+-- get a short-lived link to watch or save a video. Only MP4 and MOV, which every
+-- phone can play and save (iPhones can't play WebM).
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('workout-videos', 'workout-videos', false, 52428800, array['video/mp4', 'video/quicktime', 'video/webm'])
+values ('workout-videos', 'workout-videos', false, 52428800, array['video/mp4', 'video/quicktime'])
 on conflict (id) do nothing;
 
 -- Can the signed-in person watch this video? Yes when it belongs to a workout in their

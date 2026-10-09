@@ -13,6 +13,7 @@ import {
   loadPlan,
   startOfWeek,
   trainerLabel,
+  weekdayItems,
   WEEKDAYS,
   weekProgress,
   type PlanItem,
@@ -161,7 +162,6 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
         <View style={styles.week}>
           {WEEKDAYS.map((d) => {
             const date = addDays(week, d.day - 1);
-            const items = plan.filter((item) => item.weekdays.includes(d.day));
             const isToday = sameDay(date, today);
             return (
               <WeekRow
@@ -169,7 +169,7 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
                 label={d.short}
                 date={String(date.getDate())}
                 isToday={isToday}
-                items={items.map((item) => ({ item, done: item.done_on.includes(dayKey(date)) }))}
+                items={weekdayItems(plan, date).map((item) => ({ item, done: item.done_on.includes(dayKey(date)) }))}
               />
             );
           })}

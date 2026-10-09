@@ -1,4 +1,5 @@
 import { cleanEntry, type PlanMeal } from '@/lib/food';
+import { accessRefused } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 
 // A client's nutrition plan, which they see in the Voltrix app, and their food diary.
@@ -41,7 +42,11 @@ export async function savePlan(clientId: string, input: PlanInput, existingId?: 
         .insert({ ...input, client_id: clientId })
         .select(PLAN_COLUMNS)
         .single();
-  if (error) throw new Error('Could not save the plan. Check your internet connection and try again.');
+  if (error) {
+    // A new plan needs an active trial, plan or free access (42501).
+    if (!existingId && error.code === '42501') throw new Error(await accessRefused());
+    throw new Error('Could not save the plan. Check your internet connection and try again.');
+  }
   return cleanPlan(data as NutritionPlan);
 }
 

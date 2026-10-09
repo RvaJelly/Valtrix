@@ -10,14 +10,10 @@ import { PostMenu } from '@/components/post-menu';
 import { ReelView } from '@/components/reel-view';
 import { ShareSheet } from '@/components/share-sheet';
 import { Spacing } from '@/constants/theme';
+import { useGoBack } from '@/lib/nav';
 import { setLiked, type Reel } from '@/lib/posts';
 import { loadReelsByIds } from '@/lib/social';
 import { listTrainers } from '@/lib/trainers';
-
-function close() {
-  if (router.canGoBack()) router.back();
-  else router.replace('/reels');
-}
 
 function openTrainer(id: string) {
   router.push({ pathname: '/trainers/[id]', params: { id } });
@@ -26,6 +22,7 @@ function openTrainer(id: string) {
 // One reel full screen, for example one sent in a chat.
 export default function ReelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const goBack = useGoBack();
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
   // Undefined while loading; null when the reel is gone or can't be seen.
@@ -62,6 +59,10 @@ export default function ReelScreen() {
     } catch {
       change((r) => ({ liked_by_me: !liked, like_count: Math.max(0, r.like_count + (liked ? -1 : 1)) }));
     }
+  }
+
+  function close() {
+    goBack('/reels');
   }
 
   function blockedFromComments(personId: string) {

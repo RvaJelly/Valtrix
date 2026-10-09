@@ -14,11 +14,13 @@ import {
   mealLabel,
   type Food,
 } from '@/lib/food';
+import { useGoBack } from '@/lib/nav';
 import { addToDiary, findMyFood } from '@/lib/nutrition';
 
 // Scan a barcode (or type its number) and add the food to the diary. Barcodes the
 // person saved themselves are found first; unknown ones go to "Enter it yourself".
 export default function ScanFood() {
+  const goBack = useGoBack();
   const params = useLocalSearchParams<{ meal?: string; day?: string }>();
   const meal = isMeal(params.meal) ? params.meal : mealForNow();
   const day = isDayKey(params.day) ? params.day : dayKey(new Date());
@@ -47,8 +49,7 @@ export default function ScanFood() {
   }
 
   function close() {
-    if (router.canGoBack()) router.back();
-    else router.replace('/nutrition');
+    goBack('/nutrition');
   }
 
   return (

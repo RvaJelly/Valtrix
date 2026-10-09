@@ -7,13 +7,15 @@ import { Button, ErrorText, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
-import { goBack } from '@/lib/nav';
+import { useGoBack } from '@/lib/nav';
+import { addError, saveError } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 import { removeWorkoutVideos } from '@/lib/workout-videos';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Equipment, type Exercise, type MuscleGroup } from '@/lib/workouts';
 
 // Create a custom exercise, or edit one when an id is passed.
 export default function ExerciseForm() {
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [loaded, setLoaded] = useState(!id);
   const [name, setName] = useState('');
@@ -79,8 +81,9 @@ export default function ExerciseForm() {
     const { error } = id
       ? await supabase.from('exercises').update(values).eq('id', id)
       : await supabase.from('exercises').insert({ ...values, video_path: video });
+    const problem = error ? (id ? saveError(error) : await addError(error)) : null;
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(problem);
     unsaved.current.path = null;
     goBack('/exercises');
   }

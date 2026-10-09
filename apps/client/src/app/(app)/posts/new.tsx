@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
@@ -10,6 +10,7 @@ import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { MediaError, pickMedia, REEL_LENGTH_HINT, type PickedMedia } from '@/lib/media';
+import { useGoBack } from '@/lib/nav';
 import { acceptRules, createPost, hasAcceptedRules } from '@/lib/posts';
 
 const CAPTION_MAX = 2200;
@@ -19,6 +20,7 @@ export default function NewPost() {
   const params = useLocalSearchParams<{ kind?: string }>();
   const kind = params.kind === 'reel' ? 'reel' : 'story';
   const { session } = useAuth();
+  const goBack = useGoBack();
   const [rules, setRules] = useState<'checking' | 'ask' | 'agreed'>('checking');
   const [media, setMedia] = useState<PickedMedia | null>(null);
   const [caption, setCaption] = useState('');
@@ -52,8 +54,7 @@ export default function NewPost() {
     setBusy('sharing');
     try {
       await createPost(session.user.id, kind, media, kind === 'reel' ? caption : null);
-      if (router.canGoBack()) router.back();
-      else router.replace(kind === 'reel' ? '/reels' : '/');
+      goBack(kind === 'reel' ? '/reels' : '/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not share it. Try again.');
       setBusy(null);

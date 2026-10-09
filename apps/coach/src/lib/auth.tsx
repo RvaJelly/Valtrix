@@ -1,7 +1,9 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { AppState } from 'react-native';
 
 import { replaceReminders } from '@/lib/notify';
+import { onAccessRefused } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 
 export type Profile = {
@@ -70,6 +72,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setProfile(loaded);
   }, []);
 
+  // Loads the signed-in trainer's profile again, so a trial or plan that ended, or free
+  // access switched on or off, takes them to the Subscribe screen or back into the app.
+  // Offline, the profile already loaded stays.
+  const recheckProfile = useCallback(() => {
+    const userId = loadedUserId.current;
+    if (!userId) return;
+    fetchProfile(userId).then(
+      (fresh) => {
+        // Not if they signed out meanwhile.
+        if (fresh && loadedUserId.current === fresh.id) setProfile(fresh);
+      },
+      () => {},
+    );
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
@@ -92,12 +109,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
         loadedUserId.current = null;
         setProfile(null);
         setRecovering(false);
+      } else if (event === 'TOKEN_REFRESHED') {
+        // The login is renewed about once an hour while the app is open.
+        setTimeout(recheckProfile, 0);
       }
       if (event === 'PASSWORD_RECOVERY') setRecovering(true);
       setSession(next);
     });
     return () => listener.subscription.unsubscribe();
-  }, [loadProfile]);
+  }, [loadProfile, recheckProfile]);
+
+  // Check again each time the app comes back to the front, and when the database turned
+  // something new away for lack of a plan.
+  useEffect(() => {
+    let last = 0;
+    const appState = AppState.addEventListener('change', (state) => {
+      // iPhones can say 'active' twice in a row (after Face ID, for example).
+      if (state !== 'active' || Date.now() - last < 2000) return;
+      last = Date.now();
+      recheckProfile();
+    });
+    const stopListening = onAccessRefused(recheckProfile);
+    return () => {
+      appState.remove();
+      stopListening();
+    };
+  }, [recheckProfile]);
 
   const refreshProfile = useCallback(() => loadProfile(session), [loadProfile, session]);
 

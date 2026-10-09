@@ -1,12 +1,14 @@
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useState } from 'react';
 
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { FoodSheet } from '@/components/food-sheet';
 import { FoodError, lookupBarcode, type Food } from '@/lib/food';
+import { useGoBack } from '@/lib/nav';
 
 // Scan a barcode (or type its number) to see a food's calories, protein, carbs and fat.
 export default function ScanFood() {
+  const goBack = useGoBack();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [food, setFood] = useState<Food | null>(null);
@@ -29,8 +31,7 @@ export default function ScanFood() {
   }
 
   function close() {
-    if (router.canGoBack()) router.back();
-    else router.replace('/nutrition/check');
+    goBack('/nutrition/check');
   }
 
   return (

@@ -12,13 +12,14 @@ import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import { CLIENT_COLUMNS, fullName, type Client, type ClientStatus } from '@/lib/clients';
-import { goBack } from '@/lib/nav';
+import { useGoBack } from '@/lib/nav';
 import { useRefreshOnReturn } from '@/lib/refresh-on-return';
 import { saveError } from '@/lib/save-error';
 import { formatDay, SESSION_COLUMNS, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 export default function ClientDetail() {
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [client, setClient] = useState<Client | null>(null);
   const [error, setError] = useState<string | null>(null);

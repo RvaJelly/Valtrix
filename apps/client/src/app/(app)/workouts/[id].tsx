@@ -151,17 +151,19 @@ export default function PlanWorkout() {
                 </Body>
               </View>
             </View>
-            <View style={styles.stats}>
-              <Stat label="Sets" value={String(ex.sets)} />
-              <Stat label="Reps" value={ex.reps} />
-              {ex.weight ? (
-                <Stat
-                  label="Weight"
-                  {...weightLabel(ex.weight, ex.weight_unit ?? item.trainer_units, settings.units)}
-                />
-              ) : null}
-              {ex.rest_seconds != null ? <Stat label="Rest" value={restLabel(ex.rest_seconds)} /> : null}
-            </View>
+            <Stats
+              stats={[
+                { label: 'Sets', value: String(ex.sets) },
+                { label: 'Reps', value: ex.reps },
+                ex.weight
+                  ? {
+                      label: 'Weight',
+                      ...weightLabel(ex.weight, ex.weight_unit ?? item.trainer_units, settings.units),
+                    }
+                  : null,
+                ex.rest_seconds != null ? { label: 'Rest', value: restLabel(ex.rest_seconds) } : null,
+              ]}
+            />
             {ex.notes ? <Body style={{ fontSize: 15 }}>{ex.notes}</Body> : null}
             {ex.instructions ? (
               <Body secondary style={{ fontSize: 14 }}>
@@ -206,17 +208,33 @@ export default function PlanWorkout() {
   );
 }
 
-function Stat({ label, value, also }: { label: string; value: string; also?: string }) {
+type StatProps = { label: string; value: string; also?: string };
+
+// Two boxes to a row, so values like "20-25 lb" or "2:30 min" show in full on small phones.
+function Stats({ stats }: { stats: (StatProps | null)[] }) {
+  const shown = stats.filter((s): s is StatProps => !!s);
+  const rows: StatProps[][] = [];
+  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+  return (
+    <View style={styles.stats}>
+      {rows.map((row) => (
+        <View key={row[0].label} style={styles.statRow}>
+          {row.map((stat) => (
+            <Stat key={stat.label} {...stat} />
+          ))}
+          {/* A box on its own stays the same size as the ones above it. */}
+          {row.length === 1 ? <View style={styles.statSpacer} /> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Stat({ label, value, also }: StatProps) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue} numberOfLines={1}>
-        {value}
-      </Text>
-      {also ? (
-        <Text style={styles.statAlso} numberOfLines={1}>
-          {also}
-        </Text>
-      ) : null}
+      <Text style={styles.statValue}>{value}</Text>
+      {also ? <Text style={styles.statAlso}>{also}</Text> : null}
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -287,30 +305,37 @@ const styles = themed(() => ({
     fontWeight: '800',
   },
   stats: {
+    gap: Spacing.two,
+  },
+  statRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   stat: {
-    flexGrow: 1,
-    flexBasis: '22%',
-    minWidth: 64,
+    flex: 1,
     alignItems: 'center',
     gap: 2,
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.one,
+    paddingHorizontal: Spacing.two,
     borderRadius: Radius.medium,
     backgroundColor: Colors.background,
+  },
+  // Same padding as a box, so both halves of the row get the same width.
+  statSpacer: {
+    flex: 1,
+    paddingHorizontal: Spacing.two,
   },
   statValue: {
     color: Colors.text,
     fontSize: 16,
     fontWeight: '800',
+    textAlign: 'center',
   },
   statAlso: {
     color: Colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   statLabel: {
     color: Colors.textSecondary,

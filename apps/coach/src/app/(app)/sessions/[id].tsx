@@ -8,13 +8,14 @@ import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
-import { goBack } from '@/lib/nav';
+import { useGoBack } from '@/lib/nav';
 import { refreshReminders } from '@/lib/reminders';
 import { saveError } from '@/lib/save-error';
 import { SESSION_COLUMNS, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 export default function SessionDetail() {
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -12,14 +12,20 @@ import { useSettings } from '@/lib/settings';
 // The app locks again after it has been in the background this long.
 const RELOCK_AFTER_MS = 60_000;
 
+// True while the lock screen covers the app.
+export function useAppLocked() {
+  const { session, locked } = useAuth();
+  const { settings, ready } = useSettings();
+  return ready && settings.biometric && !!session && locked;
+}
+
 // Covers the app with a lock screen until the client uses Face ID or a fingerprint.
 // Only shown when they turned it on in Settings.
 export function AppLock() {
-  const { session, signOut, locked, setLocked } = useAuth();
-  const { settings, ready } = useSettings();
+  const { signOut, setLocked } = useAuth();
   const [name, setName] = useState('Face ID or fingerprint');
   const leftAt = useRef<number | null>(null);
-  const active = ready && settings.biometric && !!session && locked;
+  const active = useAppLocked();
 
   useEffect(() => {
     biometricName().then((n) => n && setName(n));

@@ -26,6 +26,7 @@ import {
   type PlanItem,
 } from '@/lib/plans';
 import { useRefreshOnReturn } from '@/lib/refresh-on-return';
+import { addError } from '@/lib/save-error';
 import { addDays, dayKey, startOfWeek } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
@@ -89,7 +90,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     const { error } = await supabase
       .from('plan_items')
       .insert({ client_id: clientId, workout_id: workout.id, position, weekdays, note });
-    if (error) return error.message;
+    if (error) return addError(error);
     setSheet(null);
     await load();
     return null;

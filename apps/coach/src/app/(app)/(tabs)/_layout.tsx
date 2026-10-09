@@ -5,6 +5,7 @@ import type { ColorValue } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
+import { useTabsShown } from '@/lib/nav';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -16,6 +17,7 @@ function tabIcon(name: IconName) {
 
 export default function TabLayout() {
   const { unread } = useChat();
+  useTabsShown();
   return (
     <Tabs
       screenOptions={{

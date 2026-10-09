@@ -4,6 +4,7 @@ import { ScrollView } from 'react-native';
 
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
 import { Spacing, themed } from '@/constants/theme';
+import { addError } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 
 export default function NewWorkout() {
@@ -19,8 +20,9 @@ export default function NewWorkout() {
     }
     setBusy(true);
     const { data, error } = await supabase.from('workouts').insert({ name: name.trim() }).select('id').single();
+    const problem = error ? await addError(error) : null;
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(problem);
     router.replace({ pathname: '/workouts/[id]', params: { id: data.id } });
   }
 

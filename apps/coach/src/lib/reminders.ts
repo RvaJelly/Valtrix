@@ -54,13 +54,36 @@ export function buildReminders(sessions: Session[], minutes: number, now = new D
 // Set the reminder time and reschedule. Asks for permission the first time.
 export async function setReminderLead(minutes: number) {
   lead = minutes;
-  if (minutes === 0) return replaceReminders([]);
-  if (!(await askPermission())) return;
+  if (minutes !== 0 && !(await askPermission())) return;
   await refreshReminders();
 }
 
+// One refresh at a time: two at once (like a booking saved as the app comes back to the
+// front) could set the same reminder twice. A call during a refresh runs it once more
+// afterwards, with the newest bookings and reminder time.
+let running: Promise<void> | null = null;
+let again = false;
+
 // Call after any booking changes so reminders match the calendar.
-export async function refreshReminders() {
+export function refreshReminders(): Promise<void> {
+  if (running) {
+    again = true;
+    return running;
+  }
+  running = (async () => {
+    try {
+      do {
+        again = false;
+        await refreshOnce();
+      } while (again);
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
+}
+
+async function refreshOnce() {
   try {
     if (lead === 0) return await replaceReminders([]);
     const now = new Date();

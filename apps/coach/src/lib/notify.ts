@@ -30,8 +30,17 @@ export async function askPermission() {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
+// One change at a time, so two can't mix their reminders together.
+let queue: Promise<void> = Promise.resolve();
+
 // Reminders are scheduled on this phone, so they arrive even when the app is closed.
-export async function replaceReminders(reminders: Reminder[]) {
+export function replaceReminders(reminders: Reminder[]) {
+  const next = queue.then(() => setReminders(reminders));
+  queue = next.catch(() => {});
+  return next;
+}
+
+async function setReminders(reminders: Reminder[]) {
   await Notifications.cancelAllScheduledNotificationsAsync();
   for (const r of reminders) {
     await Notifications.scheduleNotificationAsync({

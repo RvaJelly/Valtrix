@@ -1,13 +1,14 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { SessionForm } from '@/components/session-form';
-import { goBack } from '@/lib/nav';
+import { useGoBack } from '@/lib/nav';
 import { refreshReminders } from '@/lib/reminders';
-import { saveError } from '@/lib/save-error';
+import { addError } from '@/lib/save-error';
 import { fromDayKey } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 export default function NewSession() {
+  const goBack = useGoBack();
   const { date, clientId } = useLocalSearchParams<{ date?: string; clientId?: string }>();
   return (
     <SessionForm
@@ -16,7 +17,7 @@ export default function NewSession() {
       submitLabel="Book session"
       onSubmit={async (input) => {
         const { error } = await supabase.from('sessions').insert(input);
-        if (error) return saveError(error);
+        if (error) return addError(error);
         refreshReminders();
         goBack('/calendar');
         return null;

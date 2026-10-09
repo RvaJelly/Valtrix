@@ -7,7 +7,7 @@ import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/componen
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
-import { goBack } from '@/lib/nav';
+import { useGoBack } from '@/lib/nav';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
 import { removeWorkoutVideos } from '@/lib/workout-videos';
@@ -22,6 +22,7 @@ import {
 type Editable = Pick<WorkoutExercise, 'sets' | 'reps' | 'weight' | 'weight_unit' | 'rest_seconds'>;
 
 export default function WorkoutEditor() {
+  const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [name, setName] = useState('');

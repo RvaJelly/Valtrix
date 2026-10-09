@@ -86,7 +86,7 @@ export default function Home() {
 
   // Each part loads on its own, so stories and trainers still show when the sessions
   // can't be loaded, and a failed refresh keeps what was already on screen.
-  const load = useCallback(async () => {
+  const load = useCallback(async (reminders = true) => {
     const start = new Date();
     const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
     const [trainers, sessions, everyone, stories, seen] = await Promise.all([
@@ -109,16 +109,17 @@ export default function Home() {
       seen,
     }));
     // A newly linked trainer may have sessions booked already.
-    if (trainers && sessions) refreshReminders();
+    if (reminders && trainers && sessions) refreshReminders();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       load();
       // Coming back to the app doesn't refocus Home, so load again then: the next session
-      // may have ended and stories may have expired while the phone was locked.
+      // may have ended and stories may have expired while the phone was locked. The app's
+      // layout already refreshes the reminders then.
       const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') load();
+        if (state === 'active') load(false);
       });
       const timer = setInterval(() => setNow(new Date()), 60_000);
       return () => {

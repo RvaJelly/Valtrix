@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 
+import { accessRefused } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 
 // Videos for exercises and workouts: demos a trainer records or picks from their
@@ -120,6 +121,10 @@ export async function uploadWorkoutVideo(userId: string, video: PickedVideo) {
   if (error) {
     const { status, statusCode } = error as { status?: number; statusCode?: string };
     if (status === 413 || statusCode === '413') throw tooBig();
+    // Turned away: adding videos needs an active trial, plan or free access.
+    if (status === 403 || statusCode === '403' || /row-level security/i.test(error.message)) {
+      throw new VideoError(await accessRefused());
+    }
     throw new VideoError('The video could not be uploaded. Check your connection and try again.');
   }
   return path;

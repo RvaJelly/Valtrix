@@ -40,4 +40,11 @@ export async function replaceReminders(reminders: Reminder[]) {
   }
 }
 
+// A browser can't alert from a locked phone, and the tab shows "Rest over" itself.
+export async function scheduleRestAlert(_at: Date): Promise<string | null> {
+  return null;
+}
+
+export async function cancelRestAlert(_id: string | null): Promise<void> {}
+
 export function useOpenFromReminder() {}

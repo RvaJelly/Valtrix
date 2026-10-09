@@ -1,0 +1,739 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+
+import { Chips } from '@/components/chips';
+import { DaySwitcher } from '@/components/day-switcher';
+import { LineChart } from '@/components/line-chart';
+import { Sheet } from '@/components/sheet';
+import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
+import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { useChatEvents } from '@/lib/chat-live';
+import { confirm } from '@/lib/confirm';
+import { dayMonth } from '@/lib/days';
+import { saveError } from '@/lib/errors';
+import {
+  checkInWeekKey,
+  deleteBodyWeight,
+  loadBodyWeights,
+  loadCheckIns,
+  loadMeasurements,
+  loadPhotos,
+  MEASUREMENTS,
+  photoUrls,
+  POSES,
+  saveBodyWeight,
+  saveMeasurements,
+  type BodyWeight,
+  type CheckIn,
+  type MeasurementKey,
+  type Measurements,
+  type ProgressPhoto,
+  type SignedPhoto,
+} from '@/lib/progress';
+import { serial } from '@/lib/serial';
+import { addDays, dayKey } from '@/lib/sessions';
+import { useSettings } from '@/lib/settings';
+import {
+  formatLength,
+  formatNumber,
+  formatWeight,
+  fromCm,
+  fromKg,
+  parseNumber,
+  rangeLabel,
+  toCm,
+  toKg,
+  trim,
+  weightInput,
+  type LengthUnit,
+  type WeightUnit,
+} from '@/lib/units';
+
+type Range = 'month' | 'three' | 'year';
+const RANGES: Record<Range, string> = { month: 'Month', three: '3 months', year: 'Year' };
+const RANGE_DAYS: Record<Range, number> = { month: 30, three: 90, year: 365 };
+
+const MEASUREMENT_LABELS = Object.fromEntries(MEASUREMENTS.map((m) => [m.key, m.label])) as Record<
+  MeasurementKey,
+  string
+>;
+
+// "−2.6 kg" or "+1.5 cm": a change, with a real minus sign.
+function signed(text: string, value: number) {
+  if (Math.abs(value) < 1e-9) return `±${text}`;
+  return `${value < 0 ? '−' : '+'}${text}`;
+}
+
+// The client's progress: body weight, measurements, photos and the weekly check-in, each with
+// what has changed. Their trainers see the same.
+export default function Progress() {
+  const { settings } = useSettings();
+  const [weights, setWeights] = useState<BodyWeight[] | null>(null);
+  const [measurements, setMeasurements] = useState<Measurements[] | null>(null);
+  const [photos, setPhotos] = useState<ProgressPhoto[] | null>(null);
+  const [links, setLinks] = useState<Map<string, SignedPhoto>>(new Map());
+  const [checkIns, setCheckIns] = useState<CheckIn[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // A failed part keeps what is on screen.
+  const load = useMemo(
+    () =>
+      serial(async (current) => {
+        const now = new Date();
+        const from = dayKey(addDays(now, -365));
+        const to = dayKey(addDays(now, 1));
+        const [w, m, p, c] = await Promise.all([
+          loadBodyWeights(from, to).catch(() => null),
+          loadMeasurements(from, to).catch(() => null),
+          loadPhotos(6).catch(() => null),
+          loadCheckIns(12).catch(() => null),
+        ]);
+        const signedLinks = p ? await photoUrls(p.map((x) => x.path)).catch(() => null) : null;
+        if (!current()) return;
+        if (w) setWeights(w);
+        if (m) setMeasurements(m);
+        if (p) setPhotos(p);
+        if (signedLinks) setLinks(signedLinks);
+        if (c) setCheckIns(c);
+        setError(w && m && p && c ? null : 'Could not load everything. Check your internet connection.');
+      }),
+    [],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  useChatEvents((event) => {
+    if (event.type === 'progress' || event.type === 'reconnected') load();
+  });
+
+  async function refresh() {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false);
+  }
+
+  const reload = useCallback(() => load(true), [load]);
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
+      {error ? (
+        <View style={{ gap: Spacing.two }}>
+          <ErrorText>{error}</ErrorText>
+          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
+        </View>
+      ) : null}
+
+      <Text style={styles.section}>Body weight</Text>
+      {weights ? (
+        <WeightSection weights={weights} unit={settings.units} onSaved={reload} />
+      ) : !error ? (
+        <ActivityIndicator color={Colors.accentText} />
+      ) : null}
+
+      <Text style={styles.section}>Measurements</Text>
+      {measurements ? (
+        <MeasurementsSection measurements={measurements} lengths={settings.lengths} onSaved={reload} />
+      ) : !error ? (
+        <ActivityIndicator color={Colors.accentText} />
+      ) : null}
+
+      <Text style={styles.section}>Photos</Text>
+      {photos ? (
+        <PhotosSection photos={photos} links={links} />
+      ) : !error ? (
+        <ActivityIndicator color={Colors.accentText} />
+      ) : null}
+
+      <Text style={styles.section}>Weekly check-in</Text>
+      {checkIns ? (
+        <CheckInSection checkIns={checkIns} />
+      ) : !error ? (
+        <ActivityIndicator color={Colors.accentText} />
+      ) : null}
+    </ScrollView>
+  );
+}
+
+// ---------- Body weight ----------
+
+function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: WeightUnit; onSaved: () => void }) {
+  const [range, setRange] = useState<Range>('month');
+  const [sheet, setSheet] = useState({ open: false, key: 0 });
+  const [problem, setProblem] = useState<string | null>(null);
+  const today = new Date();
+  const latest = weights.at(-1) ?? null;
+
+  // The change since about a month ago, when there is a weight 25 to 35 days back.
+  const target = dayKey(addDays(today, -30));
+  const monthAgo = weights
+    .filter((w) => w.day >= dayKey(addDays(today, -35)) && w.day <= dayKey(addDays(today, -25)))
+    .sort(
+      (a, b) => Math.abs(Date.parse(a.day) - Date.parse(target)) - Math.abs(Date.parse(b.day) - Date.parse(target)),
+    )[0];
+  const change = latest && monthAgo ? fromKg(latest.weight_kg, unit) - fromKg(monthAgo.weight_kg, unit) : null;
+
+  const cutoff = dayKey(addDays(today, -RANGE_DAYS[range]));
+  const points = weights.filter((w) => w.day >= cutoff).map((w) => ({ day: w.day, value: fromKg(w.weight_kg, unit) }));
+  const first = points[0];
+  const last = points.at(-1);
+
+  async function remove(w: BodyWeight) {
+    const sure = await confirm('Remove this weight?', `The weight from ${dayMonth(w.day)} will be removed.`, 'Remove');
+    if (!sure) return;
+    setProblem(null);
+    try {
+      await deleteBodyWeight(w.day);
+      onSaved();
+    } catch (e) {
+      setProblem(saveError(e, "That didn't remove. Check your connection and try again."));
+    }
+  }
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {latest ? (
+        <View style={{ gap: 2 }}>
+          <Text style={styles.big}>{formatWeight(latest.weight_kg, unit)}</Text>
+          <Body secondary style={styles.small}>
+            {change !== null ? `${signed(`${formatNumber(Math.abs(change), 1)} ${unit}`, change)} in 30 days · ` : ''}
+            {dayMonth(latest.day)}
+          </Body>
+        </View>
+      ) : (
+        <Body secondary>Log your weight to see how it changes over time.</Body>
+      )}
+      <Chips options={RANGES} value={range} onChange={(r) => r && setRange(r)} />
+      <LineChart
+        points={points}
+        format={(v) => formatNumber(v, 1)}
+        accessibilityLabel={
+          first && last
+            ? `Body weight from ${formatNumber(first.value, 2)} ${unit} to ${formatNumber(last.value, 2)} ${unit}`
+            : 'Body weight: nothing logged yet'
+        }
+      />
+      <Button
+        title="Log weight"
+        onPress={() => setSheet((s) => ({ open: true, key: s.key + 1 }))}
+        testID="log-weight"
+      />
+      {weights.length ? (
+        <View style={{ gap: Spacing.one }}>
+          <Text style={styles.smallHeading}>Recent</Text>
+          {[...weights]
+            .reverse()
+            .slice(0, 5)
+            .map((w) => (
+              <View key={w.day} style={styles.listRow}>
+                <Text style={styles.listDay}>{dayMonth(w.day)}</Text>
+                <Text style={[styles.listValue, { flex: 1 }]}>{formatWeight(w.weight_kg, unit)}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove the weight from ${dayMonth(w.day)}`}
+                  onPress={() => remove(w)}
+                  style={styles.iconButton}>
+                  <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
+                </Pressable>
+              </View>
+            ))}
+        </View>
+      ) : null}
+      <ErrorText>{problem}</ErrorText>
+      <Body secondary style={styles.small}>
+        Your trainers can see this.
+      </Body>
+      <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Log weight">
+        <WeightForm
+          key={sheet.key}
+          weights={weights}
+          unit={unit}
+          onSaved={() => {
+            setSheet((s) => ({ ...s, open: false }));
+            onSaved();
+          }}
+        />
+      </Sheet>
+    </Card>
+  );
+}
+
+function WeightForm({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: WeightUnit; onSaved: () => void }) {
+  const [day, setDay] = useState(() => dayKey(new Date()));
+  const existing = weights.find((w) => w.day === day) ?? null;
+  const [text, setText] = useState(existing ? weightInput(existing.weight_kg, unit) : '');
+  // Typed by the person. A prefilled weight saved as it is keeps its exact kg.
+  const [typed, setTyped] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  function changeDay(next: string) {
+    setDay(next);
+    setProblem(null);
+    const found = weights.find((w) => w.day === next);
+    if (found) {
+      setText(weightInput(found.weight_kg, unit));
+      setTyped(false);
+    } else if (!typed) {
+      setText('');
+    }
+  }
+
+  async function save() {
+    setProblem(null);
+    const value = parseNumber(text);
+    const kg =
+      !typed && existing && text === weightInput(existing.weight_kg, unit)
+        ? existing.weight_kg
+        : value === null
+          ? null
+          : toKg(value, unit);
+    if (kg === null || kg < 20 || kg > 400) {
+      return setProblem(`Enter a weight between ${rangeLabel(fromKg(20, unit), fromKg(400, unit), 1, unit)}.`);
+    }
+    setBusy(true);
+    try {
+      await saveBodyWeight(day, kg);
+      onSaved();
+    } catch (e) {
+      setProblem(saveError(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <DaySwitcher day={day} onChange={changeDay} daysBack={365} />
+      <TextField
+        label={`Weight (${unit})`}
+        value={text}
+        onChangeText={(t) => {
+          setText(t);
+          setTyped(true);
+        }}
+        keyboardType="decimal-pad"
+        placeholder={unit === 'lb' ? '170' : '75.5'}
+        onSubmitEditing={save}
+      />
+      {existing ? (
+        <Body secondary style={styles.small}>
+          This replaces the {formatWeight(existing.weight_kg, unit)} logged that day.
+        </Body>
+      ) : null}
+      <ErrorText>{problem}</ErrorText>
+      <Button title="Save" onPress={save} loading={busy} />
+    </>
+  );
+}
+
+// ---------- Measurements ----------
+
+function MeasurementsSection({
+  measurements,
+  lengths,
+  onSaved,
+}: {
+  measurements: Measurements[];
+  lengths: LengthUnit;
+  onSaved: () => void;
+}) {
+  const [chart, setChart] = useState<MeasurementKey>('waist_cm');
+  const [sheet, setSheet] = useState({ open: false, key: 0 });
+
+  const points = measurements
+    .filter((m) => m[chart] !== null)
+    .map((m) => ({ day: m.day, value: fromCm(m[chart] ?? 0, lengths) }));
+  const first = points[0];
+  const last = points.at(-1);
+
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      <View style={styles.tiles}>
+        {[MEASUREMENTS.slice(0, 3), MEASUREMENTS.slice(3)].map((row) => (
+          <View key={row[0].key} style={styles.tileRow}>
+            {row.map(({ key, label }) => {
+              const values = measurements.filter((m) => m[key] !== null);
+              const latest = values.at(-1)?.[key] ?? null;
+              const start = values[0]?.[key] ?? null;
+              const change =
+                latest !== null && start !== null && values.length > 1
+                  ? fromCm(latest, lengths) - fromCm(start, lengths)
+                  : null;
+              return (
+                <View key={key} style={styles.tile}>
+                  <Text style={styles.tileLabel}>{label}</Text>
+                  <Text style={styles.tileValue}>{formatLength(latest, lengths)}</Text>
+                  {change !== null ? (
+                    <Text style={styles.tileChange}>
+                      {signed(`${formatNumber(Math.abs(change), 1)} ${lengths}`, change)}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+            {/* The second row's tiles stay the size of those above. */}
+            {row.length < 3 ? <View style={styles.tileSpacer} /> : null}
+          </View>
+        ))}
+      </View>
+      {measurements.length ? (
+        <>
+          <Chips options={MEASUREMENT_LABELS} value={chart} onChange={(k) => k && setChart(k)} />
+          <LineChart
+            points={points}
+            format={(v) => formatNumber(v, 1)}
+            accessibilityLabel={
+              first && last
+                ? `${MEASUREMENT_LABELS[chart]} from ${formatNumber(first.value, 2)} ${lengths} to ${formatNumber(last.value, 2)} ${lengths}`
+                : `${MEASUREMENT_LABELS[chart]}: nothing logged yet`
+            }
+          />
+        </>
+      ) : (
+        <Body secondary>Measure your waist, hips, chest, arms and thighs to see the changes the scale misses.</Body>
+      )}
+      <Button
+        title="Add measurements"
+        onPress={() => setSheet((s) => ({ open: true, key: s.key + 1 }))}
+        testID="add-measurements"
+      />
+      <Body secondary style={styles.small}>
+        Your trainers can see this.
+      </Body>
+      <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Add measurements">
+        <MeasurementsForm
+          key={sheet.key}
+          measurements={measurements}
+          lengths={lengths}
+          onSaved={() => {
+            setSheet((s) => ({ ...s, open: false }));
+            onSaved();
+          }}
+        />
+      </Sheet>
+    </Card>
+  );
+}
+
+type Texts = Record<MeasurementKey, string>;
+
+function textsFor(row: Measurements | null, lengths: LengthUnit): Texts {
+  const texts = {} as Texts;
+  for (const { key } of MEASUREMENTS) {
+    const value = row?.[key] ?? null;
+    texts[key] = value === null ? '' : trim(fromCm(value, lengths));
+  }
+  return texts;
+}
+
+function MeasurementsForm({
+  measurements,
+  lengths,
+  onSaved,
+}: {
+  measurements: Measurements[];
+  lengths: LengthUnit;
+  onSaved: () => void;
+}) {
+  const [day, setDay] = useState(() => dayKey(new Date()));
+  const existing = measurements.find((m) => m.day === day) ?? null;
+  const [texts, setTexts] = useState<Texts>(() => textsFor(existing, lengths));
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  // The latest of each, as a hint in the empty fields.
+  const newest: Measurements = { day, waist_cm: null, hips_cm: null, chest_cm: null, arm_cm: null, thigh_cm: null };
+  for (const { key } of MEASUREMENTS) newest[key] = measurements.findLast((m) => m[key] !== null)?.[key] ?? null;
+  const latest = textsFor(newest, lengths);
+
+  function changeDay(next: string) {
+    setDay(next);
+    setProblem(null);
+    setTexts(textsFor(measurements.find((m) => m.day === next) ?? null, lengths));
+  }
+
+  async function save() {
+    setProblem(null);
+    const prefilled = textsFor(existing, lengths);
+    const row: Measurements = { day, waist_cm: null, hips_cm: null, chest_cm: null, arm_cm: null, thigh_cm: null };
+    for (const { key, label, min, max } of MEASUREMENTS) {
+      const text = texts[key].trim();
+      if (!text) continue;
+      // A value left as it was keeps its exact cm.
+      const kept = existing?.[key] ?? null;
+      const value =
+        kept !== null && text === prefilled[key]
+          ? kept
+          : (() => {
+              const typed = parseNumber(text);
+              return typed === null ? null : toCm(typed, lengths);
+            })();
+      if (value === null || value < min || value > max) {
+        return setProblem(`${label}: ${rangeLabel(fromCm(min, lengths), fromCm(max, lengths), 1, lengths)}`);
+      }
+      row[key] = value;
+    }
+    if (MEASUREMENTS.every(({ key }) => row[key] === null)) return setProblem('Fill in at least one measurement.');
+    setBusy(true);
+    try {
+      await saveMeasurements(row);
+      onSaved();
+    } catch (e) {
+      setProblem(saveError(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <DaySwitcher day={day} onChange={changeDay} daysBack={365} />
+      {MEASUREMENTS.map(({ key, label }) => (
+        <TextField
+          key={key}
+          label={`${label} (${lengths})`}
+          value={texts[key]}
+          onChangeText={(t) => setTexts((old) => ({ ...old, [key]: t }))}
+          keyboardType="decimal-pad"
+          placeholder={latest[key] || '–'}
+        />
+      ))}
+      {existing ? (
+        <Body secondary style={styles.small}>
+          This replaces the measurements logged that day.
+        </Body>
+      ) : null}
+      <ErrorText>{problem}</ErrorText>
+      <Button title="Save" onPress={save} loading={busy} />
+    </>
+  );
+}
+
+// ---------- Photos ----------
+
+function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<string, SignedPhoto> }) {
+  // The newest of each pose.
+  const latest = POSES.map((pose) => ({ pose, photo: photos.find((p) => p.pose === pose.key) ?? null }));
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {photos.length ? (
+        <>
+          <View style={styles.thumbs}>
+            {latest.map(({ pose, photo }) => {
+              const link = photo ? links.get(photo.path) : undefined;
+              return (
+                <Pressable
+                  key={pose.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    photo ? `${pose.label} photo, ${dayMonth(photo.day)}` : `Add ${pose.label.toLowerCase()} photo`
+                  }
+                  onPress={() => router.push('/progress/photos')}
+                  style={styles.thumbWrap}>
+                  <View style={styles.thumb}>
+                    {photo && link ? (
+                      <Image
+                        source={{ uri: link.url, cacheKey: photo.path }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <Ionicons name="body-outline" size={28} color={Colors.textSecondary} />
+                    )}
+                  </View>
+                  <Text style={styles.thumbLabel}>
+                    {pose.label}
+                    {photo ? ` · ${dayMonth(photo.day)}` : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Button title="See all" variant="secondary" onPress={() => router.push('/progress/photos')} />
+        </>
+      ) : (
+        <>
+          <Body secondary>Photos from the front, side and back show changes the scale can&apos;t.</Body>
+          <Button title="Add progress photos" variant="secondary" onPress={() => router.push('/progress/photos')} />
+        </>
+      )}
+      <Body secondary style={styles.small}>
+        Only you and your trainers can see these.
+      </Body>
+    </Card>
+  );
+}
+
+// ---------- Weekly check-in ----------
+
+function CheckInSection({ checkIns }: { checkIns: CheckIn[] }) {
+  const week = checkInWeekKey();
+  const current = checkIns.find((c) => c.week_start === week);
+  const replies = checkIns
+    .flatMap((c) => c.replies)
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))
+    .slice(0, 2);
+  return (
+    <Card style={{ gap: Spacing.three }}>
+      {current ? (
+        <View style={styles.listRow}>
+          <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
+          <Text style={[styles.listValue, { flex: 1 }]}>Checked in for the week of {dayMonth(week)}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/progress/check-in')}
+            hitSlop={8}
+            style={styles.textButton}>
+            <Text style={styles.link}>Edit</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <Body>How did your week go?</Body>
+          <Button title="Check in" onPress={() => router.push('/progress/check-in')} />
+        </>
+      )}
+      {replies.map((r) => (
+        <Body key={`${r.trainer_id}-${r.updated_at}`} style={styles.small} numberOfLines={3}>
+          <Text style={{ fontWeight: '800' }}>{r.trainer_name}:</Text> {r.body}
+        </Body>
+      ))}
+      {checkIns.length ? (
+        <Pressable accessibilityRole="button" onPress={() => router.push('/progress/check-in')} hitSlop={8}>
+          <Text style={styles.link}>See all</Text>
+        </Pressable>
+      ) : null}
+    </Card>
+  );
+}
+
+const styles = themed(() => ({
+  content: {
+    padding: Spacing.four,
+    paddingBottom: Spacing.six,
+    gap: Spacing.three,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+  },
+  section: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: Spacing.two,
+  },
+  big: {
+    color: Colors.text,
+    fontSize: 32,
+    fontWeight: '900',
+  },
+  small: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  smallHeading: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    minHeight: 44,
+  },
+  listDay: {
+    width: 64,
+    color: Colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  listValue: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tiles: {
+    gap: Spacing.two,
+  },
+  tileRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  // Same padding as a tile, so all three in a row get the same width.
+  tileSpacer: {
+    flex: 1,
+    paddingHorizontal: Spacing.two,
+  },
+  tile: {
+    flex: 1,
+    gap: 2,
+    padding: Spacing.two,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.background,
+  },
+  tileLabel: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tileValue: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  tileChange: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  thumbs: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  thumbWrap: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  thumb: {
+    aspectRatio: 3 / 4,
+    borderRadius: Radius.medium,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceRaised,
+  },
+  thumbLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  link: {
+    color: Colors.accentText,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  textButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+}));

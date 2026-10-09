@@ -8,6 +8,7 @@ import { InviteCard } from '@/components/invite-card';
 import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
+import { TodayCard } from '@/components/today-card';
 import { TrainerCircle } from '@/components/trainer-circle';
 import { Body, Button, Card, ErrorText, Title } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
@@ -26,6 +27,7 @@ import {
   trainerName,
   type Session,
 } from '@/lib/sessions';
+import { loadToday, mergeToday, type TodayData } from '@/lib/today';
 import {
   listTrainers,
   loadInvites,
@@ -118,6 +120,21 @@ export default function Home() {
 
   const linkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // The Today card loads on its own, so the rest of Home never waits for it. A part that
+  // fails keeps the last answer for the same day.
+  const [today, setToday] = useState<TodayData | null>(null);
+  const userId = session?.user.id;
+  const loadTodayInOrder = useMemo(
+    () =>
+      serial(async (current) => {
+        if (!userId) return;
+        const t = await loadToday(userId).catch(() => null);
+        if (t && current()) setToday((old) => mergeToday(old, t));
+      }),
+    [userId],
+  );
+  const todayChanged = useCallback(() => loadTodayInOrder(true), [loadTodayInOrder]);
+
   // Each part loads on its own, so stories and trainers still show when the sessions
   // can't be loaded, and a failed refresh keeps what was already on screen. True when the
   // trainers and sessions loaded and were shown.
@@ -176,6 +193,10 @@ export default function Home() {
     } else if (event.type === 'reconnected') {
       // News sent while the connection was down is missed, and may have changed sessions.
       load();
+      loadTodayInOrder();
+    } else if (event.type === 'progress') {
+      // A trainer replied to a check-in.
+      loadTodayInOrder();
     }
   });
   useEffect(
@@ -188,29 +209,33 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       load();
+      loadTodayInOrder();
       // Coming back to the app doesn't refocus Home, so load again then: the next session
       // may have ended and stories may have expired while the phone was locked. The app's
       // layout already refreshes the reminders then.
       const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') load(false);
+        if (state === 'active') {
+          load(false);
+          loadTodayInOrder();
+        }
       });
       const timer = setInterval(() => setNow(new Date()), 60_000);
       return () => {
         sub.remove();
         clearInterval(timer);
       };
-    }, [load]),
+    }, [load, loadTodayInOrder]),
   );
 
   async function refresh() {
     setRefreshing(true);
-    await Promise.all([load(true, true), profile ? null : refreshProfile()]);
+    await Promise.all([load(true, true), loadTodayInOrder(true), profile ? null : refreshProfile()]);
     setRefreshing(false);
   }
 
   async function retry() {
     setRetrying(true);
-    await load(true, true);
+    await Promise.all([load(true, true), loadTodayInOrder(true)]);
     setRetrying(false);
   }
 
@@ -285,6 +310,16 @@ export default function Home() {
           <Body secondary>Their invite will show up here for you to accept. Tap the button below to check.</Body>
           <Button title="Check again" onPress={refresh} loading={refreshing} />
         </Card>
+      ) : null}
+
+      {today && userId ? (
+        <TodayCard
+          today={today}
+          userId={userId}
+          nextSession={next ?? null}
+          hasTrainers={!!data?.trainers?.length}
+          onChanged={todayChanged}
+        />
       ) : null}
 
       {data?.trainers && data.trainers.length > 0 ? (

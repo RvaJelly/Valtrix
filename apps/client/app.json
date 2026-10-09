@@ -52,8 +52,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos and add a profile photo.",
-          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories and reels.",
+          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos, add a profile photo and add progress photos.",
+          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories, reels and progress photos.",
           "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound."
         }
       ],
@@ -75,7 +75,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories and reels.",
+          "cameraPermission": "Allow Voltrix to use your camera to scan food barcodes, for video calls, chat photos, stories, reels and progress photos.",
           "microphonePermission": "Allow Voltrix to use your microphone for voice and video calls and so your videos have sound.",
           "recordAudioAndroid": true
         }
@@ -83,7 +83,7 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos and add a profile photo.",
+          "photosPermission": "Allow Voltrix to use your photos so you can share stories, reels and chat photos, add a profile photo and add progress photos.",
           "savePhotosPermission": "Allow Voltrix to save workout videos to your phone.",
           "isAccessMediaLocationEnabled": false,
           "granularPermissions": []

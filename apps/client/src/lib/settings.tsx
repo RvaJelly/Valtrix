@@ -13,6 +13,8 @@ export type Settings = {
   appearance: 'dark' | 'light' | 'system';
   accent: AccentName;
   units: 'kg' | 'lb';
+  // Body measurements in centimetres or inches.
+  lengths: 'cm' | 'in';
   // Minutes before a booked session to send a reminder. 0 turns reminders off.
   reminder: number;
   // Ask for Face ID or a fingerprint when the app opens. Kept on this phone only,
@@ -24,6 +26,7 @@ const DEFAULTS: Settings = {
   appearance: 'light',
   accent: 'orange',
   units: 'kg',
+  lengths: 'cm',
   reminder: DEFAULT_REMINDER,
   biometric: false,
 };
@@ -34,7 +37,7 @@ const STORAGE_KEY = 'valtrix.settings';
 const THEME_VERSION = 2;
 
 // The settings saved with the account, so they come back on a new phone.
-type Synced = Pick<Settings, 'appearance' | 'accent' | 'units' | 'reminder'> & { v: number };
+type Synced = Pick<Settings, 'appearance' | 'accent' | 'units' | 'lengths' | 'reminder'> & { v: number };
 
 // Keep only valid values from stored or synced settings.
 function clean(saved: Record<string, unknown> | null | undefined): Partial<Settings> {
@@ -44,6 +47,7 @@ function clean(saved: Record<string, unknown> | null | undefined): Partial<Setti
     out.appearance = saved.appearance;
   if (typeof saved.accent === 'string' && saved.accent in ACCENTS) out.accent = saved.accent as AccentName;
   if (saved.units === 'kg' || saved.units === 'lb') out.units = saved.units;
+  if (saved.lengths === 'cm' || saved.lengths === 'in') out.lengths = saved.lengths;
   if (String(saved.reminder) in REMINDER_OPTIONS) out.reminder = Number(saved.reminder);
   if (typeof saved.biometric === 'boolean') out.biometric = saved.biometric;
   return out;
@@ -54,6 +58,7 @@ function synced(settings: Settings): Synced {
     appearance: settings.appearance,
     accent: settings.accent,
     units: settings.units,
+    lengths: settings.lengths,
     reminder: settings.reminder,
     v: THEME_VERSION,
   };
@@ -99,6 +104,8 @@ export function SettingsProvider({ children }: PropsWithChildren) {
         const saved = clean(parsed);
         if (parsed?.v !== THEME_VERSION) delete saved.appearance;
         const next: Settings = { ...DEFAULTS, ...saved };
+        // Saved before lengths had a setting: inches go with pounds.
+        if (!saved.lengths) next.lengths = next.units === 'lb' ? 'in' : 'cm';
         // Apply the saved theme before any screen is drawn, so there is nothing to redraw or put back.
         const nextScheme = schemeFor(next, Appearance.getColorScheme());
         applyTheme(nextScheme, next.accent);
@@ -119,6 +126,8 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     const fromAccount = clean(profile.preferences);
     delete fromAccount.biometric;
     if (profile.preferences?.v !== THEME_VERSION) delete fromAccount.appearance;
+    // An account saved before lengths had a setting: inches go with pounds.
+    if (fromAccount.units && !fromAccount.lengths) fromAccount.lengths = fromAccount.units === 'lb' ? 'in' : 'cm';
     if (Object.keys(fromAccount).length) setSettings({ ...settings, ...fromAccount });
   }
 

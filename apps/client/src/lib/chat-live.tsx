@@ -25,7 +25,9 @@ import { supabase } from '@/lib/supabase';
 // opens the incoming call screen when someone calls. Everything arrives on the
 // person's private inbox channel, which only the database can send to. 'link'
 // news says a trainer invite was sent, answered or withdrawn, or a link started
-// or ended, so screens showing invites and clients can load again.
+// or ended, so screens showing invites and clients can load again. 'progress' news
+// says a trainer replied to a check-in (kind 'reply'), so the check-in screen and
+// Home can show it.
 
 export type ChatEvent =
   | { type: 'message'; message: Message }
@@ -33,7 +35,10 @@ export type ChatEvent =
   | { type: 'read'; chat_id: string; reader_id: string; read_at: string }
   | { type: 'call'; call: Call }
   | { type: 'link'; client_id: string; invite_status: string }
+  | { type: 'progress'; client_id: string | null; kind: ProgressKind; check_in_id: string | null }
   | { type: 'reconnected' };
+
+export type ProgressKind = 'workout' | 'weight' | 'measurements' | 'photo' | 'check_in' | 'reply';
 
 type ChatState = {
   chats: ChatSummary[];
@@ -187,6 +192,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
         .on('broadcast', { event: 'link' }, ({ payload }) => {
           emit({ type: 'link', client_id: payload.client_id, invite_status: payload.invite_status });
           refreshSoon();
+        })
+        .on('broadcast', { event: 'progress' }, ({ payload }) => {
+          emit({
+            type: 'progress',
+            client_id: payload.client_id ?? null,
+            kind: payload.kind,
+            check_in_id: payload.check_in_id ?? null,
+          });
         })
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') onConnected();

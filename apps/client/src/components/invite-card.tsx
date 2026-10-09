@@ -10,7 +10,8 @@ import { refreshReminders } from '@/lib/reminders';
 import { acceptInvite, declineInvite, trainerTitle, type Invite } from '@/lib/trainers';
 
 // "Ryan (Iron Forge) wants to be your trainer", with Accept and Decline. Nothing of the
-// client's reaches the trainer until they accept. onAnswered loads the screen again.
+// client's reaches the trainer until they accept, and the card says everything the trainer
+// will then see. onAnswered loads the screen again.
 export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered: () => void }) {
   const { refresh } = useChat();
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
@@ -77,8 +78,9 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
         </Text>
       </View>
       <Body secondary style={styles.small}>
-        If you accept, {firstName} can see your food diary, the workouts you tick off and your chats, and you can
-        message and call each other. You can leave any time in Settings.
+        If you accept, {firstName} can see your food diary, workouts, progress (weight, measurements and photos),
+        check-ins and habits, including what you logged before, and your chats. You can message and call each other. You
+        can leave any time in Settings.
       </Body>
       <View style={styles.buttons}>
         <View style={{ flex: 1 }}>

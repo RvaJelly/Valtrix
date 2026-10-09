@@ -132,6 +132,17 @@ export default function Plan() {
   );
 }
 
+// The workouts the client logged, with their personal bests.
+function HistoryLink() {
+  return (
+    <View style={styles.historyRow}>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/workouts/history')} hitSlop={8}>
+        <Text style={styles.link}>Workout history</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function Workouts({ plan }: { plan: PlanItem[] }) {
   const today = new Date();
   const todayKey = dayKey(today);
@@ -144,20 +155,24 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
 
   if (!plan.length) {
     return (
-      <Card style={{ gap: Spacing.three, alignItems: 'center', paddingVertical: Spacing.five }}>
-        <View style={styles.emptyIcon}>
-          <Ionicons name="barbell" size={28} color={Colors.accentText} />
-        </View>
-        <Text style={styles.cardTitle}>No workouts yet</Text>
-        <Body secondary style={{ textAlign: 'center' }}>
-          When your trainer adds workouts to your plan, they show up here, day by day.
-        </Body>
-      </Card>
+      <>
+        <HistoryLink />
+        <Card style={{ gap: Spacing.three, alignItems: 'center', paddingVertical: Spacing.five }}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="barbell" size={28} color={Colors.accentText} />
+          </View>
+          <Text style={styles.cardTitle}>No workouts yet</Text>
+          <Body secondary style={{ textAlign: 'center' }}>
+            When your trainer adds workouts to your plan, they show up here, day by day.
+          </Body>
+        </Card>
+      </>
     );
   }
 
   return (
     <>
+      <HistoryLink />
       <View style={{ gap: Spacing.two }}>
         <View style={styles.header}>
           <Text style={[styles.heading, { flex: 1 }]}>Today</Text>
@@ -366,6 +381,16 @@ const styles = themed(() => ({
   segmentText: {
     color: Colors.text,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: -Spacing.two,
+  },
+  link: {
+    color: Colors.accentText,
+    fontSize: 14,
     fontWeight: '700',
   },
   header: {

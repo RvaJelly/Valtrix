@@ -33,6 +33,14 @@ export default function AppLayout() {
         <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
+        {/* No swipe back by mistake mid-workout; the workout stays on the phone anyway. */}
+        <Stack.Screen name="workouts/live" options={{ title: 'Workout', gestureEnabled: false }} />
+        <Stack.Screen name="workouts/history" options={{ title: 'History' }} />
+        <Stack.Screen name="workouts/log/[id]" options={{ title: 'Workout' }} />
+        <Stack.Screen name="progress/index" options={{ title: 'Progress' }} />
+        <Stack.Screen name="progress/photos" options={{ title: 'Progress photos' }} />
+        <Stack.Screen name="progress/check-in" options={{ title: 'Weekly check-in' }} />
+        <Stack.Screen name="habits" options={{ title: 'Habits' }} />
         <Stack.Screen
           name="stories/[author]"
           options={{

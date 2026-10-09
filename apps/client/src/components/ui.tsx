@@ -10,13 +10,25 @@ type ButtonProps = {
   variant?: 'primary' | 'secondary' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
+  testID?: string;
+  accessibilityLabel?: string;
 };
 
-export function Button({ title, onPress, variant = 'primary', loading, disabled }: ButtonProps) {
+export function Button({
+  title,
+  onPress,
+  variant = 'primary',
+  loading,
+  disabled,
+  testID,
+  accessibilityLabel,
+}: ButtonProps) {
   const inactive = disabled || loading;
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
       onPress={onPress}
       disabled={inactive}
       style={({ pressed }) => [

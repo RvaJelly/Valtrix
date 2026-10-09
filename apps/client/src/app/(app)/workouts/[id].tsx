@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +8,16 @@ import { Avatar } from '@/components/avatar';
 import { PlanVideo } from '@/components/plan-video';
 import { Body, Button, Card } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  isUnderway,
+  readActiveWorkout,
+  rememberPlanWorkout,
+  saveActiveWorkout,
+  startWorkout,
+  type ActiveWorkout,
+} from '@/lib/active-workout';
+import { useAuth } from '@/lib/auth';
+import { confirm } from '@/lib/confirm';
 import {
   daysLabel,
   EQUIPMENT,
@@ -22,42 +32,20 @@ import {
 } from '@/lib/plan';
 import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
-
-// "45 s", "90 s", "2 min", "2:30 min": short enough for a small box on any phone.
-function restLabel(seconds: number) {
-  if (seconds < 120) return `${seconds} s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return rest ? `${minutes}:${String(rest).padStart(2, '0')} min` : `${minutes} min`;
-}
-
-type Units = 'kg' | 'lb';
-const LB_PER_KG = 2.20462;
-
-// Trainers write weights as free text ("40", "20-25", "light band"), with plain
-// numbers in kg or lb. Those get the unit they were written in, plus about how much
-// that is in the client's unit when the two differ.
-function weightLabel(weight: string, trainerUnits: Units, myUnits: Units): { value: string; also?: string } {
-  const text = weight.trim();
-  const numbers = /^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?$/.exec(text);
-  if (!numbers) return { value: weight };
-  const value = `${text} ${trainerUnits}`;
-  if (trainerUnits === myUnits) return { value };
-  const convert = (n: string) => {
-    const amount = Number(n.replace(',', '.'));
-    // Whole pounds, or kilograms to the nearest half.
-    return myUnits === 'lb' ? Math.round(amount * LB_PER_KG) : Math.round((amount / LB_PER_KG) * 2) / 2;
-  };
-  const converted = [numbers[1], numbers[2]].filter((n): n is string => !!n).map(convert);
-  return { value, also: `≈ ${converted.join('–')} ${myUnits}` };
-}
+import { restLabel, weightLabel } from '@/lib/units';
+import { loadLastSets, loadPersonalBests, loggedOn } from '@/lib/workout-log';
 
 // One workout from the client's plan: its exercises with sets, reps, weight, rest,
-// notes and demo videos, and "Mark as done" for today.
+// notes and demo videos, Start workout to log the sets, and a quick tick for today.
 export default function PlanWorkout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
+  // The workout on the phone, read each time this screen shows.
+  const [active, setActive] = useState<ActiveWorkout | null>(null);
+  const [starting, setStarting] = useState(false);
   const [item, setItem] = useState<PlanItem | null>(null);
   const [exercises, setExercises] = useState<PlanExercise[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +61,55 @@ export default function PlanWorkout() {
         setItem(found);
         setExercises(list);
         setDoneToday(found.done_on.includes(dayKey(new Date())));
+        // A copy on the phone, so the workout can be started with no signal.
+        if (userId) rememberPlanWorkout(userId, found, list);
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load this workout.'));
-  }, [id]);
+  }, [id, userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      let alive = true;
+      readActiveWorkout(userId).then((w) => {
+        if (alive) setActive(w);
+      });
+      return () => {
+        alive = false;
+      };
+    }, [userId]),
+  );
+
+  // Builds the workout from what this screen loaded, so it starts with no signal too.
+  async function start() {
+    if (!userId || !item || !exercises || starting) return;
+    setStarting(true);
+    setProblem(null);
+    const stored = await readActiveWorkout(userId);
+    if (stored && isUnderway(stored)) {
+      // This workout is already going and carries on, or a different one is in progress and
+      // the live screen asks what to do. Either way the sets on the phone are kept.
+      setStarting(false);
+      return router.push({ pathname: '/workouts/live', params: { plan: id } });
+    }
+    const names = exercises.map((e) => e.exercise_name);
+    const [last, bests] = await Promise.all([
+      loadLastSets(names).catch(() => new Map()),
+      loadPersonalBests().catch(() => []),
+    ]);
+    await saveActiveWorkout(startWorkout({ userId, item, exercises, last, bests, unit: settings.units }));
+    setStarting(false);
+    router.push({ pathname: '/workouts/live', params: { plan: id } });
+  }
+
+  async function undo() {
+    const today = dayKey(new Date());
+    setBusy(true);
+    const logged = await loggedOn(id, today).catch(() => false);
+    setBusy(false);
+    if (logged && !(await confirm('Undo done today?', 'Your logged workout stays in your history.', 'Undo'))) return;
+    await setDone(false);
+  }
 
   async function setDone(done: boolean) {
     const today = dayKey(new Date());
@@ -101,6 +135,8 @@ export default function PlanWorkout() {
   }
 
   const trainer = trainerLabel(item);
+  // This workout is on the phone, being done or waiting to be saved.
+  const resume = !!active && active.planItemId === id && isUnderway(active);
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: item.workout_name }} />
@@ -177,7 +213,13 @@ export default function PlanWorkout() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
         {problem ? <Text style={styles.problem}>{problem}</Text> : null}
-        {doneToday ? (
+        {resume ? (
+          <Button
+            title="Continue workout"
+            onPress={() => router.push({ pathname: '/workouts/live', params: { plan: id } })}
+            testID="start-workout"
+          />
+        ) : doneToday ? (
           <View style={styles.done}>
             <Ionicons name="checkmark-circle" size={28} color={Colors.accentText} />
             <View style={{ flex: 1 }}>
@@ -189,7 +231,7 @@ export default function PlanWorkout() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Undo"
-              onPress={() => setDone(false)}
+              onPress={undo}
               disabled={busy}
               hitSlop={8}
               style={({ pressed }) => [styles.undo, pressed && { backgroundColor: Colors.surfaceRaised }]}>
@@ -201,8 +243,20 @@ export default function PlanWorkout() {
             </Pressable>
           </View>
         ) : (
-          <Button title="Mark as done" onPress={() => setDone(true)} loading={busy} />
+          <>
+            <Button
+              title="Start workout"
+              onPress={start}
+              loading={starting}
+              testID="start-workout"
+              accessibilityLabel={`Start ${item.workout_name}`}
+            />
+            <Button title="Just tick it off" variant="secondary" onPress={() => setDone(true)} loading={busy} />
+          </>
         )}
+        {doneToday && !resume ? (
+          <Button title="Log your sets" variant="ghost" onPress={start} loading={starting} testID="log-your-sets" />
+        ) : null}
       </View>
     </View>
   );

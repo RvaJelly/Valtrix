@@ -15,6 +15,7 @@ import { confirm } from '@/lib/confirm';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
+import { removeProgressPhotoFiles } from '@/lib/progress';
 import { removeMyChatPhotos } from '@/lib/chat';
 import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
 import { leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
@@ -31,6 +32,11 @@ const APPEARANCE: Record<SettingsValues['appearance'], string> = {
 const UNITS: Record<SettingsValues['units'], string> = {
   kg: 'Kilograms (kg)',
   lb: 'Pounds (lb)',
+};
+
+const LENGTHS: Record<SettingsValues['lengths'], string> = {
+  cm: 'Centimetres (cm)',
+  in: 'Inches (in)',
 };
 
 export default function Settings() {
@@ -89,6 +95,10 @@ export default function Settings() {
               Weight units
             </Body>
             <Segmented options={UNITS} value={settings.units} onChange={(units) => update({ units })} />
+            <Body secondary style={styles.small}>
+              Body measurements
+            </Body>
+            <Segmented options={LENGTHS} value={settings.lengths} onChange={(lengths) => update({ lengths })} />
           </Card>
         </Section>
 
@@ -285,7 +295,7 @@ function MyTrainers() {
     const firstName = trainer.trainer_name?.split(' ')[0] || name;
     const sure = await confirm(
       `Leave ${name}?`,
-      `${firstName} will no longer see your food diary, the workouts you tick off, your chat or your calls, and you won't see the plans and sessions they set for you. ${firstName} keeps their own notes. You can join again if they send you a new invite.`,
+      `${firstName} will no longer see your food diary, workouts, progress (weight, measurements and photos), check-ins, habits, chat or calls, and you won't see the plans and sessions they set for you. ${firstName} keeps their own notes. You can join again if they send you a new invite.`,
       'Leave',
     );
     if (!sure) return;
@@ -344,14 +354,16 @@ function MyTrainers() {
           {trainer.client_status === 'archived' ? (
             <Body secondary style={styles.small}>
               {trainer.trainer_name?.split(' ')[0] || trainerTitle(trainer)} archived you for now, so they don&apos;t
-              see your food diary or chat. They will again if they make you active. Leave if you don&apos;t want that.
+              see your food diary, workouts, progress, check-ins, habits or chat. They will again if they make you
+              active. Leave if you don&apos;t want that.
             </Body>
           ) : null}
         </View>
       ))}
       {list?.length ? (
         <Body secondary style={styles.small}>
-          Your trainers see your food diary, the workouts you tick off and your chats with them.
+          Your trainers see your food diary, workouts, progress (including photos), check-ins, habits and your chats
+          with them.
         </Body>
       ) : null}
       <ErrorText>{error}</ErrorText>
@@ -489,11 +501,20 @@ function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () =
   async function remove() {
     const sure = await confirm(
       'Delete your account?',
-      'This permanently deletes your account, your stories, reels, photos and the messages you sent. It cannot be undone.',
+      'This permanently deletes your account, your workouts, progress photos and other progress, habits, stories, reels, photos and the messages you sent. It cannot be undone.',
       'Delete account',
     );
     if (!sure) return;
+    setError(null);
     setBusy(true);
+    // Progress photos are private files that nothing could find once the account is gone, so
+    // they must be removed first.
+    try {
+      if (userId) await removeProgressPhotoFiles(userId);
+    } catch {
+      setBusy(false);
+      return setError("Your progress photos couldn't be removed. Check your connection and try again.");
+    }
     await removeMyChatPhotos().catch(() => {});
     if (userId) await removeAllMyFiles(userId).catch(() => {});
     const { error } = await supabase.rpc('delete_my_client_account');

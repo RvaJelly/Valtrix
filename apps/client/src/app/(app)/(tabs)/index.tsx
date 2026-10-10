@@ -309,13 +309,7 @@ export default function Home() {
         ) : null}
 
         {today && userId ? (
-          <TodayCard
-            today={today}
-            userId={userId}
-            nextSession={next ?? null}
-            hasTrainers={hasTrainers}
-            onChanged={todayChanged}
-          />
+          <TodayCard today={today} userId={userId} hasTrainers={hasTrainers} onChanged={todayChanged} />
         ) : null}
 
         {data?.trainers && hasTrainers ? (

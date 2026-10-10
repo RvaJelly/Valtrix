@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useEffectEvent, useState, type ComponentProps } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   BackHandler,
   Easing,
@@ -10,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  StyleSheet,
   TextInput,
   useWindowDimensions,
   View,
@@ -18,8 +18,18 @@ import {
 } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Text } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  Skeleton,
+  Text,
+  type IconName,
+} from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { newId } from '@/lib/chat';
 import { confirm } from '@/lib/confirm';
@@ -326,28 +336,35 @@ export function CommentsSheet({
             },
           ]}>
           <View style={styles.header}>
-            <View style={styles.handle} />
-            <Text style={styles.title} accessibilityRole="header">
+            <View style={styles.grabber} />
+            <Text variant="headline" accessibilityRole="header">
               Comments
             </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={10}
-              style={styles.close}
+              hitSlop={6}
+              style={({ pressed }) => [styles.close, pressed && { backgroundColor: Colors.tint }]}
               accessibilityRole="button"
               accessibilityLabel="Close comments">
-              <Ionicons name="close" size={26} color={Colors.text} />
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
             </Pressable>
           </View>
 
           {!shown && failedFor !== postId ? (
-            <ActivityIndicator color={Colors.textSecondary} style={{ flex: 1 }} />
+            <View accessible accessibilityLabel="Loading comments" style={{ flex: 1, paddingVertical: Spacing.two }}>
+              <CommentSkeleton />
+              <CommentSkeleton short />
+              <CommentSkeleton />
+            </View>
           ) : !shown ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>Could not load the comments. Check your internet.</Text>
-              <Pressable onPress={retryLoad} style={styles.retry} accessibilityRole="button">
-                <Text style={styles.retryText}>Try again</Text>
-              </Pressable>
+              <Text variant="headline" style={{ textAlign: 'center' }}>
+                Could not load the comments
+              </Text>
+              <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
+                Check your internet and try again.
+              </Text>
+              <Button title="Try again" variant="secondary" size="medium" onPress={retryLoad} />
             </View>
           ) : (
             <FlatList
@@ -358,12 +375,14 @@ export function CommentsSheet({
               keyboardShouldPersistTaps="handled"
               onEndReached={loadOlder}
               onEndReachedThreshold={0.3}
-              ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.textSecondary} /> : null}
+              ListFooterComponent={loadingMore ? <CommentSkeleton short /> : null}
               ListEmptyComponent={
                 <View style={styles.empty}>
-                  <Ionicons name="chatbubbles-outline" size={40} color={Colors.textSecondary} />
-                  <Text style={styles.emptyTitle}>No comments yet</Text>
-                  <Text style={styles.emptyText}>Be the first to say something nice.</Text>
+                  <EmptyState
+                    icon="chatbubbles-outline"
+                    title="No comments yet"
+                    message="Be the first to say something nice."
+                  />
                 </View>
               }
               renderItem={({ item }) => (
@@ -384,7 +403,10 @@ export function CommentsSheet({
           <View
             style={[styles.composer, { paddingBottom: keyboardUp ? Spacing.two : Math.max(bottomInset, Spacing.two) }]}>
             {remaining <= 50 ? (
-              <Text style={[styles.left, remaining <= 0 && { color: Colors.danger }]}>
+              <Text
+                variant="footnote"
+                tone={remaining <= 0 ? 'danger' : 'secondary'}
+                style={[Tabular, { textAlign: 'right' }]}>
                 {remaining} {remaining === 1 ? 'letter' : 'letters'} left
               </Text>
             ) : null}
@@ -394,19 +416,23 @@ export function CommentsSheet({
                 onChangeText={setText}
                 placeholder="Add a comment…"
                 placeholderTextColor={Colors.textSecondary}
+                selectionColor={Colors.accent}
                 maxLength={COMMENT_MAX}
                 multiline
                 style={styles.input}
                 accessibilityLabel="Add a comment"
                 onKeyPress={Platform.OS === 'web' ? onKey : undefined}
               />
+              {/* Orange only once there is something to post. */}
               <Pressable
                 onPress={send}
                 disabled={!canSend}
-                style={[styles.send, !canSend && { opacity: 0.4 }]}
+                hitSlop={4}
+                style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}
                 accessibilityRole="button"
-                accessibilityLabel="Post comment">
-                <Ionicons name="arrow-up" size={22} color={Colors.onAccent} />
+                accessibilityLabel="Post comment"
+                accessibilityState={{ disabled: !canSend }}>
+                <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
               </Pressable>
             </View>
           </View>
@@ -415,8 +441,9 @@ export function CommentsSheet({
             <View style={styles.overlay}>
               <Pressable style={{ flex: 1 }} onPress={() => setChosen(null)} accessibilityLabel="Close options" />
               <View style={[styles.panel, { paddingBottom: Math.max(bottomInset, Spacing.three) }]}>
+                <View style={styles.grabber} />
                 {step === 'menu' ? (
-                  <>
+                  <Group>
                     {chosen.can_delete ? (
                       <Option
                         icon="trash-outline"
@@ -424,6 +451,7 @@ export function CommentsSheet({
                         danger
                         onPress={() => remove(chosen)}
                         disabled={busy}
+                        last={chosen.is_mine}
                       />
                     ) : null}
                     {!chosen.is_mine ? (
@@ -441,48 +469,72 @@ export function CommentsSheet({
                           danger
                           onPress={() => block(chosen)}
                           disabled={busy}
+                          last
                         />
                       </>
                     ) : null}
-                  </>
+                  </Group>
                 ) : null}
                 {step === 'report' ? (
                   <>
-                    <Text style={styles.panelTitle}>Why are you reporting this comment?</Text>
-                    <Text style={styles.note}>Your report is private. {chosenName} won&apos;t know it was you.</Text>
-                    {(Object.keys(REPORT_REASONS) as ReportReason[]).map((reason) => (
-                      <Option
-                        key={reason}
-                        label={REPORT_REASONS[reason]}
-                        onPress={() => report(chosen, reason)}
-                        disabled={busy}
-                      />
-                    ))}
+                    <View style={{ gap: Spacing.one }}>
+                      <Text variant="title" accessibilityRole="header">
+                        Why are you reporting this comment?
+                      </Text>
+                      <Text variant="callout" tone="secondary">
+                        Your report is private. {chosenName} won&apos;t know it was you.
+                      </Text>
+                    </View>
+                    <Group>
+                      {REASONS.map((reason, i) => (
+                        <Option
+                          key={reason}
+                          label={REPORT_REASONS[reason]}
+                          onPress={() => report(chosen, reason)}
+                          disabled={busy}
+                          last={i === REASONS.length - 1}
+                        />
+                      ))}
+                    </Group>
                   </>
                 ) : null}
                 {step === 'thanks' ? (
-                  <View style={{ gap: Spacing.three, paddingVertical: Spacing.two }}>
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={40}
-                      color={Colors.accentText}
-                      style={{ alignSelf: 'center' }}
-                    />
-                    <Text style={[styles.panelTitle, { textAlign: 'center' }]}>Thanks for letting us know</Text>
-                    <Text style={[styles.note, { textAlign: 'center' }]}>
+                  <View style={{ gap: Spacing.tight, alignItems: 'center', paddingTop: Spacing.two }}>
+                    <Ionicons name="checkmark-circle" size={44} color={Colors.success} />
+                    <Text variant="headline" accessibilityRole="header" style={{ textAlign: 'center' }}>
+                      Thanks for letting us know
+                    </Text>
+                    <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
                       We won&apos;t show you this comment again. Comments that several people report are hidden.
                     </Text>
-                    <Option label="Done" onPress={() => setChosen(null)} />
                   </View>
                 ) : null}
-                {busy ? <ActivityIndicator color={Colors.textSecondary} /> : null}
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-                {step !== 'thanks' ? <Option label="Cancel" onPress={() => setChosen(null)} /> : null}
+                <ErrorText>{error}</ErrorText>
+                {step === 'thanks' ? (
+                  <Button title="Done" variant="secondary" onPress={() => setChosen(null)} />
+                ) : (
+                  <Button title="Cancel" variant="ghost" onPress={() => setChosen(null)} disabled={busy} />
+                )}
               </View>
             </View>
           ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const REASONS = Object.keys(REPORT_REASONS) as ReportReason[];
+
+// A comment's shape while the list loads.
+function CommentSkeleton({ short }: { short?: boolean }) {
+  return (
+    <View style={styles.row}>
+      <Skeleton width={36} height={36} radius={18} />
+      <View style={{ flex: 1, gap: Spacing.two, paddingTop: 4 }}>
+        <Skeleton width="30%" height={10} radius={5} />
+        <Skeleton width={short ? '50%' : '85%'} height={12} radius={6} />
+      </View>
     </View>
   );
 }
@@ -507,7 +559,7 @@ function CommentRow({
         ? 'Not posted'
         : timeAgo(comment.created_at);
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, comment.pending === 'sending' && { opacity: 0.6 }]}>
       <Pressable
         onPress={onAuthor}
         disabled={!onAuthor}
@@ -517,30 +569,38 @@ function CommentRow({
         <Avatar url={comment.author_avatar} name={name} size={36} />
       </Pressable>
       <Pressable
-        style={{ flex: 1 }}
+        style={{ flex: 1, gap: 2 }}
         onPress={comment.pending === 'failed' ? onRetry : undefined}
         onLongPress={onOptions}
         delayLongPress={350}>
         <View style={styles.line}>
           <Text
-            style={[styles.name, onAuthor && { color: Colors.accentText }]}
+            variant="footnote"
+            style={{ flexShrink: 1, fontFamily: Fonts.textSemi, color: Colors.text }}
             numberOfLines={1}
             onPress={onAuthor}
             suppressHighlighting>
             {name}
           </Text>
-          <Text style={[styles.when, comment.pending === 'failed' && { color: Colors.danger }]}>{when}</Text>
+          {onAuthor ? <Ionicons name="chevron-forward" size={12} color={Colors.textTertiary} /> : null}
+          <Text variant="footnote" tone={comment.pending === 'failed' ? 'danger' : 'tertiary'}>
+            {when}
+          </Text>
         </View>
-        <Text style={styles.body}>{comment.body}</Text>
-        {comment.pending === 'failed' ? <Text style={styles.failed}>Tap to try again.</Text> : null}
+        <Text variant="callout">{comment.body}</Text>
+        {comment.pending === 'failed' ? (
+          <Text variant="footnote" tone="danger">
+            Tap to try again.
+          </Text>
+        ) : null}
       </Pressable>
       <Pressable
         onPress={onOptions}
-        hitSlop={6}
-        style={styles.more}
+        hitSlop={4}
+        style={({ pressed }) => [styles.more, pressed && { backgroundColor: Colors.tint }]}
         accessibilityRole="button"
         accessibilityLabel={`Options for ${name}'s comment`}>
-        <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textSecondary} />
+        <Ionicons name="ellipsis-horizontal" size={18} color={Colors.textTertiary} />
       </Pressable>
     </View>
   );
@@ -552,23 +612,29 @@ function Option({
   danger,
   onPress,
   disabled,
+  last,
 }: {
-  icon?: ComponentProps<typeof Ionicons>['name'];
+  icon?: IconName;
   label: string;
   danger?: boolean;
   onPress: () => void;
   disabled?: boolean;
+  last?: boolean;
 }) {
-  const color = danger ? Colors.danger : Colors.text;
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [styles.option, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      {icon ? <Ionicons name={icon} size={22} color={color} /> : null}
-      <Text style={[styles.optionText, { color }]}>{label}</Text>
-    </Pressable>
+    <ListRow
+      title={label}
+      titleTone={danger ? 'danger' : undefined}
+      leading={icon ? <IconTile icon={icon} color={danger ? Colors.danger : undefined} /> : undefined}
+      chevron={false}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      onPress={() => {
+        if (!disabled) onPress();
+      }}
+      compact
+      last={last}
+    />
   );
 }
 
@@ -585,33 +651,34 @@ const styles = themed(() => ({
   backdrop: {
     flex: 1,
     minHeight: 40,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: Colors.scrim,
   },
   sheet: {
     flexShrink: 1,
     overflow: 'hidden',
-    borderTopLeftRadius: Radius.large,
-    borderTopRightRadius: Radius.large,
-    backgroundColor: Colors.background,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.surfaceHigh,
+    boxShadow: Colors.shadowFloating,
+    ...(Colors.scheme === 'dark'
+      ? { borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, borderColor: Colors.borderStrong }
+      : null),
   },
   header: {
     alignItems: 'center',
     paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
-    borderBottomWidth: 1,
+    paddingBottom: Spacing.tight,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  handle: {
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    marginBottom: Spacing.two,
-    backgroundColor: Colors.border,
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
+  grabber: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: Spacing.tight,
+    backgroundColor: Colors.borderStrong,
   },
   close: {
     position: 'absolute',
@@ -619,6 +686,7 @@ const styles = themed(() => ({
     top: Spacing.two,
     width: 44,
     height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -629,81 +697,33 @@ const styles = themed(() => ({
     gap: Spacing.two,
     padding: Spacing.four,
   },
-  emptyTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  emptyText: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  retry: {
-    minHeight: 44,
-    paddingHorizontal: Spacing.four,
-    justifyContent: 'center',
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  retryText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing.three,
-    paddingLeft: Spacing.three,
-    paddingRight: Spacing.one,
-    paddingVertical: Spacing.two,
+    gap: Spacing.tight,
+    paddingLeft: Spacing.gutter,
+    paddingRight: Spacing.two,
+    paddingVertical: Spacing.tight,
   },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-  },
-  name: {
-    flexShrink: 1,
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  when: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-  body: {
-    color: Colors.text,
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: 2,
-  },
-  failed: {
-    color: Colors.danger,
-    fontSize: 13,
-    marginTop: 2,
+    gap: Spacing.one,
   },
   more: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   composer: {
     gap: Spacing.one,
     paddingTop: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderTopWidth: 1,
+    paddingHorizontal: Spacing.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
-  },
-  left: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'right',
+    backgroundColor: Colors.surfaceHigh,
   },
   inputRow: {
     flexDirection: 'row',
@@ -718,17 +738,19 @@ const styles = themed(() => ({
     paddingTop: 11,
     paddingBottom: 11,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
     color: Colors.text,
-    fontSize: 16,
+    ...Type.body,
+    lineHeight: 22,
+    ...(Platform.OS === 'web' ? { outlineWidth: 0 } : null),
   },
   send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    marginVertical: 4,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
   },
   overlay: {
     position: 'absolute',
@@ -736,42 +758,17 @@ const styles = themed(() => ({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+    backgroundColor: Colors.scrim,
   },
   panel: {
-    gap: Spacing.one,
-    padding: Spacing.three,
-    borderTopLeftRadius: Radius.large,
-    borderTopRightRadius: Radius.large,
-    backgroundColor: Colors.background,
-  },
-  panelTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    paddingHorizontal: Spacing.two,
-  },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    paddingHorizontal: Spacing.two,
-    marginBottom: Spacing.two,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.three,
-    minHeight: 52,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  error: {
-    color: Colors.danger,
-    fontSize: 14,
-    paddingHorizontal: Spacing.two,
+    paddingTop: Spacing.two,
+    paddingHorizontal: Spacing.gutter,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.surfaceHigh,
+    boxShadow: Colors.shadowFloating,
   },
 }));

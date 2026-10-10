@@ -34,7 +34,7 @@ import { saveError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
 import { DEFAULT_TARGETS, logHabit, newer, type HabitDay } from '@/lib/habits';
 import { isoWeekday, trainerLabel, type PlanItem } from '@/lib/plan';
-import { dayKey, formatDay, formatTime, trainerName, type Session } from '@/lib/sessions';
+import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
 import type { TodayData } from '@/lib/today';
 import { formatNumber, formatSleep, waterStep, waterUnit, waterValue } from '@/lib/units';
@@ -46,8 +46,6 @@ type TodayCardProps = {
   today: TodayData;
   // Save now and Discard clear the workout on the phone.
   userId: string;
-  // Home's next booked session; null hides the row.
-  nextSession: Session | null;
   // The check-in prompt shows only with a trainer.
   hasTrainers: boolean;
   // Loads Today again (only Today, not the rest of Home).
@@ -57,8 +55,9 @@ type TodayCardProps = {
 const MAX_ROWS = 3;
 
 // The top of Home: what's on today. Today's workouts with Start, calories left, habits with a
-// quick add for water, the next session and the weekly check-in.
-export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }: TodayCardProps) {
+// quick add for water and the weekly check-in. (The next session is Home's own hero card, right
+// under this one, so it isn't repeated here.)
+export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardProps) {
   const { settings } = useSettings();
   const unit = settings.units;
   // The newest water quick add, shown until Today loads again with it.
@@ -175,9 +174,8 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
           <ErrorText>{waterError}</ErrorText>
         </Card>
 
-        {nextSession || checkIn || reply ? (
+        {checkIn || reply ? (
           <Group>
-            {nextSession ? <NextSessionRow session={nextSession} last={!checkIn && !reply} /> : null}
             {checkIn ? (
               <ListRow
                 title="Weekly check-in"
@@ -433,22 +431,6 @@ function HabitTile({
       </Pressable>
       {children}
     </View>
-  );
-}
-
-function NextSessionRow({ session, last }: { session: Session; last: boolean }) {
-  const start = new Date(session.starts_at);
-  const when = `${formatDay(start)} ${formatTime(start)} · ${trainerName(session)}`;
-  return (
-    <ListRow
-      title="Next session"
-      subtitle={session.online ? `${when} · Video call` : when}
-      leading={<IconTile icon={session.online ? 'videocam-outline' : 'calendar-outline'} />}
-      accessibilityLabel={`Next session, ${when}${session.online ? ', video call' : ''}`}
-      testID="today-next-session"
-      onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
-      last={last}
-    />
   );
 }
 

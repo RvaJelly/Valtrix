@@ -1,11 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Logo } from '@/components/logo';
-import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
-import { Layout, Spacing, themed } from '@/constants/theme';
+import { AuthPage, CheckEmailActions } from '@/components/auth-page';
+import { Button, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
@@ -21,67 +18,69 @@ export default function ForgotPassword() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [resend, setResend] = useState<{ busy: boolean; done: boolean; error: string | null }>({
+    busy: false,
+    done: false,
+    error: null,
+  });
+
+  function request() {
+    return supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: emailRedirect() });
+  }
 
   async function send() {
     setError(null);
     if (!email.trim()) return setError('Enter the email you signed up with.');
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: emailRedirect() });
+    const { error } = await request();
     setBusy(false);
     if (error) return setError(plainError(error));
     setSent(true);
   }
 
+  async function sendAgain() {
+    setResend({ busy: true, done: false, error: null });
+    const { error } = await request();
+    setResend({ busy: false, done: !error, error: error ? plainError(error) : null });
+  }
+
+  if (sent) {
+    return (
+      <AuthPage
+        title="Check your email"
+        icon="mail-outline"
+        intro={`If ${email.trim()} has a Voltrix account, we’ve sent it a link to choose a new password.`}
+        footer={
+          <CheckEmailActions onResend={sendAgain} resending={resend.busy} resent={resend.done} error={resend.error}>
+            <TextLink label="Back to sign in" onPress={backToSignIn} />
+          </CheckEmailActions>
+        }
+      />
+    );
+  }
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Logo style={styles.logo} />
-          <Title>{sent ? 'Check your email' : 'Reset your password'}</Title>
-          {sent ? (
-            <Body secondary>
-              If {email.trim()} has a Voltrix account, we’ve sent it a link to choose a new password.
-            </Body>
-          ) : (
-            <>
-              <Body secondary>Enter your email and we’ll send you a link to choose a new password.</Body>
-              <TextField
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                placeholder="you@example.com"
-                onSubmitEditing={send}
-              />
-              <ErrorText>{error}</ErrorText>
-              <Button title="Send reset link" onPress={send} loading={busy} />
-            </>
-          )}
-          <Button title="Back to sign in" variant={sent ? 'primary' : 'ghost'} onPress={backToSignIn} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <AuthPage
+      title="Reset your password"
+      intro="Enter your email and we’ll send you a link to choose a new password."
+      footer={
+        <>
+          <Button title="Send reset link" onPress={send} loading={busy} />
+          <TextLink label="Back to sign in" onPress={backToSignIn} />
+        </>
+      }>
+      <TextField
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        placeholder="you@example.com"
+        onSubmitEditing={send}
+        error={error ?? undefined}
+      />
+    </AuthPage>
   );
 }
-
-const styles = themed(() => ({
-  content: {
-    width: '100%',
-    maxWidth: Layout.maxWelcome,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.gutter,
-    paddingTop: Spacing.six,
-    paddingBottom: Spacing.four,
-    gap: Spacing.three,
-  },
-  logo: {
-    width: 148,
-    alignSelf: 'flex-start',
-    // The image carries the brand kit's clear space; this lines the V up with the text below.
-    marginLeft: -12,
-    marginBottom: Spacing.two,
-  },
-}));

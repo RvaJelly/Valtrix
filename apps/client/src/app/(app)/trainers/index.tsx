@@ -1,21 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, AppState, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { AppState, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
+import { Avatar } from '@/components/avatar';
+import { Chips } from '@/components/chips';
 import { PickerSheet, type PickerOption } from '@/components/picker-sheet';
-import { TrainerCircle } from '@/components/trainer-circle';
-import { Body, Card, Notice, SearchField, Text, Text as UIText } from '@/components/ui';
-import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
+import { Button, Card, EmptyState, Notice, SearchField, Skeleton, StatusPill, Text } from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import { findMe } from '@/lib/location';
 import {
   displayName,
+  distanceLabel,
   listTrainers,
+  loadTrainers,
   sortTrainers,
   townKey,
   trainerDistances,
   trainerTowns,
+  yearsLabel,
   type PublicTrainer,
   type TrainerSort,
 } from '@/lib/trainers';
@@ -51,6 +55,8 @@ async function measure(): Promise<Nearby | 'denied' | 'failed'> {
 
 export default function Trainers() {
   const [trainers, setTrainers] = useState<PublicTrainer[] | null>(null);
+  // The client's own trainers, marked on their cards. Left out when they can't be loaded.
+  const [mine, setMine] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [specialty, setSpecialty] = useState<string | null>(null);
@@ -66,7 +72,9 @@ export default function Trainers() {
 
   const load = useCallback(async () => {
     try {
-      setTrainers(await listTrainers());
+      const [all, linked] = await Promise.all([listTrainers(), loadTrainers().catch(() => null)]);
+      setTrainers(all);
+      if (linked) setMine(new Set(linked.map((t) => t.trainer_id)));
       setError(null);
     } catch (e) {
       setError(plainError(e, 'Could not load trainers.'));
@@ -167,93 +175,104 @@ export default function Trainers() {
   );
   const noneNearby = nearest && shown.length > 0 && !shown.some((t) => nearest.has(t.id));
 
+  const specialties = Object.fromEntries(offered.map((o) => [o, o]));
+  const filtered = !!(query || specialty || activeTown);
+  const rows: PublicTrainer[][] = [];
+  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+
   return (
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
-      <UIText variant="callout" tone="secondary">
-        Personal trainers on Voltrix. Tap a trainer to see what they do.
-      </UIText>
-      <SearchField
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Name, city or specialty"
-        accessibilityLabel="Search trainers"
-      />
-      {trainers?.length ? (
-        <View style={styles.pills}>
-          <Pill
+      <View style={styles.searchRow}>
+        <SearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Name, city or specialty"
+          accessibilityLabel="Search trainers"
+          style={{ flex: 1 }}
+        />
+        {trainers?.length ? (
+          <FilterButton
             icon="swap-vertical"
-            label={SORT_BUTTON[sort]}
             active={sort !== 'default'}
             accessibilityLabel={`Sort: ${sortLabel}`}
             onPress={() => setPicker('sort')}
           />
-          {towns.length ? (
-            <Pill
-              icon="location-outline"
-              label={activeTown?.name ?? 'All towns'}
-              active={!!activeTown}
-              accessibilityLabel={`Town: ${activeTown?.name ?? 'All towns'}`}
-              onPress={() => setPicker('town')}
-            />
-          ) : null}
-        </View>
-      ) : null}
+        ) : null}
+        {trainers?.length && towns.length ? (
+          <FilterButton
+            icon="location-outline"
+            active={!!activeTown}
+            accessibilityLabel={`Town: ${activeTown?.name ?? 'All towns'}`}
+            onPress={() => setPicker('town')}
+          />
+        ) : null}
+      </View>
       {offered.length ? (
         // The row runs to the screen edges, so a chip cut by the edge reads as "scroll for more".
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginHorizontal: -Spacing.gutter }}
-          contentContainerStyle={{ gap: Spacing.two, paddingHorizontal: Spacing.gutter }}>
-          {[null, ...offered].map((s) => {
-            const selected = specialty === s;
-            return (
-              <Pressable
-                key={s ?? 'all'}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => setSpecialty(s)}
-                style={[styles.chip, selected && styles.chipSelected]}>
-                <Text style={[styles.chipText, selected && { color: Colors.background }]}>{s ?? 'All'}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View style={{ marginHorizontal: -Spacing.gutter }}>
+          <Chips options={specialties} value={specialty} onChange={setSpecialty} all="All" />
+        </View>
+      ) : null}
+      {sort !== 'default' || activeTown ? (
+        <Text variant="footnote" tone="secondary">
+          {[sort !== 'default' ? `${SORT_BUTTON[sort]} first` : null, activeTown ? `In ${activeTown.name}` : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
       ) : null}
 
-      {locating ? (
-        <View style={styles.note}>
-          <ActivityIndicator size="small" color={Colors.textSecondary} />
-          <Text style={styles.noteText}>Finding trainers near you…</Text>
-        </View>
-      ) : null}
-      {notice || noneNearby ? (
-        <View style={styles.note}>
-          <Ionicons name="information-circle-outline" size={20} color={Colors.textSecondary} />
-          <Text style={styles.noteText}>{notice ?? "These trainers haven't added their location yet."}</Text>
-        </View>
-      ) : null}
+      {locating ? <Notice>Finding trainers near you…</Notice> : null}
+      {notice || noneNearby ? <Notice>{notice ?? "These trainers haven't added their location yet."}</Notice> : null}
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
-      {!trainers && !error ? <ActivityIndicator color={Colors.textSecondary} /> : null}
+      {!trainers && !error ? (
+        <View style={styles.grid} accessible accessibilityLabel="Loading">
+          {[0, 1].map((row) => (
+            <View key={row} style={styles.gridRow}>
+              {[0, 1].map((cell) => (
+                <View key={cell} style={[styles.card, styles.cardSkeleton]}>
+                  <Skeleton width={72} height={72} radius={36} />
+                  <Skeleton width="70%" height={14} radius={7} />
+                  <Skeleton width="45%" height={10} radius={5} />
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
       {trainers && shown.length === 0 ? (
-        <Card>
-          <Body secondary>{trainers.length ? 'No trainers match that search.' : 'No trainers yet.'}</Body>
-        </Card>
+        <EmptyState
+          compact={!!trainers.length}
+          icon="people-outline"
+          title={trainers.length ? 'No trainers match' : 'No trainers yet'}
+          message={trainers.length ? 'Try another name, town or specialty.' : 'Trainers who join Voltrix show up here.'}
+          action={
+            trainers.length && filtered ? (
+              <Button
+                title="Clear"
+                variant="ghost"
+                size="small"
+                onPress={() => {
+                  setSearch('');
+                  setSpecialty(null);
+                  setTown('');
+                }}
+              />
+            ) : undefined
+          }
+        />
       ) : null}
       <View style={styles.grid}>
-        {shown.map((t) => (
-          <TrainerCircle
-            key={t.id}
-            trainer={t}
-            size={88}
-            width={104}
-            distanceKm={nearest?.get(t.id)}
-            years={sort === 'experience' ? (t.years_experience ?? undefined) : undefined}
-          />
+        {rows.map((row) => (
+          <View key={row[0].id} style={styles.gridRow}>
+            {row.map((t) => (
+              <TrainerCard key={t.id} trainer={t} mine={mine.has(t.id)} distanceKm={nearest?.get(t.id)} />
+            ))}
+            {row.length === 1 ? <View style={{ flex: 1 }} /> : null}
+          </View>
         ))}
       </View>
 
@@ -277,97 +296,119 @@ export default function Trainers() {
   );
 }
 
-// A button that opens a list of choices. Filled in when it is set to something other than the default.
-function Pill({
+// A trainer as a card: photo, full name on up to two lines, town and years. Opens their profile.
+function TrainerCard({ trainer, mine, distanceKm }: { trainer: PublicTrainer; mine: boolean; distanceKm?: number }) {
+  const name = displayName(trainer);
+  const facts = [
+    distanceKm != null ? distanceLabel(distanceKm) : trainer.city,
+    trainer.years_experience != null ? yearsLabel(trainer.years_experience) : null,
+  ].filter(Boolean);
+  return (
+    <Card
+      style={styles.card}
+      accessibilityLabel={[name, mine ? 'your trainer' : null, ...facts].filter(Boolean).join(', ')}
+      onPress={() =>
+        router.push({
+          pathname: '/trainers/[id]',
+          params: distanceKm != null ? { id: trainer.id, km: String(distanceKm) } : { id: trainer.id },
+        })
+      }>
+      <View style={styles.cardInner}>
+        <Avatar url={trainer.avatar_url} name={name} size={72} />
+        <Text variant="rowTitle" numberOfLines={2} style={styles.cardName}>
+          {name}
+        </Text>
+        {facts.length ? (
+          <Text variant="footnote" tone="secondary" numberOfLines={2} style={{ textAlign: 'center' }}>
+            {facts.join(' · ')}
+          </Text>
+        ) : null}
+        {mine ? (
+          <View style={{ marginTop: Spacing.one }}>
+            <StatusPill tone="success" label="Your trainer" />
+          </View>
+        ) : null}
+      </View>
+    </Card>
+  );
+}
+
+// A round button that opens a list of choices, filled in when it is set to something other than
+// the default.
+function FilterButton({
   icon,
-  label,
   active,
   accessibilityLabel,
   onPress,
 }: {
   icon: ComponentProps<typeof Ionicons>['name'];
-  label: string;
   active: boolean;
   accessibilityLabel: string;
   onPress: () => void;
 }) {
-  const color = active ? Colors.background : Colors.text;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.pill,
-        pressed && { backgroundColor: Colors.tintPressed },
-        active && styles.chipSelected,
+        styles.filter,
+        { backgroundColor: active ? Colors.text : pressed ? Colors.tintPressed : Colors.tint },
       ]}>
-      <Ionicons name={icon} size={16} color={active ? Colors.background : Colors.textSecondary} />
-      <Text style={[styles.pillText, { color }]} numberOfLines={1}>
-        {label}
-      </Text>
-      <Ionicons name="chevron-down" size={14} color={color} />
+      <Ionicons name={icon} size={20} color={active ? Colors.background : Colors.text} />
     </Pressable>
   );
 }
 
 const styles = themed(() => ({
   content: {
+    width: '100%',
+    maxWidth: Layout.maxClient,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.three,
     paddingBottom: Spacing.hero,
-    gap: Spacing.tight,
+    gap: Spacing.three,
   },
-  pills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  pill: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    maxWidth: '100%',
-    minHeight: 36,
-    paddingHorizontal: 14,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.tint,
   },
-  pillText: {
-    ...Type.callout,
-    fontFamily: Fonts.textMedium,
-    flexShrink: 1,
-  },
-  chip: {
-    minHeight: 36,
+  filter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.tint,
-  },
-  chipSelected: {
-    backgroundColor: Colors.text,
-  },
-  chipText: {
-    ...Type.callout,
-    fontFamily: Fonts.textMedium,
-    color: Colors.text,
-  },
-  note: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  noteText: {
-    ...Type.footnote,
-    flex: 1,
-    color: Colors.textSecondary,
   },
   grid: {
+    gap: Spacing.tight,
+    marginTop: Spacing.one,
+  },
+  gridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: Spacing.three,
-    rowGap: Spacing.four,
+    gap: Spacing.tight,
+  },
+  // Narrower side padding than other cards: two fit side by side and long names need the room.
+  card: {
+    flex: 1,
+    paddingHorizontal: Spacing.tight,
+  },
+  cardSkeleton: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.gutter,
+    borderRadius: Radius.large,
+    backgroundColor: Colors.surface,
+  },
+  cardInner: {
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  cardName: {
+    textAlign: 'center',
+    fontFamily: Fonts.textSemi,
     marginTop: Spacing.two,
   },
 }));

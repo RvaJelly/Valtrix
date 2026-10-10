@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Modal, Platform, Pressable, View } from 'react-native';
+import { AppState, Modal, Platform, View } from 'react-native';
 import { FullWindowOverlay } from 'react-native-screens';
 
-import { Logo } from '@/components/logo';
-import { Body, Button, Text } from '@/components/ui';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Button, Text } from '@/components/ui';
+import { VMark } from '@/components/v-mark';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
 import { useSettings } from '@/lib/settings';
@@ -53,15 +53,18 @@ export function AppLock() {
   if (!active) return null;
   const cover = (
     <View style={styles.cover}>
-      <Logo style={{ width: 200 }} />
-      <Body secondary style={{ textAlign: 'center' }}>
-        Voltrix is locked.
-      </Body>
-      <View style={{ alignSelf: 'stretch', gap: Spacing.three }}>
-        <Button title={`Unlock with ${name}`} onPress={unlock} />
-        <Pressable accessibilityRole="button" onPress={signOut} hitSlop={8}>
-          <Text style={styles.link}>Sign in with password instead</Text>
-        </Pressable>
+      <View style={styles.middle}>
+        <VMark height={48} />
+        <Text variant="largeTitle" accessibilityRole="header" style={{ marginTop: Spacing.four }}>
+          Locked
+        </Text>
+        <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
+          Use {name} to open Voltrix.
+        </Text>
+      </View>
+      <View style={styles.actions}>
+        <Button title="Unlock" icon="lock-open-outline" onPress={unlock} accessibilityLabel={`Unlock with ${name}`} />
+        <Button title="Sign in with password instead" variant="ghost" onPress={signOut} />
       </View>
     </View>
   );
@@ -88,15 +91,20 @@ const styles = themed(() => ({
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.five,
-    padding: Spacing.five,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.hero,
+    paddingBottom: Spacing.five,
     backgroundColor: Colors.background,
   },
-  link: {
-    color: Colors.accentText,
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
+  middle: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  actions: {
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    gap: Spacing.two,
   },
 }));

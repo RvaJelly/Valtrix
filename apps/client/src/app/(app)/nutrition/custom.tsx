@@ -1,21 +1,26 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FoodSheet } from '@/components/food-sheet';
-import { Body, Button, ErrorText, segmentOn, Text, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, ErrorText, Notice, Section, Segmented, Text, TextField } from '@/components/ui';
+import { Colors, Fonts, Layout, Spacing, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import { dayKey, isBarcode, isDayKey, isMeal, mealForNow, mealLabel } from '@/lib/food';
 import { addToDiary, saveMyFood, type SavedFood } from '@/lib/nutrition';
 
 type Basis = '100g' | '100ml' | 'serving';
 
-const BASIS: { key: Basis; label: string }[] = [
-  { key: '100g', label: '100 g' },
-  { key: '100ml', label: '100 ml' },
-  { key: 'serving', label: '1 serving' },
+const BASIS: { value: Basis; label: string }[] = [
+  { value: '100g', label: '100 g' },
+  { value: '100ml', label: '100 ml' },
+  { value: 'serving', label: '1 serving' },
+];
+
+const ENERGY: { value: 'kcal' | 'kJ'; label: string }[] = [
+  { value: 'kcal', label: 'kcal' },
+  { value: 'kJ', label: 'kJ' },
 ];
 
 // "12,5" and "12.5" both work; blank is fine for the optional numbers.
@@ -58,6 +63,7 @@ export default function CustomFood() {
   // What this form saved, kept after Cancel so saving again changes it instead of adding a copy.
   const [saved, setSaved] = useState<SavedFood | null>(null);
   const [adding, setAdding] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const liquid = basis === '100ml';
   const measure = liquid ? 'ml' : 'g';
@@ -104,130 +110,135 @@ export default function CustomFood() {
     setBusy(false);
   }
 
+  const kj = energyUnit === 'kJ' ? parse(energy) : null;
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Enter it yourself' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {scanned ? (
-          <View style={styles.notice}>
-            <Ionicons name="barcode-outline" size={24} color={Colors.textSecondary} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.noticeTitle}>
-                {params.name ? 'No calories listed for this one yet' : 'We don’t know this barcode yet'}
-              </Text>
-              <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
-                Add it from the label once. Next time you scan {scanned}, Voltrix will find it.
-              </Body>
-            </View>
-          </View>
+          <Notice>
+            <Text variant="callout" style={{ fontFamily: Fonts.textMedium }}>
+              {params.name ? 'No calories listed for this one yet. ' : 'We don’t know this barcode yet. '}
+            </Text>
+            Add it from the label once. Next time you scan {scanned}, Voltrix finds it.
+          </Notice>
         ) : null}
 
-        <TextField
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          placeholder="For example: Chicken curry"
-          autoCapitalize="sentences"
-          maxLength={200}
-        />
-        <TextField
-          label="Brand (optional)"
-          value={brand}
-          onChangeText={setBrand}
-          placeholder="For example: Woolworths"
-          maxLength={200}
-        />
-        <TextField
-          label="Barcode (optional)"
-          value={barcode}
-          onChangeText={(t) => setBarcode(t.replace(/[^0-9]/g, ''))}
-          keyboardType="number-pad"
-          inputMode="numeric"
-          maxLength={14}
-          placeholder="The numbers under the barcode"
-        />
-
-        <View style={{ gap: Spacing.two }}>
-          <Text style={styles.label}>The numbers on the label are for</Text>
-          <Segmented options={BASIS} value={basis} onChange={setBasis} />
-        </View>
-
-        <View style={styles.energyRow}>
-          <View style={{ flex: 1 }}>
+        <Section title="Food">
+          <View style={styles.fields}>
             <TextField
-              label="Energy"
-              value={energy}
-              onChangeText={(t) => setEnergy(numberOnly(t))}
+              label="Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="For example: Chicken curry"
+              autoCapitalize="sentences"
+              maxLength={200}
+            />
+            <TextField
+              label="Brand"
+              optional
+              value={brand}
+              onChangeText={setBrand}
+              placeholder="For example: Woolworths"
+              maxLength={200}
+            />
+            <TextField
+              label="Barcode"
+              optional
+              value={barcode}
+              onChangeText={(t) => setBarcode(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              maxLength={14}
+              placeholder="The numbers under the barcode"
+            />
+          </View>
+        </Section>
+
+        <Section title="From the label">
+          <View style={styles.fields}>
+            <View style={{ gap: Spacing.two }}>
+              <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }}>
+                The numbers are for
+              </Text>
+              <Segmented options={BASIS} value={basis} onChange={setBasis} />
+            </View>
+
+            <View style={styles.energyRow}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Energy"
+                  value={energy}
+                  onChangeText={(t) => setEnergy(numberOnly(t))}
+                  keyboardType="decimal-pad"
+                  placeholder={energyUnit === 'kJ' ? 'kJ' : 'kcal'}
+                  maxLength={7}
+                />
+              </View>
+              <Segmented options={ENERGY} value={energyUnit} onChange={setEnergyUnit} style={{ width: 132 }} />
+            </View>
+            {kj ? (
+              <Text variant="footnote" tone="secondary" style={{ marginTop: -Spacing.two }}>
+                That’s {Math.round(kj / 4.184)} kcal.
+              </Text>
+            ) : null}
+
+            <View style={styles.macroRow}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Protein g"
+                  value={protein}
+                  onChangeText={(t) => setProtein(numberOnly(t))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  maxLength={6}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Carbs g"
+                  value={carbs}
+                  onChangeText={(t) => setCarbs(numberOnly(t))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  maxLength={6}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  label="Fat g"
+                  value={fat}
+                  onChangeText={(t) => setFat(numberOnly(t))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  maxLength={6}
+                />
+              </View>
+            </View>
+
+            <TextField
+              label={`One serving in ${measure}`}
+              optional
+              value={servingSize}
+              onChangeText={(t) => setServingSize(numberOnly(t))}
               keyboardType="decimal-pad"
-              placeholder={energyUnit === 'kJ' ? 'kJ' : 'kcal'}
+              placeholder={liquid ? 'For example 250' : 'For example 30'}
               maxLength={7}
             />
           </View>
-          <View style={{ width: 140 }}>
-            <Segmented
-              options={[
-                { key: 'kcal', label: 'kcal' },
-                { key: 'kJ', label: 'kJ' },
-              ]}
-              value={energyUnit}
-              onChange={setEnergyUnit}
-            />
-          </View>
-        </View>
-        {energyUnit === 'kJ' && parse(energy) ? (
-          <Body secondary style={{ fontSize: 14, marginTop: -Spacing.two }}>
-            That’s {Math.round((parse(energy) ?? 0) / 4.184)} kcal.
-          </Body>
-        ) : null}
+        </Section>
 
-        <View style={styles.macroRow}>
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Protein g"
-              value={protein}
-              onChangeText={(t) => setProtein(numberOnly(t))}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              maxLength={6}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Carbs g"
-              value={carbs}
-              onChangeText={(t) => setCarbs(numberOnly(t))}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              maxLength={6}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Fat g"
-              value={fat}
-              onChangeText={(t) => setFat(numberOnly(t))}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              maxLength={6}
-            />
-          </View>
-        </View>
-
-        <TextField
-          label={`One serving in ${measure} (optional)`}
-          value={servingSize}
-          onChangeText={(t) => setServingSize(numberOnly(t))}
-          keyboardType="decimal-pad"
-          placeholder={liquid ? 'For example 250' : 'For example 30'}
-          maxLength={7}
-        />
-
-        <ErrorText>{error}</ErrorText>
-        <Button title="Save and add" onPress={save} loading={busy} />
-        <Body secondary style={{ fontSize: 14, textAlign: 'center' }}>
+        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
           It’s saved to your foods, so you can find it in Search next time.
-        </Body>
+        </Text>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
+        <View style={styles.footerInner}>
+          <ErrorText>{error}</ErrorText>
+          <Button title="Save and add" onPress={save} loading={busy} />
+        </View>
+      </View>
 
       <FoodSheet
         mode="add"
@@ -245,75 +256,22 @@ export default function CustomFood() {
   );
 }
 
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { key: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <View style={styles.segmented}>
-      {options.map((o) => (
-        <Pressable
-          key={o.key}
-          accessibilityRole="button"
-          accessibilityState={{ selected: o.key === value }}
-          onPress={() => onChange(o.key)}
-          style={[styles.segment, o.key === value && segmentOn()]}>
-          <Text style={[styles.segmentText, o.key !== value && { color: Colors.textSecondary }]}>{o.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 const styles = themed(() => ({
-  content: {
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
-    width: '100%',
-    maxWidth: 640,
-    alignSelf: 'center',
-  },
-  notice: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  noticeTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  segmented: {
-    flexDirection: 'row',
-    minHeight: 52,
-    padding: 3,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.tint,
-  },
-  segment: {
+  screen: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.small,
+    backgroundColor: Colors.background,
   },
-  segmentText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+  content: {
+    width: '100%',
+    maxWidth: Layout.maxClient,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.section,
+    gap: Spacing.section,
+  },
+  fields: {
+    gap: Spacing.three,
   },
   energyRow: {
     flexDirection: 'row',
@@ -322,6 +280,19 @@ const styles = themed(() => ({
   },
   macroRow: {
     flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  footer: {
+    paddingTop: Spacing.tight,
+    paddingHorizontal: Spacing.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  footerInner: {
+    width: '100%',
+    maxWidth: Layout.maxClient - Spacing.gutter * 2,
+    alignSelf: 'center',
     gap: Spacing.two,
   },
 }));

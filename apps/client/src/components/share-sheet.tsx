@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Text } from '@/components/ui';
+import { Sheet } from '@/components/sheet';
+import { Button, EmptyState, Group, IconTile, ListRow, Notice, Section, SkeletonRows, Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import type { ChatSummary } from '@/lib/chat';
 import { useChat } from '@/lib/chat-live';
@@ -19,8 +19,6 @@ type Status = { kind: 'busy' | 'done' | 'error'; text: string; link?: string };
 // Share a reel: send it to someone you chat with, or to other apps like WhatsApp.
 export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () => void }) {
   const { chats, ready, refresh } = useChat();
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
   const [sent, setSent] = useState<Record<string, SendState>>({});
   const [status, setStatus] = useState<Status | null>(null);
   const [chatsFailed, setChatsFailed] = useState(false);
@@ -29,13 +27,15 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
   const shareAttempt = useRef(0);
   const open = !!reel;
 
-  // Start fresh each time the sheet opens for a reel.
-  if ((reel?.id ?? null) !== shownFor) {
-    setShownFor(reel?.id ?? null);
+  // Start fresh each time the sheet opens for a reel. (Closing keeps what was shown, so the sheet
+  // doesn't change while it slides away.)
+  if (reel && reel.id !== shownFor) {
+    setShownFor(reel.id);
     setSent({});
     setStatus(null);
     setChatsFailed(false);
   }
+  if (!reel && shownFor !== null) setShownFor(null);
 
   // The chat list may never have loaded (for example the phone was offline when the app
   // opened). Try again now, and say so if it still can't.
@@ -99,266 +99,122 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
   }
 
   const linkOnly = !canShareLink();
+  const outLabel = linkOnly ? 'Copy link' : 'Share to other apps';
 
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close} accessibilityLabel="Close" />
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
-        <View style={styles.handle} />
-        <Text style={styles.title} accessibilityRole="header">
-          Share reel
-        </Text>
-
-        <Text style={styles.section}>Send in chat</Text>
+    <Sheet visible={open} onClose={close} title="Share reel">
+      <Section title="Send in chat">
         {!ready && chatsFailed ? (
-          <View style={styles.failed}>
-            <Text style={[styles.note, { flex: 1 }]}>Couldn&apos;t load your chats.</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={retryChats}
-              hitSlop={6}
-              style={({ pressed }) => [styles.retry, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-              <Text style={styles.retryText}>Try again</Text>
-            </Pressable>
-          </View>
+          <Notice tone="danger" action={{ label: 'Try again', onPress: retryChats }}>
+            Couldn&apos;t load your chats.
+          </Notice>
         ) : !ready ? (
-          <ActivityIndicator color={Colors.textSecondary} style={{ marginVertical: Spacing.three }} />
+          <SkeletonRows count={2} avatar />
         ) : chats.length ? (
-          <ScrollView style={{ maxHeight: height * 0.4 }}>
-            {chats.map((chat) => (
-              <ChatRow key={chat.chat_id} chat={chat} state={sent[chat.chat_id]} onSend={() => send(chat)} />
+          <Group>
+            {chats.map((chat, i) => (
+              <ChatRow
+                key={chat.chat_id}
+                chat={chat}
+                state={sent[chat.chat_id]}
+                onSend={() => send(chat)}
+                last={i === chats.length - 1}
+              />
             ))}
-          </ScrollView>
+          </Group>
         ) : (
-          <Text style={styles.note}>No chats yet. When you have one, you can send reels there.</Text>
+          <EmptyState
+            compact
+            icon="chatbubbles-outline"
+            title="No chats yet"
+            message="When you have one, you can send reels there."
+          />
         )}
+      </Section>
 
-        <View style={styles.divider} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={linkOnly ? 'Copy link' : 'Share to other apps'}
+      <Group>
+        <ListRow
+          title={outLabel}
+          subtitle={linkOnly ? 'Paste it in any app' : 'WhatsApp, Instagram and more'}
+          leading={<IconTile icon={linkOnly ? 'link-outline' : 'share-social-outline'} />}
+          chevron={false}
+          accessibilityLabel={outLabel}
           onPress={shareOut}
-          disabled={status?.kind === 'busy'}
-          style={({ pressed }) => [styles.option, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <View style={styles.optionIcon}>
-            <Ionicons name={linkOnly ? 'link-outline' : 'share-social-outline'} size={22} color={Colors.text} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.optionText}>{linkOnly ? 'Copy link' : 'Share to other apps'}</Text>
-            <Text style={styles.detail}>{linkOnly ? 'Paste it in any app' : 'WhatsApp, Instagram and more'}</Text>
-          </View>
-        </Pressable>
+          last
+        />
+      </Group>
 
-        {status ? (
-          <View style={styles.status} accessibilityLiveRegion="polite">
-            {status.kind === 'busy' ? <ActivityIndicator color={Colors.textSecondary} /> : null}
-            {status.kind === 'done' ? <Ionicons name="checkmark-circle" size={20} color={Colors.accentText} /> : null}
-            <Text style={[styles.statusText, status.kind === 'error' && { color: Colors.danger }]}>{status.text}</Text>
-          </View>
-        ) : null}
-        {status?.link ? (
-          <Text selectable style={styles.link} accessibilityLabel={`Reel link: ${status.link}`}>
-            {status.link}
+      {status ? (
+        <View style={styles.status} accessibilityLiveRegion="polite">
+          <Ionicons
+            name={
+              status.kind === 'busy' ? 'time-outline' : status.kind === 'done' ? 'checkmark-circle' : 'alert-circle'
+            }
+            size={18}
+            color={
+              status.kind === 'busy' ? Colors.textSecondary : status.kind === 'done' ? Colors.success : Colors.danger
+            }
+          />
+          <Text variant="callout" tone={status.kind === 'error' ? 'danger' : 'primary'} style={{ flex: 1 }}>
+            {status.text}
           </Text>
-        ) : null}
+        </View>
+      ) : null}
+      {status?.link ? (
+        <Text variant="footnote" selectable style={styles.link} accessibilityLabel={`Reel link: ${status.link}`}>
+          {status.link}
+        </Text>
+      ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={close}
-          style={({ pressed }) => [styles.done, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Text style={styles.doneText}>Done</Text>
-        </Pressable>
-      </View>
-    </Modal>
+      <Button title="Done" variant="secondary" onPress={close} />
+    </Sheet>
   );
 }
 
-function ChatRow({ chat, state, onSend }: { chat: ChatSummary; state?: SendState; onSend: () => void }) {
+function ChatRow({
+  chat,
+  state,
+  onSend,
+  last,
+}: {
+  chat: ChatSummary;
+  state?: SendState;
+  onSend: () => void;
+  last: boolean;
+}) {
   const done = state === 'sent';
   return (
-    <View style={styles.row}>
-      <Avatar url={chat.other_avatar} name={chat.other_name} size={44} />
-      <Text style={styles.name} numberOfLines={1}>
-        {chat.other_name}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={done ? `Sent to ${chat.other_name}` : `Send to ${chat.other_name}`}
-        onPress={onSend}
-        disabled={state === 'sending' || done}
-        hitSlop={6}
-        style={({ pressed }) => [
-          styles.sendButton,
-          done ? styles.sentButton : { backgroundColor: pressed ? Colors.accentPressed : Colors.accent },
-        ]}>
-        {state === 'sending' ? (
-          <ActivityIndicator color={Colors.onAccent} />
-        ) : (
-          <Text style={[styles.sendText, done && { color: Colors.text }]}>
-            {done ? 'Sent' : state === 'failed' ? 'Try again' : 'Send'}
-          </Text>
-        )}
-      </Pressable>
-    </View>
+    <ListRow
+      title={chat.other_name}
+      leading={<Avatar url={chat.other_avatar} name={chat.other_name} size={40} />}
+      trailing={
+        <Button
+          title={done ? 'Sent' : state === 'failed' ? 'Try again' : 'Send'}
+          icon={done ? 'checkmark' : undefined}
+          variant={done ? 'ghost' : 'secondary'}
+          size="medium"
+          accessibilityLabel={done ? `Sent to ${chat.other_name}` : `Send to ${chat.other_name}`}
+          onPress={onSend}
+          loading={state === 'sending'}
+          disabled={done}
+          style={{ minWidth: 92 }}
+        />
+      }
+      compact
+      last={last}
+    />
   );
 }
 
 const styles = themed(() => ({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  sheet: {
-    gap: Spacing.one,
-    paddingTop: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    borderTopLeftRadius: Radius.large,
-    borderTopRightRadius: Radius.large,
-    backgroundColor: Colors.background,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    marginBottom: Spacing.two,
-    backgroundColor: Colors.border,
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: Spacing.two,
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: Spacing.two,
-    marginBottom: Spacing.one,
-  },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-  },
-  failed: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingRight: Spacing.two,
-  },
-  retry: {
-    minHeight: 44,
-    paddingHorizontal: Spacing.three,
-    justifyContent: 'center',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  retryText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  link: {
-    color: Colors.text,
-    fontSize: 13,
-    marginHorizontal: Spacing.two,
-    padding: Spacing.two,
-    borderRadius: Radius.small,
-    backgroundColor: Colors.surface,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 60,
-    paddingHorizontal: Spacing.two,
-  },
-  name: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  sendButton: {
-    minWidth: 92,
-    minHeight: 40,
-    paddingHorizontal: Spacing.three,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sentButton: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  sendText: {
-    color: Colors.onAccent,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.two,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 60,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Radius.medium,
-  },
-  optionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
-  optionText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  detail: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
   status: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
   },
-  statusText: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  done: {
-    minHeight: 52,
-    marginTop: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  doneText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  link: {
+    padding: Spacing.tight,
+    borderRadius: Radius.small,
+    backgroundColor: Colors.tint,
   },
 }));

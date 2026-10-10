@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
-import { Spacing, themed } from '@/constants/theme';
+import { AuthPage } from '@/components/auth-page';
+import { PasswordField } from '@/components/password-field';
+import { Button } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -27,35 +26,25 @@ export default function NewPassword() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Title>Choose a new password</Title>
-          <Body secondary>You’ll use it the next time you sign in.</Body>
-          <TextField
-            label="New password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="new-password"
-            placeholder="At least 8 characters"
-            onSubmitEditing={save}
-          />
-          <ErrorText>{error}</ErrorText>
+    <AuthPage
+      title="Choose a new password"
+      icon="key-outline"
+      intro="You’ll use it the next time you sign in."
+      footer={
+        <>
           <Button title="Save password" onPress={save} loading={busy} />
           <Button title="Cancel" variant="ghost" onPress={signOut} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </>
+      }>
+      <PasswordField
+        label="New password"
+        value={password}
+        onChangeText={setPassword}
+        autoComplete="new-password"
+        placeholder="At least 8 characters"
+        onSubmitEditing={save}
+        error={error}
+      />
+    </AuthPage>
   );
 }
-
-const styles = themed(() => ({
-  content: {
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.four,
-    paddingTop: Spacing.six,
-    gap: Spacing.three,
-  },
-}));

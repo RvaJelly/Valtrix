@@ -1,33 +1,34 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Logo } from '@/components/logo';
-import { Body, Button, Card, ErrorText, TextField, TextLink, Title } from '@/components/ui';
-import { Layout, Spacing, themed } from '@/constants/theme';
+import { AuthPage, CheckEmailActions } from '@/components/auth-page';
+import { PasswordField } from '@/components/password-field';
+import { Button, ErrorText, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
+
+type Field = 'name' | 'email' | 'password' | 'form';
+type Problem = { field: Field; text: string } | null;
 
 export default function SignUp() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem>(null);
   const [checkEmail, setCheckEmail] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resend, setResend] = useState<{ busy: boolean; done: boolean; error: string | null }>({
+    busy: false,
+    done: false,
+    error: null,
+  });
 
   async function signUp() {
-    setError(null);
-    if (!fullName.trim() || !email.trim()) {
-      setError('Enter your name and email.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Use a password with at least 8 characters.');
-      return;
-    }
+    setProblem(null);
+    if (!fullName.trim()) return setProblem({ field: 'name', text: 'Enter your name.' });
+    if (!email.trim()) return setProblem({ field: 'email', text: 'Enter your email.' });
+    if (password.length < 8) return setProblem({ field: 'password', text: 'Use at least 8 characters.' });
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -36,90 +37,86 @@ export default function SignUp() {
     });
     setBusy(false);
     if (error) {
-      setError(plainError(error));
+      setProblem({ field: 'form', text: plainError(error) });
     } else if (data.user && !data.user.identities?.length) {
       // Supabase answers this way when the email already has an account, for example a trainer's.
-      setError('This email already has a Voltrix account. Sign in with it instead, including a Voltrix Coach login.');
+      setProblem({
+        field: 'email',
+        text: 'This email already has a Voltrix account. Sign in with it instead, including a Voltrix Coach login.',
+      });
     } else if (!data.session) {
       // Email confirmation is switched on for this project.
       setCheckEmail(true);
     }
   }
 
+  async function sendAgain() {
+    setResend({ busy: true, done: false, error: null });
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: emailRedirect() },
+    });
+    setResend({ busy: false, done: !error, error: error ? plainError(error) : null });
+  }
+
   if (checkEmail) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Logo style={styles.logo} />
-          <Title>Check your email</Title>
-          <Card>
-            <Body>We sent a confirmation link to {email.trim()}. Open it to confirm your account, then sign in.</Body>
-          </Card>
-          <Button title="Go to sign in" onPress={() => router.replace('/sign-in')} />
-        </ScrollView>
-      </SafeAreaView>
+      <AuthPage
+        title="Check your email"
+        icon="mail-outline"
+        intro={`We sent a link to ${email.trim()}. Open it to confirm your account, then sign in.`}
+        footer={
+          <CheckEmailActions onResend={sendAgain} resending={resend.busy} resent={resend.done} error={resend.error}>
+            <TextLink lead="Confirmed it?" label="Sign in" onPress={() => router.replace('/sign-in')} />
+          </CheckEmailActions>
+        }
+      />
     );
   }
 
+  const errorFor = (field: Field) => (problem?.field === field ? problem.text : undefined);
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Logo style={styles.logo} />
-          <Title>Create your account</Title>
-          <Body secondary>Use the email your personal trainer has for you, so we can connect you to them.</Body>
-          <TextField
-            label="Your name"
-            value={fullName}
-            onChangeText={setFullName}
-            autoComplete="name"
-            textContentType="name"
-            placeholder="First and last name"
-          />
-          <TextField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            placeholder="you@example.com"
-          />
-          <TextField
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            placeholder="At least 8 characters"
-          />
-          <ErrorText>{error}</ErrorText>
+    <AuthPage
+      title="Create your account"
+      intro="Use the email your personal trainer has for you, so we can connect you to them."
+      footer={
+        <>
           <Button title="Create account" onPress={signUp} loading={busy} />
           <TextLink lead="Already have an account?" label="Sign in" onPress={() => router.replace('/sign-in')} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </>
+      }>
+      <TextField
+        label="Your name"
+        value={fullName}
+        onChangeText={setFullName}
+        autoComplete="name"
+        textContentType="name"
+        placeholder="First and last name"
+        error={errorFor('name')}
+      />
+      <TextField
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        placeholder="you@example.com"
+        error={errorFor('email')}
+      />
+      <PasswordField
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        autoComplete="new-password"
+        textContentType="newPassword"
+        placeholder="At least 8 characters"
+        onSubmitEditing={signUp}
+        error={errorFor('password')}
+      />
+      <ErrorText>{errorFor('form')}</ErrorText>
+    </AuthPage>
   );
 }
-
-const styles = themed(() => ({
-  // The welcome screen's 20 gutter and column, and room at the top for the back arrow.
-  content: {
-    width: '100%',
-    maxWidth: Layout.maxWelcome,
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.gutter,
-    paddingTop: Spacing.six,
-    paddingBottom: Spacing.four,
-    gap: Spacing.three,
-  },
-  logo: {
-    width: 148,
-    alignSelf: 'flex-start',
-    // The image carries the brand kit's clear space; this lines the V up with the text below.
-    marginLeft: -12,
-    marginBottom: Spacing.two,
-  },
-}));

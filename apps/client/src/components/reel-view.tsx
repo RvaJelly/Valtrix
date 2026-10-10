@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Text } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { BRAND, Fonts, Spacing, Tabular, withAlpha } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
 import { authorName, mediaUrl, timeAgo, type Reel } from '@/lib/posts';
 import { compactCount } from '@/lib/social';
 
@@ -26,6 +27,8 @@ type Props = {
   onMenu: () => void;
   // Set when the author is a trainer: their name opens their profile.
   onAuthor?: () => void;
+  // The small muted sign at the top right. Off where the screen's own bar has a sound button.
+  showMute?: boolean;
 };
 
 function setPlayerMuted(player: VideoPlayer, muted: boolean) {
@@ -47,6 +50,7 @@ export function ReelView({
   onShare,
   onMenu,
   onAuthor,
+  showMute = true,
 }: Props) {
   const player = useVideoPlayer(mediaUrl(reel.media_path), (p) => {
     p.loop = true;
@@ -67,9 +71,11 @@ export function ReelView({
   }, [playing, player]);
 
   return (
-    <View style={{ height, backgroundColor: '#000000' }}>
+    <View style={{ height, backgroundColor: BRAND.iron }}>
       <VideoView player={player} style={styles.video} contentFit="cover" nativeControls={false} />
-      {!ready ? <ActivityIndicator color="#FFFFFF" style={StyleSheet.absoluteFill} /> : null}
+      {!ready ? <ActivityIndicator color={withAlpha(BRAND.white, 0.6)} style={StyleSheet.absoluteFill} /> : null}
+      {/* A soft dark fade at the bottom keeps the name and caption readable on any video. */}
+      <View style={[styles.scrim, SCRIM]} pointerEvents="none" />
       <Pressable
         style={StyleSheet.absoluteFill}
         accessibilityRole="button"
@@ -77,28 +83,27 @@ export function ReelView({
         onPress={onToggleMute}
       />
 
-      {muted ? (
+      {muted && showMute ? (
         <View style={[styles.mute, { top: topInset + 56 }]} pointerEvents="none">
-          <Ionicons name="volume-mute" size={16} color="#FFFFFF" />
+          <Ionicons name="volume-mute-outline" size={16} color={BRAND.white} />
         </View>
       ) : null}
 
       <View style={[styles.side, { bottom: bottomInset + Spacing.four }]}>
         <Action
           icon={reel.liked_by_me ? 'heart' : 'heart-outline'}
-          color={reel.liked_by_me ? '#FF3B5C' : '#FFFFFF'}
           label={reel.liked_by_me ? 'Unlike' : 'Like'}
           selected={reel.liked_by_me}
-          count={compactCount(reel.like_count)}
+          count={reel.like_count ? compactCount(reel.like_count) : undefined}
           onPress={onLike}
         />
         <Action
-          icon="chatbubble-ellipses-outline"
+          icon="chatbubble-outline"
           label="Comments"
-          count={compactCount(reel.comment_count)}
+          count={reel.comment_count ? compactCount(reel.comment_count) : undefined}
           onPress={onComments}
         />
-        <Action icon="paper-plane-outline" label="Share" count="Share" onPress={onShare} />
+        <Action icon="paper-plane-outline" label="Share" onPress={onShare} />
         <Action icon="ellipsis-horizontal" label="More options" onPress={onMenu} />
       </View>
 
@@ -111,15 +116,17 @@ export function ReelView({
           pointerEvents={onAuthor ? 'auto' : 'none'}
           hitSlop={6}
           style={styles.author}>
-          <Avatar url={reel.author_avatar} name={name} size={36} />
-          <Text style={styles.name} numberOfLines={1}>
+          <Avatar url={reel.author_avatar} name={name} size={32} />
+          <Text variant="callout" numberOfLines={1} style={styles.name}>
             {reel.is_mine ? 'You' : name}
           </Text>
-          <Text style={styles.time}>{timeAgo(reel.created_at)}</Text>
+          <Text variant="footnote" style={styles.time}>
+            {timeAgo(reel.created_at)}
+          </Text>
         </Pressable>
         {reel.caption ? (
           <View pointerEvents="none">
-            <Text style={styles.caption} numberOfLines={3}>
+            <Text variant="callout" style={styles.caption} numberOfLines={3}>
               {reel.caption}
             </Text>
           </View>
@@ -129,17 +136,16 @@ export function ReelView({
   );
 }
 
-// A round, see-through dark button so the icon stands out on any video, with its count under it.
+// A round, see-through dark button with a white outline icon, so it stands out on any video, and
+// its count under it (none at 0).
 function Action({
   icon,
-  color = '#FFFFFF',
   label,
   selected,
   count,
   onPress,
 }: {
   icon: ComponentProps<typeof Ionicons>['name'];
-  color?: string;
   label: string;
   selected?: boolean;
   count?: string;
@@ -150,19 +156,27 @@ function Action({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={selected === undefined ? undefined : { selected }}
-      onPress={onPress}
+      onPress={() => {
+        haptic.tap();
+        onPress();
+      }}
       hitSlop={6}
       style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}>
       <View style={styles.circle}>
-        <Ionicons name={icon} size={28} color={color} />
+        <Ionicons name={icon} size={24} color={BRAND.white} />
       </View>
-      {count ? <Text style={styles.count}>{count}</Text> : null}
+      {count ? (
+        <Text variant="footnote" style={styles.count}>
+          {count}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
 
 // Reels are always white on black, whatever the app's theme.
-const shadow = { textShadowColor: 'rgba(0,0,0,0.75)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } };
+const FADE = `linear-gradient(to bottom, ${withAlpha(BRAND.iron, 0)}, ${withAlpha(BRAND.iron, 0.65)})`;
+const SCRIM = (Platform.OS === 'web' ? { backgroundImage: FADE } : { experimental_backgroundImage: FADE }) as ViewStyle;
 
 const styles = StyleSheet.create({
   // A width and height, not just the four edges: on the web the video is a <video> tag,
@@ -174,42 +188,48 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  scrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '45%',
+  },
   mute: {
     position: 'absolute',
     right: Spacing.three,
     padding: 6,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   side: {
     position: 'absolute',
-    right: Spacing.two,
+    right: Spacing.tight,
     alignItems: 'center',
     gap: Spacing.three,
   },
   action: {
     alignItems: 'center',
-    gap: 3,
-    minWidth: 56,
+    gap: Spacing.one,
+    minWidth: 48,
   },
   circle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   count: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    ...shadow,
+    color: BRAND.white,
+    fontFamily: Fonts.textMedium,
+    ...Tabular,
   },
   info: {
     position: 'absolute',
-    left: Spacing.three,
-    right: 84,
+    left: Spacing.gutter,
+    right: 76,
     gap: Spacing.two,
   },
   author: {
@@ -220,20 +240,13 @@ const styles = StyleSheet.create({
   },
   name: {
     flexShrink: 1,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    ...shadow,
+    color: BRAND.white,
+    fontFamily: Fonts.textSemi,
   },
   time: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
-    ...shadow,
+    color: withAlpha(BRAND.white, 0.7),
   },
   caption: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    lineHeight: 21,
-    ...shadow,
+    color: BRAND.white,
   },
 });

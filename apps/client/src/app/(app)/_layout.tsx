@@ -41,7 +41,15 @@ export default function AppLayout() {
         />
         <Stack.Screen name="trainers/index" options={{ title: 'Trainers' }} />
         <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="settings/notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="settings/units" options={{ title: 'Workouts and units' }} />
+        <Stack.Screen name="settings/appearance" options={{ title: 'Appearance' }} />
+        <Stack.Screen name="settings/privacy" options={{ title: 'Privacy and blocked people' }} />
+        <Stack.Screen name="settings/account" options={{ title: 'Account and password' }} />
+        <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
+        <Stack.Screen name="settings/trainer/[id]" options={{ title: '' }} />
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
         {/* No swipe back by mistake mid-workout; the workout stays on the phone anyway. */}
         <Stack.Screen name="workouts/live" options={{ title: 'Workout', gestureEnabled: false }} />

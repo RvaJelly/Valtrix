@@ -90,13 +90,12 @@ export function startOfWeek(date: Date) {
   return addDays(startOfDay(date), -(isoWeekday(date) - 1));
 }
 
+// The planned days written out: "Mon and Fri", "Mon, Wed and Fri", "Every day" or "Any day".
 export function daysLabel(weekdays: number[]) {
   if (!weekdays.length) return 'Any day';
   if (weekdays.length === 7) return 'Every day';
-  return [...weekdays]
-    .sort((a, b) => a - b)
-    .map((d) => WEEKDAYS[d - 1]?.short)
-    .join(' · ');
+  const names = [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAYS[d - 1]?.short ?? '');
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
 
 export function trainerLabel(item: Pick<PlanItem, 'trainer_name' | 'business_name'>) {

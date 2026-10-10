@@ -1,19 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState, type ComponentProps } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FoodRow, FoodSheet } from '@/components/food-sheet';
-import { Body, ErrorText, Text } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  SearchField,
+  Section,
+  SkeletonRows,
+  Text,
+} from '@/components/ui';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import {
   dayKey,
   FOOD_CREDIT,
@@ -49,6 +52,7 @@ export default function SearchFood() {
   const [opening, setOpening] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [food, setFood] = useState<Food | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     Promise.all([loadRecent().catch(() => [] as Food[]), loadMyFoods().catch(() => [] as Food[])]).then(([r, m]) => {
@@ -98,100 +102,104 @@ export default function SearchFood() {
   const mineSection = { key: 'mine', title: 'Your foods', foods: myMatches };
   // While searching, the person's own foods come first; otherwise what they had lately.
   const sections = !recentFirst && query.trim() ? [mineSection, recentSection] : [recentSection, mineSection];
+  // The one orange button: search for what's typed, until it has been searched.
+  const canSearch = !!query.trim() && results?.query !== query.trim();
 
   const list = (title: string, key: string, foods: Food[]) =>
     foods.length ? (
-      <View key={key} style={{ gap: Spacing.two }}>
-        <Text style={styles.section}>{title}</Text>
-        {foods.map((f, i) => (
-          <FoodRow
-            key={`${key}-${f.barcode ?? f.name}-${i}`}
-            food={f}
-            loading={opening === `${key}-${i}`}
-            onPress={() => open(f, `${key}-${i}`)}
-          />
-        ))}
-      </View>
+      <Section key={key} title={title}>
+        <Group>
+          {foods.map((f, i) => (
+            <FoodRow
+              key={`${key}-${f.barcode ?? f.name}-${i}`}
+              food={f}
+              grouped
+              last={i === foods.length - 1}
+              loading={opening === `${key}-${i}`}
+              onPress={() => open(f, `${key}-${i}`)}
+            />
+          ))}
+        </Group>
+      </Section>
     ) : null;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: recentFirst ? 'Recent foods' : 'Search foods' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={20} color={Colors.textSecondary} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="For example Weet-Bix"
-              placeholderTextColor={Colors.textSecondary}
-              selectionColor={Colors.accent}
-              accessibilityLabel="Search foods"
-              autoFocus={!recentFirst}
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={search}
-              style={styles.searchInput}
-            />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Search"
-            onPress={search}
-            disabled={!query.trim() || searching}
-            style={({ pressed }) => [
-              styles.searchButton,
-              pressed && { backgroundColor: Colors.accentPressed },
-              !query.trim() && { opacity: 0.5 },
-            ]}>
-            <Text style={styles.searchButtonText}>Search</Text>
-          </Pressable>
-        </View>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search foods, like Weet-Bix"
+          accessibilityLabel="Search foods"
+          autoFocus={!recentFirst}
+          onSubmitEditing={search}
+        />
 
-        <View style={styles.shortcuts}>
-          <Shortcut
-            icon="barcode-outline"
-            label="Scan a barcode"
+        <Group>
+          <ListRow
+            title="Scan a barcode"
+            leading={<IconTile icon="barcode-outline" />}
             onPress={() => router.replace({ pathname: '/nutrition/scan', params: { meal, day } })}
+            compact
           />
-          <Shortcut icon="create-outline" label="Enter it yourself" onPress={() => enterYourself()} />
-        </View>
+          <ListRow
+            title="Enter it yourself"
+            leading={<IconTile icon="create-outline" />}
+            onPress={() => enterYourself()}
+            compact
+            last
+          />
+        </Group>
 
         <ErrorText>{error}</ErrorText>
 
         {sections.map((s) => list(s.title, s.key, s.foods))}
 
-        {recent && recentFirst && !recent.length && !query.trim() ? (
-          <Body secondary>Foods you add will show here, so you can add them again in one tap.</Body>
-        ) : null}
-
         {searching ? (
-          <View style={styles.searching}>
-            <ActivityIndicator color={Colors.textSecondary} />
-            <Body secondary>Searching…</Body>
-          </View>
+          <Section title="Products">
+            <SkeletonRows count={4} avatar />
+          </Section>
         ) : null}
 
         {results && !searching ? (
           results.foods.length ? (
-            <View style={{ gap: Spacing.two }}>
+            <View style={{ gap: Spacing.tight }}>
               {list('Products', 'results', results.foods)}
-              <Text style={styles.credit}>{FOOD_CREDIT}. South African products show first.</Text>
+              <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
+                {FOOD_CREDIT}. South African products show first.
+              </Text>
             </View>
           ) : (
-            <View style={{ gap: Spacing.two }}>
-              <Body secondary>
-                Nothing found for “{results.query}”. Try other words, scan the barcode, or enter it yourself.
-              </Body>
-            </View>
+            <EmptyState
+              compact
+              icon="search-outline"
+              title={`Nothing found for “${results.query}”`}
+              message="Try other words, scan the barcode, or enter it yourself."
+            />
           )
         ) : null}
 
-        {!results && !searching && query.trim() ? (
-          <Text style={styles.hint}>Tap Search to look through thousands of products.</Text>
+        {recent && recentFirst && !recent.length && !query.trim() ? (
+          <EmptyState
+            compact
+            icon="time-outline"
+            title="No recent foods"
+            message="Foods you add show here, so you can add them again in one tap."
+          />
         ) : null}
       </ScrollView>
+
+      {canSearch && !searching ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
+          <Button
+            title={`Search for “${query.trim()}”`}
+            icon="search-outline"
+            onPress={search}
+            style={styles.footerButton}
+          />
+        </View>
+      ) : null}
 
       <FoodSheet
         mode="add"
@@ -209,117 +217,31 @@ export default function SearchFood() {
   );
 }
 
-function Shortcut({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.shortcut, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={20} color={Colors.text} />
-      <Text style={styles.shortcutText}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = themed(() => ({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   content: {
     // The same side margins as the other tabs.
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.four,
   },
-  searchRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
+  footer: {
+    paddingTop: Spacing.tight,
+    paddingHorizontal: Spacing.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
   },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    minHeight: 52,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    color: Colors.text,
-    fontSize: 16,
-    paddingVertical: Spacing.two,
-  },
-  searchButton: {
-    minHeight: 52,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.accent,
-  },
-  searchButtonText: {
-    color: Colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  shortcuts: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  shortcut: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    minHeight: 48,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  shortcutText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: Spacing.two,
-  },
-  searching: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.four,
-  },
-  credit: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: Spacing.two,
-  },
-  hint: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
+  footerButton: {
+    width: '100%',
+    maxWidth: Layout.maxClient - Spacing.gutter * 2,
+    alignSelf: 'center',
   },
 }));

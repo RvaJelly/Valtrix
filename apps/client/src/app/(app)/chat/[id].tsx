@@ -4,7 +4,6 @@ import { Image } from 'expo-image';
 import { router, Stack, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   AppState,
   FlatList,
@@ -23,8 +22,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { ReelCard } from '@/components/reel-card';
-import { Text } from '@/components/ui';
-import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
+import { IconButton, Skeleton, Text } from '@/components/ui';
+import { BRAND, Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
   callLabel,
@@ -399,10 +398,8 @@ export default function ChatScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
-        <Pressable onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={28} color={Colors.text} />
-        </Pressable>
-        <Avatar url={otherAvatar} name={otherName} size={40} />
+        <IconButton icon="chevron-back" label="Back" onPress={back} />
+        <Avatar url={otherAvatar} name={otherName} size={36} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
             {otherName}
@@ -411,22 +408,8 @@ export default function ChatScreen() {
         </View>
         {canCall ? (
           <>
-            <Pressable
-              onPress={() => call(true)}
-              hitSlop={8}
-              style={styles.headerButton}
-              accessibilityRole="button"
-              accessibilityLabel={`Video call ${otherName}`}>
-              <Ionicons name="videocam-outline" size={24} color={Colors.text} />
-            </Pressable>
-            <Pressable
-              onPress={() => call(false)}
-              hitSlop={8}
-              style={styles.headerButton}
-              accessibilityRole="button"
-              accessibilityLabel={`Voice call ${otherName}`}>
-              <Ionicons name="call-outline" size={22} color={Colors.text} />
-            </Pressable>
+            <IconButton icon="videocam-outline" label={`Video call ${otherName}`} onPress={() => call(true)} />
+            <IconButton icon="call-outline" label={`Voice call ${otherName}`} onPress={() => call(false)} />
           </>
         ) : null}
       </View>
@@ -435,7 +418,7 @@ export default function ChatScreen() {
           screen smaller for the keyboard, and the message box would sit behind it. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         {loading ? (
-          <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
+          <LoadingBubbles />
         ) : (
           <FlatList
             inverted={messages.length > 0}
@@ -445,11 +428,17 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps="handled"
             onEndReached={loadOlder}
             onEndReachedThreshold={0.3}
-            ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.textSecondary} /> : null}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.older}>
+                  <Skeleton width={180} height={40} radius={18} />
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Avatar url={otherAvatar} name={otherName} size={72} />
-                <Text style={styles.emptyTitle}>Say hi to {otherName} 👋</Text>
+                <Text style={styles.emptyTitle}>Say hi to {otherName.split(' ')[0] || otherName}</Text>
                 <Text style={styles.emptyText}>
                   Messages and calls here are just between the two of you.
                   {canCall ? ' Tap the phone or camera at the top to call.' : ''}
@@ -539,10 +528,22 @@ export default function ChatScreen() {
             style={[styles.viewerClose, { top: insets.top + Spacing.three }]}
             accessibilityRole="button"
             accessibilityLabel="Close photo">
-            <Ionicons name="close" size={30} color="#FFFFFF" />
+            <Ionicons name="close" size={30} color={BRAND.white} />
           </Pressable>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+// While the first messages load: a few quiet bubble shapes on both sides, no spinner.
+function LoadingBubbles() {
+  return (
+    <View style={styles.loading} accessible accessibilityLabel="Loading messages">
+      <Skeleton width="55%" height={40} radius={18} style={{ alignSelf: 'flex-start' }} />
+      <Skeleton width="40%" height={40} radius={18} style={{ alignSelf: 'flex-end' }} />
+      <Skeleton width="62%" height={60} radius={18} style={{ alignSelf: 'flex-start' }} />
+      <Skeleton width="35%" height={40} radius={18} style={{ alignSelf: 'flex-end' }} />
     </View>
   );
 }
@@ -593,7 +594,7 @@ function Bubble({
             <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" transition={150} />
           ) : (
             <View style={[styles.photo, styles.photoLoading]}>
-              <ActivityIndicator color={mine ? Colors.onBubble : Colors.textSecondary} />
+              <Ionicons name="image-outline" size={28} color={Colors.textTertiary} />
             </View>
           )
         ) : null}
@@ -660,7 +661,7 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.one,
     paddingBottom: Spacing.two,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
@@ -674,12 +675,12 @@ const styles = themed(() => ({
     ...Type.footnote,
     color: Colors.textSecondary,
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+  loading: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    gap: Spacing.tight,
+    padding: Spacing.three,
   },
   list: {
     flexGrow: 1,
@@ -709,6 +710,10 @@ const styles = themed(() => ({
     textAlign: 'center',
     maxWidth: 320,
   },
+  older: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+  },
   dayRow: {
     alignItems: 'center',
     paddingVertical: Spacing.two,
@@ -724,7 +729,7 @@ const styles = themed(() => ({
     overflow: 'hidden',
   },
   bubbleRow: {
-    maxWidth: '78%',
+    maxWidth: '75%',
     marginVertical: 2,
   },
   rowMine: {

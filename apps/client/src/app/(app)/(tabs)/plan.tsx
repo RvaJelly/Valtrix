@@ -1,24 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { AppState, Platform, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { JoinCall } from '@/components/join-call';
+import { Chips } from '@/components/chips';
 import { SessionRow } from '@/components/session-row';
 import {
-  Body,
+  Button,
   Card,
+  EmptyState,
   Group,
+  IconTile,
+  ListRow,
   Notice,
   PageHeader,
+  ProgressBar,
   Section,
   Segmented,
   SkeletonRows,
+  StatusPill,
   Text,
   useDelayed,
 } from '@/components/ui';
-import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
+import { Colors, Fonts, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { dayMonth } from '@/lib/format';
 import {
   daysLabel,
@@ -32,15 +37,22 @@ import {
   type PlanItem,
 } from '@/lib/plan';
 import { addDays, dayKey, endOf, formatDay, loadSessions, sameDay, type Session } from '@/lib/sessions';
+import { loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
 
 type Tab = 'workouts' | 'sessions';
 type When = 'upcoming' | 'past';
+
+const WHEN: Record<When, string> = { upcoming: 'Upcoming', past: 'Past' };
 
 // How far ahead and back the session lists reach.
 const DAYS = 180;
 
 function openWorkout(item: PlanItem) {
   router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } });
+}
+
+function startWorkout(item: PlanItem) {
+  router.push({ pathname: '/workouts/live', params: { plan: item.plan_item_id } });
 }
 
 // The client's training: the workouts their trainers planned for today and this
@@ -50,6 +62,8 @@ export default function Plan() {
   const tab: Tab = params.view === 'sessions' ? 'sessions' : 'workouts';
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  // Only for the empty states' "Message {trainer}": a failure just leaves the action out.
+  const [trainers, setTrainers] = useState<Trainer[] | null>(null);
   const [when, setWhen] = useState<When>('upcoming');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,12 +77,14 @@ export default function Plan() {
   const load = useCallback(async () => {
     const now = new Date();
     loadedFor.current = dayKey(now);
-    const [items, list] = await Promise.all([
+    const [items, list, linked] = await Promise.all([
       loadPlan(now).catch(() => null),
       loadSessions(addDays(now, -DAYS), addDays(now, DAYS)).catch(() => null),
+      loadTrainers().catch(() => null),
     ]);
     if (items) setPlan(items);
     if (list) setSessions(list);
+    if (linked) setTrainers(linked);
     setError(items && list ? null : 'Could not load your plan. Check your internet connection.');
   }, []);
 
@@ -127,12 +143,12 @@ export default function Plan() {
         ) : null}
         {tab === 'workouts' ? (
           plan ? (
-            <Workouts plan={plan} />
+            <Workouts plan={plan} trainers={trainers} />
           ) : !error && showSkeleton ? (
             <SkeletonRows count={3} />
           ) : null
         ) : sessions ? (
-          <Sessions sessions={sessions} when={when} onWhen={setWhen} />
+          <Sessions sessions={sessions} trainers={trainers} when={when} onWhen={setWhen} />
         ) : !error && showSkeleton ? (
           <SkeletonRows count={3} />
         ) : null}
@@ -144,7 +160,35 @@ export default function Plan() {
 // The workouts the client logged, with their personal bests: a quiet action beside a section title.
 const HISTORY = { label: 'Workout history', onPress: () => router.push('/workouts/history') };
 
-function Workouts({ plan }: { plan: PlanItem[] }) {
+function firstName(name: string) {
+  return name.split(' ')[0] || name;
+}
+
+// The empty states' one action: write to the trainer (or pick one of several in Chats), or find
+// a trainer when there is none yet.
+function TrainerAction({ trainers }: { trainers: Trainer[] | null }) {
+  if (!trainers) return null;
+  if (!trainers.length) {
+    return <Button title="Find a trainer" size="medium" onPress={() => router.push('/trainers')} />;
+  }
+  if (trainers.length > 1) {
+    return <Button title="Message your trainers" size="medium" onPress={() => router.navigate('/chats')} />;
+  }
+  const t = trainers[0];
+  const name = trainerTitle(t);
+  return (
+    <Button
+      title={`Message ${firstName(name)}`}
+      size="medium"
+      icon="chatbubble-outline"
+      onPress={() =>
+        router.push({ pathname: '/chat/[id]', params: { id: t.client_id, name, avatar: t.trainer_avatar ?? '' } })
+      }
+    />
+  );
+}
+
+function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | null }) {
   const today = new Date();
   const todayKey = dayKey(today);
   const week = startOfWeek(today);
@@ -153,156 +197,217 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
   const progress = weekProgress(plan);
   // Say who each workout is from when more than one trainer planned something.
   const manyTrainers = new Set(plan.map((p) => p.trainer_id)).size > 1;
+  // The screen's one orange button: Start on the first workout still to do today.
+  const main = due.find((item) => !item.done_on.includes(todayKey));
 
   if (!plan.length) {
+    const single = trainers?.length === 1 ? firstName(trainerTitle(trainers[0])) : null;
     return (
-      <Section title="Workouts" action={HISTORY}>
-        <Card style={{ gap: Spacing.three, alignItems: 'center', paddingVertical: Spacing.five }}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="barbell-outline" size={28} color={Colors.textSecondary} />
-          </View>
-          <Text style={styles.cardTitle}>No workouts yet</Text>
-          <Body secondary style={{ textAlign: 'center' }}>
-            When your trainer adds workouts to your plan, they show up here, day by day.
-          </Body>
-        </Card>
-      </Section>
+      <View style={{ gap: Spacing.three }}>
+        <EmptyState
+          icon="barbell-outline"
+          title="No workouts yet"
+          message={`When ${single ?? 'your trainer'} adds workouts to your plan, they show up here, day by day.`}
+          action={<TrainerAction trainers={trainers} />}
+        />
+        <Group>
+          <ListRow
+            title={HISTORY.label}
+            subtitle="Your workouts and personal bests"
+            leading={<IconTile icon="time-outline" />}
+            onPress={HISTORY.onPress}
+            last
+          />
+        </Group>
+      </View>
     );
   }
+
+  // One row per day of the week, and one per extra workout on a busy day.
+  const rows: { key: string; day: string; date: string; today: boolean; item: PlanItem | null; done: boolean }[] = [];
+  for (const d of WEEKDAYS) {
+    const date = addDays(week, d.day - 1);
+    const items = weekdayItems(plan, date);
+    const isToday = sameDay(date, today);
+    const base = { day: isToday ? 'Today' : d.short, date: String(date.getDate()), today: isToday };
+    if (!items.length) rows.push({ key: `${d.day}`, ...base, item: null, done: false });
+    items.forEach((item, i) =>
+      rows.push({
+        key: `${d.day}-${item.plan_item_id}`,
+        ...(i === 0 ? base : { day: '', date: '', today: isToday }),
+        item,
+        done: item.done_on.includes(dayKey(date)),
+      }),
+    );
+  }
+  anyDay.forEach((item, i) =>
+    rows.push({
+      key: `any-${item.plan_item_id}`,
+      day: i === 0 ? 'Any' : '',
+      date: i === 0 ? 'day' : '',
+      today: false,
+      item,
+      done: item.done_on.length > 0,
+    }),
+  );
 
   return (
     <>
       <Section title={`Today · ${dayMonth(today)}`} action={HISTORY}>
         {due.length ? (
-          due.map((item) => (
-            <WorkoutCard
-              key={item.plan_item_id}
-              item={item}
-              done={item.done_on.includes(todayKey)}
-              showTrainer={manyTrainers}
-            />
-          ))
+          <View style={{ gap: Spacing.tight }}>
+            {due.map((item) => (
+              <WorkoutCard
+                key={item.plan_item_id}
+                item={item}
+                done={item.done_on.includes(todayKey)}
+                main={item === main}
+                showTrainer={manyTrainers}
+              />
+            ))}
+          </View>
         ) : (
-          <Card>
-            <Body secondary>Nothing planned for today. Enjoy your rest day.</Body>
-          </Card>
+          <EmptyState
+            compact
+            icon="cafe-outline"
+            title="Rest day"
+            message="Nothing planned for today. Enjoy your rest day."
+          />
         )}
       </Section>
 
-      <View style={{ gap: Spacing.two }}>
-        <View style={styles.header}>
-          <Text style={[styles.heading, { flex: 1 }]}>This week</Text>
-          <Text style={styles.progress}>
-            {progress.done} of {progress.planned} done
+      <View style={{ gap: Spacing.tight }}>
+        <View style={styles.weekHeader}>
+          <Text variant="label" tone="secondary" accessibilityRole="header" style={{ flex: 1 }}>
+            This week
           </Text>
+          <Text variant="footnote" tone="secondary" style={Tabular}>
+            {`${progress.done} of ${progress.planned} done`}
+          </Text>
+          <View style={styles.weekBar}>
+            <ProgressBar progress={progress.planned ? progress.done / progress.planned : 0} color={Colors.success} />
+          </View>
         </View>
-        <View style={styles.week}>
-          {WEEKDAYS.map((d) => {
-            const date = addDays(week, d.day - 1);
-            const isToday = sameDay(date, today);
-            return (
-              <WeekRow
-                key={d.day}
-                label={d.short}
-                date={String(date.getDate())}
-                isToday={isToday}
-                items={weekdayItems(plan, date).map((item) => ({ item, done: item.done_on.includes(dayKey(date)) }))}
-              />
-            );
-          })}
-          {anyDay.length ? (
-            <WeekRow label="Any" date="day" items={anyDay.map((item) => ({ item, done: item.done_on.length > 0 }))} />
-          ) : null}
-        </View>
+        <Group>
+          {rows.map(({ key, ...row }, i) => (
+            <WeekRow key={key} {...row} last={i === rows.length - 1} />
+          ))}
+        </Group>
       </View>
     </>
   );
 }
 
-function WorkoutCard({ item, done, showTrainer }: { item: PlanItem; done: boolean; showTrainer: boolean }) {
+function WorkoutCard({
+  item,
+  done,
+  main,
+  showTrainer,
+}: {
+  item: PlanItem;
+  done: boolean;
+  main: boolean;
+  showTrainer: boolean;
+}) {
   const details = [
-    showTrainer ? `With ${trainerLabel(item)}` : daysLabel(item.weekdays),
     item.exercise_count === 1 ? '1 exercise' : `${item.exercise_count} exercises`,
+    showTrainer ? `With ${trainerLabel(item)}` : daysLabel(item.weekdays),
   ].join(' · ');
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${item.workout_name}${done ? ', done today' : ''}`}
+    <Card
       onPress={() => openWorkout(item)}
-      style={({ pressed }) => [styles.workout, pressed && { backgroundColor: Colors.tint }]}>
-      <View style={styles.workoutIcon}>
-        <Ionicons
-          name={done ? 'checkmark-circle' : 'barbell-outline'}
-          size={done ? 24 : 20}
-          color={done ? Colors.success : Colors.textSecondary}
-        />
+      accessibilityLabel={`${item.workout_name}${done ? ', done today' : ''}`}
+      footer={
+        done ? null : (
+          <Button
+            title="Start"
+            icon="play"
+            size="medium"
+            variant={main ? 'primary' : 'secondary'}
+            accessibilityLabel={`Start ${item.workout_name}`}
+            onPress={() => startWorkout(item)}
+          />
+        )
+      }>
+      <View style={styles.cardTop}>
+        <View style={{ flex: 1, gap: Spacing.one }}>
+          <Text variant="title" numberOfLines={2}>
+            {item.workout_name}
+          </Text>
+          <Text variant="footnote" tone="secondary" numberOfLines={2}>
+            {details}
+          </Text>
+        </View>
+        {done ? <StatusPill tone="success" label="Done" /> : null}
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.workoutName}>{item.workout_name}</Text>
-        <Text style={styles.details} numberOfLines={1}>
-          {done ? 'Done today' : details}
-        </Text>
-        {item.note ? (
-          <Text style={styles.note} numberOfLines={2}>
+      {item.note ? (
+        <View style={styles.quote}>
+          <Text variant="callout" tone="secondary" numberOfLines={3}>
             “{item.note}”
           </Text>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-    </Pressable>
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
 function WeekRow({
-  label,
+  day,
   date,
-  isToday,
-  items,
+  today,
+  item,
+  done,
+  last,
 }: {
-  label: string;
+  day: string;
   date: string;
-  isToday?: boolean;
-  items: { item: PlanItem; done: boolean }[];
+  today: boolean;
+  item: PlanItem | null;
+  done: boolean;
+  last: boolean;
 }) {
-  return (
-    <View style={[styles.weekRow, isToday && { backgroundColor: Colors.tint }]}>
-      <View style={styles.weekDay}>
-        <Text style={[styles.weekDayName, isToday && { fontFamily: Fonts.textSemi }]}>{isToday ? 'Today' : label}</Text>
-        <Text style={styles.weekDate}>{date}</Text>
-      </View>
-      <View style={styles.weekItems}>
-        {items.length ? (
-          items.map(({ item, done }) => (
-            <Pressable
-              key={item.plan_item_id}
-              accessibilityRole="button"
-              accessibilityLabel={`${label} ${date}: ${item.workout_name}${done ? ', done' : ''}`}
-              onPress={() => openWorkout(item)}
-              style={({ pressed }) => [styles.pill, pressed && { backgroundColor: Colors.tintPressed }]}>
-              <Ionicons
-                name={done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={16}
-                color={done ? Colors.success : Colors.textTertiary}
-              />
-              <Text style={styles.pillText} numberOfLines={1}>
-                {item.workout_name}
-              </Text>
-            </Pressable>
-          ))
-        ) : (
-          <Text style={styles.rest}>Rest</Text>
-        )}
-      </View>
+  const leading = (
+    <View style={styles.weekDay}>
+      <Text variant="footnote" tone={today ? 'primary' : 'secondary'} style={today && styles.today}>
+        {day}
+      </Text>
+      <Text variant="footnote" tone="tertiary" style={Tabular}>
+        {date}
+      </Text>
     </View>
+  );
+  if (!item) return <ListRow compact title="Rest" titleTone="tertiary" leading={leading} last={last} />;
+  return (
+    <ListRow
+      compact
+      title={item.workout_name}
+      leading={leading}
+      trailing={done ? <Ionicons name="checkmark-circle" size={22} color={Colors.success} /> : null}
+      accessibilityLabel={`${day === 'Today' ? 'Today' : `${day} ${date}`}: ${item.workout_name}${done ? ', done' : ''}`}
+      onPress={() => openWorkout(item)}
+      last={last}
+    />
   );
 }
 
-function Sessions({ sessions, when, onWhen }: { sessions: Session[]; when: When; onWhen: (when: When) => void }) {
+function Sessions({
+  sessions,
+  trainers,
+  when,
+  onWhen,
+}: {
+  sessions: Session[];
+  trainers: Trainer[] | null;
+  when: When;
+  onWhen: (when: When) => void;
+}) {
   const now = new Date();
   const shown = sessions.filter((s) =>
     when === 'upcoming' ? s.status === 'scheduled' && endOf(s) > now : endOf(s) <= now || s.status !== 'scheduled',
   );
   if (when === 'past') shown.reverse();
+  // The trainer's name only matters when there are several.
+  const manyTrainers = new Set(sessions.map((s) => s.client_id)).size > 1;
 
   // Group by day, keeping the order.
   const days: { key: string; date: Date; items: Session[] }[] = [];
@@ -312,49 +417,39 @@ function Sessions({ sessions, when, onWhen }: { sessions: Session[]; when: When;
     if (days.at(-1)?.key !== key) days.push({ key, date, items: [] });
     days.at(-1)!.items.push(s);
   }
+  const single = trainers?.length === 1 ? firstName(trainerTitle(trainers[0])) : null;
 
   return (
     <>
-      <View style={styles.pills}>
-        {(['upcoming', 'past'] as const).map((key) => {
-          const selected = key === when;
-          return (
-            <Pressable
-              key={key}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => onWhen(key)}
-              style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && { color: Colors.background }]}>
-                {key === 'upcoming' ? 'Upcoming' : 'Past'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Chips options={WHEN} value={when} onChange={(next) => next && onWhen(next)} />
       {days.length === 0 ? (
-        <Card>
-          <Body secondary>
-            {when === 'upcoming'
-              ? 'Nothing booked yet. Sessions your trainer books will show here.'
-              : 'Your finished sessions will show here.'}
-          </Body>
-        </Card>
+        when === 'upcoming' ? (
+          <EmptyState
+            icon="calendar-outline"
+            title="Nothing booked"
+            message={`Sessions ${single ?? 'your trainer'} books for you show up here.`}
+            action={<TrainerAction trainers={trainers} />}
+          />
+        ) : (
+          <EmptyState compact icon="time-outline" title="No past sessions" message="Finished sessions show up here." />
+        )
       ) : null}
       {days.map((d) => (
-        <View key={d.key} style={{ gap: Spacing.tight }}>
-          <Text style={styles.day} accessibilityRole="header">
-            {formatDay(d.date)}
-          </Text>
+        <Section key={d.key} title={formatDay(d.date)}>
           <Group>
             {d.items.map((s, i) => (
-              <SessionRow key={s.id} session={s} variant="grouped" last={i === d.items.length - 1} />
+              <SessionRow
+                key={s.id}
+                session={s}
+                variant="grouped"
+                showTrainer={manyTrainers}
+                muted={when === 'past'}
+                join={when === 'upcoming'}
+                last={i === d.items.length - 1}
+              />
             ))}
           </Group>
-          {d.items.map((s) => (
-            <JoinCall key={s.id} session={s} />
-          ))}
-        </View>
+        </Section>
       ))}
     </>
   );
@@ -372,142 +467,33 @@ const styles = themed(() => ({
     paddingHorizontal: Spacing.gutter,
     paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
     paddingBottom: Spacing.hero,
-    gap: Spacing.four,
+    gap: Spacing.section,
   },
-  header: {
+  cardTop: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
+    gap: Spacing.tight,
+  },
+  quote: {
+    marginTop: Spacing.three,
+    paddingLeft: Spacing.tight,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.borderStrong,
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
+    minHeight: 22,
   },
-  heading: {
-    ...Type.label,
-    color: Colors.textSecondary,
-  },
-  progress: {
-    ...Type.footnote,
-    ...Tabular,
-    color: Colors.textSecondary,
-  },
-  cardTitle: {
-    ...Type.headline,
-    color: Colors.text,
-  },
-  emptyIcon: {
+  weekBar: {
     width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.tint,
-  },
-  workout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.tight,
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.gutter,
-    borderRadius: Radius.large,
-    borderCurve: 'continuous',
-    backgroundColor: Colors.surface,
-  },
-  workoutIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.tint,
-  },
-  workoutName: {
-    ...Type.headline,
-    color: Colors.text,
-  },
-  details: {
-    ...Type.footnote,
-    color: Colors.textSecondary,
-  },
-  note: {
-    ...Type.footnote,
-    color: Colors.text,
-    fontStyle: 'italic',
-  },
-  week: {
-    borderRadius: Radius.large,
-    borderCurve: 'continuous',
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  weekRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.tight,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minHeight: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   weekDay: {
-    width: 44,
-    alignItems: 'center',
+    width: 40,
+    alignItems: 'flex-start',
   },
-  weekDayName: {
-    ...Type.footnote,
-    fontFamily: Fonts.textMedium,
-    color: Colors.text,
-  },
-  weekDate: {
-    ...Type.footnote,
-    ...Tabular,
-    color: Colors.textSecondary,
-  },
-  weekItems: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    maxWidth: '100%',
-    minHeight: 36,
-    paddingHorizontal: Spacing.tight,
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.tint,
-  },
-  pillText: {
-    ...Type.footnote,
-    fontFamily: Fonts.textMedium,
-    flexShrink: 1,
-    color: Colors.text,
-  },
-  rest: {
-    ...Type.footnote,
-    color: Colors.textTertiary,
-  },
-  pills: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    minHeight: 36,
-    justifyContent: 'center',
-    borderRadius: Radius.pill,
-    backgroundColor: Colors.tint,
-  },
-  chipSelected: {
-    backgroundColor: Colors.text,
-  },
-  chipText: {
-    ...Type.callout,
-    fontFamily: Fonts.textMedium,
-    color: Colors.text,
-  },
-  day: {
-    ...Type.label,
-    color: Colors.textSecondary,
+  today: {
+    fontFamily: Fonts.textSemi,
   },
 }));

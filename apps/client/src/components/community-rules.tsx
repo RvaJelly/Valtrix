@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
 
 const RULES = [
   'Be kind and respectful. No bullying, harassment or hate.',
@@ -12,17 +11,23 @@ const RULES = [
   'No spam or scams.',
 ];
 
-// The rules everyone agrees to before their first story or reel.
+// The rules everyone agrees to before their first story or reel: a calm numbered list.
 export function CommunityRules() {
   return (
-    <View style={{ gap: Spacing.three }}>
-      {RULES.map((rule) => (
-        <View key={rule} style={styles.rule}>
-          <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
-          <Text style={styles.text}>{rule}</Text>
-        </View>
-      ))}
-      <Text style={styles.note}>
+    <View style={{ gap: Spacing.four }}>
+      <View>
+        {RULES.map((rule, i) => (
+          <View key={rule} style={[styles.rule, i < RULES.length - 1 && styles.line]}>
+            <Text variant="label" tone="tertiary" style={[styles.number, Tabular]}>
+              {String(i + 1).padStart(2, '0')}
+            </Text>
+            <Text variant="callout" style={{ flex: 1 }}>
+              {rule}
+            </Text>
+          </View>
+        ))}
+      </View>
+      <Text variant="footnote" tone="secondary">
         Posts that break these rules are removed, and people who keep breaking them lose access to Voltrix. Report
         anything that doesn&apos;t belong, and block anyone you don&apos;t want to see.
       </Text>
@@ -34,17 +39,15 @@ const styles = themed(() => ({
   rule: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing.two,
+    gap: Spacing.tight,
+    paddingVertical: Spacing.tight,
   },
-  text: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 16,
-    lineHeight: 22,
+  line: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
+  number: {
+    width: 24,
+    marginTop: 3,
   },
 }));

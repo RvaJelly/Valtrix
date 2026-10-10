@@ -45,10 +45,12 @@ async function join(myId: string | undefined, params: { chat: string; video: str
 export function JoinCall({
   session,
   onAccent,
+  size,
   style,
 }: {
   session: Session;
   onAccent?: boolean;
+  size?: 'large' | 'medium';
   style?: StyleProp<ViewStyle>;
 }) {
   const now = useNow();
@@ -67,6 +69,7 @@ export function JoinCall({
       <Button
         title="Join video call"
         icon="videocam-outline"
+        size={size}
         accessibilityLabel={`Join video call with ${name}`}
         loading={joining}
         onPress={onPress}

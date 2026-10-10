@@ -82,6 +82,8 @@ export default function ChatScreen() {
   // Reels sent in this chat, by id; null when one can't be shown any more.
   const [reels, setReels] = useState<Record<string, Reel | null>>({});
   const [text, setText] = useState('');
+  // On the web the message box is a one-row text area that grows with what is typed (up to 140).
+  const [webHeight, setWebHeight] = useState(INPUT_MIN);
   const [photo, setPhoto] = useState<ChatPhoto | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
@@ -483,13 +485,21 @@ export default function ChatScreen() {
             <View style={styles.photoReady}>
               <Image source={{ uri: photo.uri }} style={styles.photoThumb} contentFit="cover" />
               <Text style={styles.photoReadyText}>Photo ready. Add a caption or tap send.</Text>
-              <Pressable onPress={() => setPhoto(null)} hitSlop={8} accessibilityLabel="Remove photo">
+              <Pressable
+                onPress={() => setPhoto(null)}
+                style={styles.removePhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo">
                 <Ionicons name="close-circle" size={24} color={Colors.textSecondary} />
               </Pressable>
             </View>
           ) : null}
           <View style={styles.inputRow}>
-            <Pressable onPress={askPhoto} hitSlop={6} style={styles.attach} accessibilityLabel="Send a photo">
+            <Pressable
+              onPress={askPhoto}
+              style={styles.attach}
+              accessibilityRole="button"
+              accessibilityLabel="Send a photo">
               <Ionicons name="image-outline" size={26} color={Colors.textSecondary} />
             </Pressable>
             <TextInput
@@ -497,22 +507,30 @@ export default function ChatScreen() {
               onChangeText={onType}
               placeholder={photo ? 'Add a caption' : 'Message'}
               placeholderTextColor={Colors.textSecondary}
+              selectionColor={Colors.accent}
               multiline
+              {...WEB_ONE_ROW}
+              onContentSizeChange={
+                Platform.OS === 'web'
+                  ? (e) => setWebHeight(Math.min(INPUT_MAX, Math.max(INPUT_MIN, e.nativeEvent.contentSize.height)))
+                  : undefined
+              }
               maxLength={4000}
-              style={styles.input}
+              style={[styles.input, Platform.OS === 'web' && { height: text ? webHeight : INPUT_MIN }]}
               accessibilityLabel="Message"
               onKeyPress={Platform.OS === 'web' ? onKey : undefined}
             />
-            {/* Orange only once there is something to send. */}
+            {/* Orange only once there is something to send. The circle is 36; the button around it 44. */}
             <Pressable
               onPress={send}
               disabled={!canSend}
-              hitSlop={4}
-              style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}
+              style={styles.sendTarget}
               accessibilityRole="button"
               accessibilityLabel="Send"
               accessibilityState={{ disabled: !canSend }}>
-              <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
+              <View style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}>
+                <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
+              </View>
             </Pressable>
           </View>
         </View>
@@ -652,6 +670,12 @@ function CallRow({ message, me, onCall }: { message: Message; me: string; onCall
   );
 }
 
+// The message box: one line high (44) at rest, growing to 140 before it scrolls.
+const INPUT_MIN = 44;
+const INPUT_MAX = 140;
+// On the web a multiline box is a <textarea>, which the browser makes two rows high unless told.
+const WEB_ONE_ROW = Platform.OS === 'web' ? { rows: 1 } : {};
+
 const styles = themed(() => ({
   screen: {
     flex: 1,
@@ -741,12 +765,12 @@ const styles = themed(() => ({
     alignItems: 'flex-start',
   },
   bubble: {
-    // The row allows 75% of the width; on a wide window a bubble stops at 520.
-    maxWidth: 520,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
     paddingBottom: Spacing.one,
     borderRadius: 18,
+    // The row allows 75% of the width; on a wide window a bubble stops at 520.
+    maxWidth: 520,
   },
   mine: {
     backgroundColor: Colors.bubble,
@@ -863,15 +887,15 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   attach: {
-    width: 40,
+    width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 140,
+    minHeight: INPUT_MIN,
+    maxHeight: INPUT_MAX,
     paddingHorizontal: Spacing.three,
     paddingTop: 11,
     paddingBottom: 11,
@@ -880,12 +904,25 @@ const styles = themed(() => ({
     color: Colors.text,
     ...Type.body,
     lineHeight: 22,
+    // The pill itself is the box; the browser's square outline would sit inside it.
+    ...(Platform.OS === 'web' ? { outlineWidth: 0 } : null),
+  },
+  sendTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   send: {
     width: 36,
     height: 36,
-    marginVertical: 4,
     borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removePhoto: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

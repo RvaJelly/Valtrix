@@ -7,6 +7,7 @@ import {
   type ComponentProps,
   type PropsWithChildren,
   type ReactNode,
+  type Ref,
 } from 'react';
 import {
   ActivityIndicator,
@@ -150,6 +151,9 @@ type ButtonProps = {
   icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
+  // In a narrow spot ("+250 ml" in a habit tile) the label stays on one line and shrinks a little at
+  // large text sizes instead of breaking in two.
+  oneLine?: boolean;
   accessibilityLabel?: string;
   testID?: string;
   style?: StyleProp<ViewStyle>;
@@ -170,6 +174,7 @@ export function Button({
   icon,
   loading,
   disabled,
+  oneLine,
   accessibilityLabel,
   testID,
   style,
@@ -230,7 +235,12 @@ export function Button({
         {/* While loading, the label keeps the button's width and a spinner shows in its place. */}
         <View style={[styles.buttonInner, loading && { opacity: 0 }]}>
           {icon ? <Ionicons name={icon} size={s.icon} color={color} /> : null}
-          <Text variant="button" style={{ color, fontSize: s.font, textAlign: 'center' }}>
+          <Text
+            variant="button"
+            style={[{ color, fontSize: s.font, textAlign: 'center' }, oneLine && { flexShrink: 1 }]}
+            numberOfLines={oneLine ? 1 : undefined}
+            adjustsFontSizeToFit={oneLine}
+            minimumFontScale={0.75}>
             {title}
           </Text>
         </View>
@@ -241,8 +251,19 @@ export function Button({
 }
 
 // A quiet text link under a form: an optional lead-in in the secondary colour ("New here?") and the
-// action in the text colour. Never as heavy as a button.
-export function TextLink({ lead, label, onPress }: { lead?: string; label: string; onPress: () => void }) {
+// action in the text colour. Never as heavy as a button. With `end` it sits at the right edge, under
+// a field ("Forgot password?").
+export function TextLink({
+  lead,
+  label,
+  onPress,
+  end,
+}: {
+  lead?: string;
+  label: string;
+  onPress: () => void;
+  end?: boolean;
+}) {
   const { hovered, hover } = useHover();
   return (
     <Pressable
@@ -250,7 +271,7 @@ export function TextLink({ lead, label, onPress }: { lead?: string; label: strin
       accessibilityLabel={lead ? `${lead} ${label}` : label}
       onPress={onPress}
       {...hover}
-      style={[styles.textLink, pointer]}>
+      style={[styles.textLink, end && styles.textLinkEnd, pointer]}>
       {({ pressed }) => (
         <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
           {lead ? `${lead} ` : null}
@@ -314,18 +335,30 @@ export function IconButton({
 
 // ---------- Inputs ----------
 
-type FieldProps = TextInputProps & { label: string; error?: string; optional?: boolean; icon?: IconName };
+type FieldProps = TextInputProps & {
+  label: string;
+  error?: string | null;
+  optional?: boolean;
+  icon?: IconName;
+  // A password box: hidden as it is typed, with an eye button on the right to show it.
+  password?: boolean;
+  // Lets Next on the keyboard move to this field (React 19 passes `ref` as a prop).
+  ref?: Ref<TextInput>;
+};
 
 // A labelled text box. The label stays above the field; focus and errors show on its border.
 // Focus is drawn in the text colour, which stands out on every theme and with every accent.
-export function TextField({ label, error, optional, icon, style, onFocus, onBlur, ...rest }: FieldProps) {
+export function TextField({ label, error, optional, icon, password, style, onFocus, onBlur, ...rest }: FieldProps) {
   const [focused, setFocused] = useState(false);
+  const [shown, setShown] = useState(false);
   const border = error ? Colors.danger : focused ? Colors.text : 'transparent';
+  const boxed = !!icon || !!password;
   const input = (
     <TextInput
       accessibilityLabel={label}
       placeholderTextColor={Colors.textSecondary}
       selectionColor={Colors.accent}
+      {...(password ? ({ secureTextEntry: !shown, autoCapitalize: 'none', autoCorrect: false } as const) : null)}
       onFocus={(e) => {
         setFocused(true);
         onFocus?.(e);
@@ -334,7 +367,7 @@ export function TextField({ label, error, optional, icon, style, onFocus, onBlur
         setFocused(false);
         onBlur?.(e);
       }}
-      style={[icon ? styles.inputBare : [styles.input, { borderColor: border }], style]}
+      style={[boxed ? styles.inputBare : [styles.input, { borderColor: border }], style]}
       {...rest}
     />
   );
@@ -342,12 +375,27 @@ export function TextField({ label, error, optional, icon, style, onFocus, onBlur
     <View style={{ gap: Spacing.two }}>
       <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }}>
         {label}
-        {optional ? <Text tone="tertiary"> (optional)</Text> : null}
+        {optional ? <Text style={{ fontFamily: Fonts.text }}> (optional)</Text> : null}
       </Text>
-      {icon ? (
-        <View style={[styles.inputBox, styles.inputRow, { borderColor: border }]}>
-          <Ionicons name={icon} size={18} color={Colors.textSecondary} />
+      {boxed ? (
+        <View style={[styles.inputBox, styles.inputRow, password && styles.inputBoxEnd, { borderColor: border }]}>
+          {icon ? <Ionicons name={icon} size={18} color={Colors.textSecondary} /> : null}
           {input}
+          {password ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={shown ? 'Hide password' : 'Show password'}
+              onPress={() => setShown((s) => !s)}
+              style={[styles.eye, pointer]}>
+              {({ pressed }) => (
+                <Ionicons
+                  name={shown ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={pressed ? Colors.text : Colors.textSecondary}
+                />
+              )}
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         input
@@ -357,20 +405,24 @@ export function TextField({ label, error, optional, icon, style, onFocus, onBlur
   );
 }
 
-// A search box: magnifier, placeholder and a clear button once something is typed.
+// A search box: magnifier, placeholder and a clear button once something is typed. Focus shows as a
+// border in the text colour around the whole box, like TextField.
 export function SearchField({
   value,
   onChangeText,
   placeholder,
   style,
+  onFocus,
+  onBlur,
   ...rest
 }: Omit<TextInputProps, 'style'> & {
   value: string;
   onChangeText: (text: string) => void;
   style?: StyleProp<ViewStyle>;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={[styles.search, style]}>
+    <View style={[styles.search, focused && { borderColor: Colors.text }, style]}>
       <Ionicons name="search-outline" size={18} color={Colors.textSecondary} />
       <TextInput
         value={value}
@@ -382,17 +434,27 @@ export function SearchField({
         autoCorrect={false}
         autoCapitalize="none"
         returnKeyType="search"
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
         style={styles.searchInput}
         {...rest}
       />
       {value ? (
+        // The x is small; the button around it is a full 44 square (hitSlop does nothing on the web).
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Clear search"
-          hitSlop={12}
           onPress={() => onChangeText('')}
-          style={pointer}>
-          <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
+          style={[styles.searchClear, pointer]}>
+          {({ pressed }) => (
+            <Ionicons name="close-circle" size={18} color={pressed ? Colors.textSecondary : Colors.textTertiary} />
+          )}
         </Pressable>
       ) : null}
     </View>
@@ -408,7 +470,7 @@ export function segmentOn(): ViewStyle {
 }
 
 // Two to four choices in one row: Workouts / Sessions, Navy / Light / Auto. The raised pill slides
-// to the new choice (instantly with reduced motion).
+// to the new choice (instantly with reduced motion). A value that is none of the options shows no pill.
 export function Segmented<T extends string>({
   options,
   value,
@@ -421,10 +483,8 @@ export function Segmented<T extends string>({
   style?: StyleProp<ViewStyle>;
 }) {
   const reduceMotion = useReducedMotion();
-  const index = Math.max(
-    0,
-    options.findIndex((o) => o.value === value),
-  );
+  const found = options.findIndex((o) => o.value === value);
+  const index = Math.max(0, found);
   const [width, setWidth] = useState(0);
   const [position] = useState(() => new Animated.Value(index));
   useEffect(() => {
@@ -439,7 +499,7 @@ export function Segmented<T extends string>({
       style={[styles.segmented, style]}
       accessibilityRole="tablist"
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      {segment > 0 ? (
+      {segment > 0 && found >= 0 ? (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -957,7 +1017,8 @@ export type StatusTone = 'success' | 'warning' | 'danger' | 'neutral' | 'muted';
 
 function statusColor(tone: StatusTone) {
   if (tone === 'neutral') return Colors.textSecondary;
-  if (tone === 'muted') return Colors.textTertiary;
+  // Muted pills are 12 px words on a tint, so they keep the secondary colour to stay above 4.5:1.
+  if (tone === 'muted') return Colors.textSecondary;
   return Colors[tone];
 }
 
@@ -1215,7 +1276,19 @@ export function EmptyState({ icon, title, message, action, compact }: EmptyState
   if (compact) {
     return (
       <Group>
-        <ListRow title={title} subtitle={message} leading={<IconTile icon={icon} />} trailing={action} last />
+        <ListRow
+          title={title}
+          titleLines={2}
+          // The message may take two lines, so it never ends in "…" beside a button.
+          subtitle={
+            <Text variant="footnote" tone="secondary" numberOfLines={3}>
+              {message}
+            </Text>
+          }
+          leading={<IconTile icon={icon} />}
+          trailing={action}
+          last
+        />
       </Group>
     );
   }
@@ -1253,6 +1326,12 @@ const styles = themed(() => ({
     alignSelf: 'center',
     paddingHorizontal: Spacing.two,
   },
+  // The words line up with the field's right edge; the tap area runs past it.
+  textLinkEnd: {
+    alignSelf: 'flex-end',
+    marginRight: -Spacing.two,
+    marginTop: -Spacing.two,
+  },
   iconPlain: {
     width: 44,
     height: 44,
@@ -1276,6 +1355,8 @@ const styles = themed(() => ({
     color: Colors.text,
     ...Type.body,
     paddingHorizontal: Spacing.three,
+    // The border draws the focus; the browser's own outline would double it.
+    ...(WEB ? { outlineWidth: 0 } : null),
   },
   // The same box as `input` without the text styles, for the row that holds an icon and the field.
   inputBox: {
@@ -1291,26 +1372,54 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.tight,
   },
+  // The password box ends in the eye button, which brings its own room.
+  inputBoxEnd: {
+    paddingRight: 0,
+  },
   inputBare: {
     flex: 1,
     alignSelf: 'stretch',
+    minWidth: 0,
     color: Colors.text,
     ...Type.body,
+    // The box around it draws the focus; the browser's own outline would sit inside it.
+    ...(WEB ? { outlineWidth: 0 } : null),
+  },
+  eye: {
+    width: 48,
+    alignSelf: 'stretch',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
     height: 44,
-    paddingHorizontal: Spacing.tight,
+    paddingHorizontal: Spacing.tight - 2,
     borderRadius: Radius.medium,
+    borderWidth: 2,
+    borderColor: 'transparent',
     backgroundColor: Colors.tint,
   },
   searchInput: {
     flex: 1,
     alignSelf: 'stretch',
+    // Lets the box shrink at large text sizes instead of pushing the clear button out.
+    minWidth: 0,
     color: Colors.text,
     ...Type.body,
+    ...(WEB ? { outlineWidth: 0 } : null),
+  },
+  // A 44 square over the box's right end (its 2 px border included).
+  searchClear: {
+    width: 44,
+    height: 44,
+    marginVertical: -2,
+    marginRight: -Spacing.tight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   segmented: {
     flexDirection: 'row',

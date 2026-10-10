@@ -122,8 +122,15 @@ const styles = themed(() => ({
     flexShrink: 1,
     color: Colors.onToast,
   },
+  // A full 44 pt target (hitSlop does nothing on the web) that reaches into the toast's padding, so
+  // the toast stays the same height and the word stays where it was.
   action: {
-    minHeight: 32,
+    minWidth: 44,
+    minHeight: 44,
+    marginVertical: -6,
+    marginHorizontal: -Spacing.two,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'center',
     justifyContent: 'center',
     ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
   },

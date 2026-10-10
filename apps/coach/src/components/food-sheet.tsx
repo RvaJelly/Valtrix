@@ -1,11 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, TextInput, View } from 'react-native';
 
 import { Sheet } from '@/components/sheet';
-import { Button, ErrorText, segmentOn, Text } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, ErrorText, Group, IconButton, IconTile, ListRow, Segmented, StatStrip, Text } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import {
   baseUnit,
@@ -143,57 +142,65 @@ function FoodDetails({
     }
   }
 
+  // The label's own figures are reference, so they sit quietly under the name. A diary entry knows
+  // only the unit it was logged in, so nothing shows for the other. Each figure keeps its name and
+  // unit on one line ("Fat 7.6 g"), so a narrow sheet wraps at the dots, never inside a figure.
+  const keep = (text: string) => text.replace(/ /g, '\u00A0');
+  const line = (label: string, n: Macros) =>
+    [
+      `${label}: ${keep(formatKcal(n.kcal))}`,
+      keep(`Protein ${formatGrams(n.protein)}`),
+      keep(`Carbs ${formatGrams(n.carbs)}`),
+      keep(`Fat ${formatGrams(n.fat)}`),
+    ].join(' · ');
+  const facts = [
+    food.per100 ? line(`Per 100 ${baseUnit(food)}`, food.per100) : null,
+    serving ? line(servingLabel(food), serving) : null,
+  ].filter((f): f is string => !!f);
   return (
     <>
       <View style={styles.header}>
         {food.image ? (
           <Image source={{ uri: food.image }} style={styles.image} contentFit="cover" accessibilityLabel="" />
         ) : (
-          <View style={[styles.image, styles.noImage]}>
-            <Ionicons name="nutrition-outline" size={26} color={Colors.textSecondary} />
-          </View>
+          <IconTile icon="restaurant-outline" style={styles.image} />
         )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name} numberOfLines={3}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="headline" numberOfLines={3}>
             {food.name}
           </Text>
-          {food.brand ? <Text style={styles.brand}>{food.brand}</Text> : null}
+          {food.brand ? (
+            <Text variant="footnote" tone="secondary">
+              {food.brand}
+            </Text>
+          ) : null}
         </View>
       </View>
 
-      <View style={styles.facts}>
-        {/* A diary entry knows only the unit it was logged in, so don't show an empty box for the other. */}
-        {food.per100 || mode !== 'edit' ? <Fact title={`Per 100 ${baseUnit(food)}`} macros={food.per100} /> : null}
-        {serving || mode !== 'edit' ? (
-          <Fact title={serving ? servingLabel(food) : 'Per serving'} macros={serving} />
-        ) : null}
-      </View>
+      {facts.length ? (
+        <View style={{ gap: Spacing.one }}>
+          {facts.map((fact) => (
+            <Text key={fact} variant="footnote" tone="secondary" style={Tabular}>
+              {fact}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       {units.length ? (
-        <View style={{ gap: Spacing.two }}>
-          <Text style={styles.label}>{mode === 'info' ? 'Work out an amount' : 'How much?'}</Text>
+        <View style={{ gap: Spacing.tight }}>
+          <Text variant="label" tone="secondary">
+            {mode === 'info' ? 'Work out an amount' : 'How much?'}
+          </Text>
           {units.length > 1 ? (
-            <View style={styles.segmented}>
-              {units.map((u) => (
-                <Pressable
-                  key={u}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: u === unit }}
-                  onPress={() => switchUnit(u)}
-                  style={[styles.segment, u === unit && segmentOn()]}>
-                  <Text style={[styles.segmentText, u !== unit && { color: Colors.textSecondary }]}>{unitName(u)}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Segmented
+              options={units.map((u) => ({ value: u, label: unitName(u) }))}
+              value={unit}
+              onChange={switchUnit}
+            />
           ) : null}
           <View style={styles.amountRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Less"
-              onPress={() => step(-1)}
-              style={({ pressed }) => [styles.stepper, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-              <Ionicons name="remove" size={24} color={Colors.text} />
-            </Pressable>
+            <IconButton icon="remove" label="Less" variant="tonal" onPress={() => step(-1)} style={styles.stepper} />
             <View style={[styles.amountBox, focused && styles.amountBoxFocused]}>
               <TextInput
                 accessibilityLabel="Amount"
@@ -207,243 +214,164 @@ function FoodDetails({
                 selectionColor={Colors.accent}
                 style={styles.amountInput}
               />
-              <Text style={styles.amountUnit}>
-                {unit === 'serving' ? (amount === 1 ? 'serving' : 'servings') : unit}
-              </Text>
+              {/* In the text colour: grey on the box's fill is too faint in a dark sheet. */}
+              <Text variant="callout">{unit === 'serving' ? (amount === 1 ? 'serving' : 'servings') : unit}</Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="More"
-              onPress={() => step(1)}
-              style={({ pressed }) => [styles.stepper, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-              <Ionicons name="add" size={24} color={Colors.text} />
-            </Pressable>
+            <IconButton icon="add" label="More" variant="tonal" onPress={() => step(1)} style={styles.stepper} />
           </View>
         </View>
       ) : null}
 
+      {/* What the chosen amount adds up to: the loudest numbers on the sheet, updating as it changes. */}
       {units.length ? (
-        <View
-          style={styles.total}
-          accessible
-          accessibilityLabel={totals ? `Adds up to ${formatKcal(totals.kcal)}` : ''}>
-          <Text style={styles.totalKcal}>{totals ? formatKcal(totals.kcal) : '–'}</Text>
-          <Text style={styles.totalMacros}>
-            {totals
-              ? `Protein ${formatGrams(totals.protein)} · Carbs ${formatGrams(totals.carbs)} · Fat ${formatGrams(totals.fat)}`
-              : 'Enter an amount'}
-          </Text>
+        <View style={styles.result}>
+          <View
+            style={styles.total}
+            accessible
+            accessibilityLabel={totals ? `Adds up to ${formatKcal(totals.kcal)}` : 'Enter an amount'}>
+            <Text variant="stat" style={Tabular}>
+              {totals ? formatKcal(totals.kcal) : '–'}
+            </Text>
+            {totals ? null : (
+              <Text variant="footnote" tone="secondary">
+                Enter an amount
+              </Text>
+            )}
+          </View>
+          <View style={styles.facts}>
+            <StatStrip
+              items={[
+                { value: totals ? formatGrams(totals.protein) : null, label: 'Protein' },
+                { value: totals ? formatGrams(totals.carbs) : null, label: 'Carbs' },
+                { value: totals ? formatGrams(totals.fat) : null, label: 'Fat' },
+              ]}
+            />
+          </View>
         </View>
       ) : null}
 
-      {!units.length ? <Text style={styles.note}>No calories are listed for this one yet.</Text> : null}
+      {!units.length ? (
+        <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
+          No calories are listed for this one yet.
+        </Text>
+      ) : null}
 
       <ErrorText>{error}</ErrorText>
-      {onSubmit && units.length ? (
-        <Button
-          title={actionLabel ?? (mode === 'edit' ? 'Save' : 'Add')}
-          onPress={submit}
-          loading={busy === 'save'}
-          disabled={!!busy}
-        />
+      <View style={{ gap: Spacing.two }}>
+        {onSubmit && units.length ? (
+          <Button
+            title={actionLabel ?? (mode === 'edit' ? 'Save' : 'Add')}
+            onPress={submit}
+            loading={busy === 'save'}
+            disabled={!!busy}
+          />
+        ) : null}
+        {footer}
+        {onRemove ? (
+          <Button
+            title="Remove from diary"
+            icon="trash-outline"
+            variant="destructive"
+            onPress={remove}
+            loading={busy === 'remove'}
+            disabled={!!busy}
+          />
+        ) : null}
+        <Button title={mode === 'info' ? 'Done' : 'Cancel'} variant="ghost" onPress={onClose} disabled={!!busy} />
+      </View>
+      {food.source === 'off' ? (
+        <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
+          {FOOD_CREDIT}
+        </Text>
       ) : null}
-      {footer}
-      {onRemove ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={remove}
-          disabled={!!busy}
-          style={({ pressed }) => [styles.remove, pressed && { opacity: 0.6 }]}>
-          <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-          <Text style={styles.removeText}>{busy === 'remove' ? 'Removing…' : 'Remove from diary'}</Text>
-        </Pressable>
+      {food.source === 'mine' ? (
+        <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
+          One of your own foods
+        </Text>
       ) : null}
-      <Button title={mode === 'info' ? 'Done' : 'Cancel'} variant="ghost" onPress={onClose} disabled={!!busy} />
-      {food.source === 'off' ? <Text style={styles.credit}>{FOOD_CREDIT}</Text> : null}
-      {food.source === 'mine' ? <Text style={styles.credit}>One of your own foods</Text> : null}
     </>
   );
 }
 
-// One food in a list, with its calories.
-export function FoodRow({ food, onPress, loading }: { food: Food; onPress: () => void; loading?: boolean }) {
+// One food in a list, with its calories. On its own it is a small card; `grouped` makes it a row
+// of a Group (`last` drops its hairline).
+export function FoodRow({
+  food,
+  onPress,
+  loading,
+  grouped,
+  last,
+}: {
+  food: Food;
+  onPress: () => void;
+  loading?: boolean;
+  grouped?: boolean;
+  last?: boolean;
+}) {
   const serving = perServing(food);
   const detail = food.per100
     ? `${formatKcal(food.per100.kcal)} per 100 ${baseUnit(food)}`
     : serving
       ? `${formatKcal(serving.kcal)} per serving`
       : 'No calories listed';
-  return (
-    <Pressable
-      accessibilityRole="button"
+  const row = (
+    <ListRow
+      title={food.name}
+      titleLines={2}
+      subtitle={[food.brand, detail].filter(Boolean).join(' · ')}
+      leading={
+        food.image ? (
+          <Image source={{ uri: food.image }} style={styles.rowImage} contentFit="cover" accessibilityLabel="" />
+        ) : (
+          <IconTile icon={food.source === 'recent' ? 'time-outline' : 'restaurant-outline'} />
+        )
+      }
+      trailing={loading ? <ActivityIndicator size="small" color={Colors.textSecondary} /> : null}
+      chevron={!loading}
       accessibilityLabel={`${food.name}${food.brand ? `, ${food.brand}` : ''}. ${detail}`}
-      onPress={onPress}
-      disabled={loading}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      {food.image ? (
-        <Image source={{ uri: food.image }} style={styles.rowImage} contentFit="cover" accessibilityLabel="" />
-      ) : (
-        <View style={[styles.rowImage, styles.noImage]}>
-          <Ionicons
-            name={food.source === 'recent' ? 'time-outline' : 'nutrition-outline'}
-            size={20}
-            color={Colors.textSecondary}
-          />
-        </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowName} numberOfLines={2}>
-          {food.name}
-        </Text>
-        <Text style={styles.rowDetail} numberOfLines={1}>
-          {[food.brand, detail].filter(Boolean).join(' · ')}
-        </Text>
-      </View>
-      {loading ? (
-        <ActivityIndicator color={Colors.textSecondary} />
-      ) : (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-      )}
-    </Pressable>
+      onPress={loading ? undefined : onPress}
+      last={!grouped || last}
+    />
   );
-}
-
-function Fact({ title, macros }: { title: string; macros: Macros | null }) {
-  return (
-    <View style={styles.fact}>
-      <Text style={styles.factTitle} numberOfLines={2}>
-        {title}
-      </Text>
-      <Text style={[styles.factKcal, !macros && { color: Colors.textSecondary }]}>
-        {macros ? formatKcal(macros.kcal) : 'Not listed'}
-      </Text>
-      {macros ? (
-        <Text style={styles.factMacros}>
-          Protein {formatGrams(macros.protein)}
-          {'\n'}Carbs {formatGrams(macros.carbs)}
-          {'\n'}Fat {formatGrams(macros.fat)}
-        </Text>
-      ) : null}
-    </View>
-  );
+  return grouped ? row : <Group>{row}</Group>;
 }
 
 const styles = themed(() => ({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 64,
-    padding: Spacing.two,
-    paddingRight: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
   rowImage: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.small,
-    backgroundColor: Colors.background,
-  },
-  rowName: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  rowDetail: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.tint,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: Spacing.tight,
   },
   image: {
-    width: 60,
-    height: 60,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
-  noImage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  brand: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  facts: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  fact: {
-    flex: 1,
-    gap: Spacing.one,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
-  factTitle: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  factKcal: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  factMacros: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  segmented: {
-    flexDirection: 'row',
-    padding: 3,
+    width: 56,
+    height: 56,
     borderRadius: Radius.medium,
     backgroundColor: Colors.tint,
   },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.small,
-  },
-  segmentText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+  facts: {
+    borderRadius: Radius.large,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.surface,
+    paddingVertical: Spacing.one,
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.tight,
   },
   stepper: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
+  // A field like any other: a fill at rest, and the whole box shows focus in the text colour (in
+  // place of the browser's outline around the number only).
   amountBox: {
     flex: 1,
     flexDirection: 'row',
@@ -451,66 +379,30 @@ const styles = themed(() => ({
     minHeight: 52,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: Colors.tint,
   },
   amountBoxFocused: {
-    // The whole box shows focus, in place of the browser's outline around the number only.
-    borderWidth: 2,
     borderColor: Colors.text,
-    paddingHorizontal: Spacing.three - 1,
   },
+  // Typed numbers are Inter with even-width figures; Chakra Petch is for numbers that stand still.
   amountInput: {
     flex: 1,
     minWidth: 0,
     outlineWidth: 0,
     color: Colors.text,
+    fontFamily: Fonts.textSemi,
     fontSize: 22,
-    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
     paddingVertical: Spacing.two,
   },
-  amountUnit: {
-    color: Colors.textSecondary,
-    fontSize: 16,
-    fontWeight: '700',
+  result: {
+    gap: Spacing.tight,
   },
   total: {
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: Spacing.two,
-  },
-  totalKcal: {
-    color: Colors.text,
-    fontSize: 30,
-    fontWeight: '900',
-  },
-  totalMacros: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  remove: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    minHeight: 48,
-  },
-  removeText: {
-    color: Colors.danger,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  credit: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
+    gap: Spacing.one,
+    paddingTop: Spacing.two,
   },
 }));

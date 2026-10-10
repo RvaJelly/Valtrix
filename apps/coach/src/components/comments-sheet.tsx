@@ -83,7 +83,9 @@ export function CommentsSheet({
 }: Props) {
   const { session, profile } = useAuth();
   const me = session?.user.id ?? '';
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  // On a wide window the sheet is a 560 wide panel in the middle, like every other sheet.
+  const wide = width > 600;
   const postId = reel?.id ?? null;
   const [slide] = useState(() => new Animated.Value(0));
 
@@ -92,6 +94,8 @@ export function CommentsSheet({
   const [attempt, setAttempt] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [text, setText] = useState('');
+  // On the web the box is one row that grows with what is typed (up to 110).
+  const [webHeight, setWebHeight] = useState(44);
   const [chosen, setChosen] = useState<PostComment | null>(null);
   const [step, setStep] = useState<'menu' | 'report' | 'thanks'>('menu');
   const [busy, setBusy] = useState(false);
@@ -316,38 +320,47 @@ export function CommentsSheet({
 
   const remaining = COMMENT_MAX - text.length;
   const canSend = !!text.trim();
-  const sheetHeight = Math.round(height * 0.72);
+  const sheetHeight = Math.round(height * (wide ? 0.8 : 0.72));
+  // Slides up by its own height on a phone; a short rise and a fade on a wide window.
+  const travel = wide ? 24 : sheetHeight;
   const chosenName = chosen ? authorName(chosen) : '';
 
   if (!reel) return null;
 
   return (
     <View style={styles.cover} role="dialog" aria-modal accessibilityViewIsModal>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
-        <Animated.View style={[styles.backdrop, { opacity: slide }]}>
+      <KeyboardAvoidingView
+        style={[styles.wrap, wide && styles.wrapWide]}
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: slide }]}>
           <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close comments" />
         </Animated.View>
         <Animated.View
           style={[
             styles.sheet,
+            wide && styles.sheetWide,
             {
               height: sheetHeight,
-              transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight, 0] }) }],
+              transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [travel, 0] }) }],
             },
+            wide && { opacity: slide },
           ]}>
           <View style={styles.header}>
-            <View style={styles.grabber} />
-            <Text variant="headline" accessibilityRole="header">
-              Comments
-            </Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={6}
-              style={({ pressed }) => [styles.close, pressed && { backgroundColor: Colors.tint }]}
-              accessibilityRole="button"
-              accessibilityLabel="Close comments">
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
-            </Pressable>
+            {wide ? null : <View style={styles.grabber} />}
+            {/* The title and the close button share one 44 pt row, so they line up on their centres. */}
+            <View style={styles.titleRow}>
+              <Text variant="title" accessibilityRole="header">
+                Comments
+              </Text>
+              <Pressable
+                onPress={onClose}
+                hitSlop={6}
+                style={({ pressed }) => [styles.close, pressed && { backgroundColor: Colors.tint }]}
+                accessibilityRole="button"
+                accessibilityLabel="Close comments">
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
           </View>
 
           {!shown && failedFor !== postId ? (
@@ -419,7 +432,13 @@ export function CommentsSheet({
                 selectionColor={Colors.accent}
                 maxLength={COMMENT_MAX}
                 multiline
-                style={styles.input}
+                {...WEB_ONE_ROW}
+                onContentSizeChange={
+                  Platform.OS === 'web'
+                    ? (e) => setWebHeight(Math.min(110, Math.max(44, e.nativeEvent.contentSize.height)))
+                    : undefined
+                }
+                style={[styles.input, Platform.OS === 'web' && { height: text ? webHeight : 44 }]}
                 accessibilityLabel="Add a comment"
                 onKeyPress={Platform.OS === 'web' ? onKey : undefined}
               />
@@ -427,12 +446,13 @@ export function CommentsSheet({
               <Pressable
                 onPress={send}
                 disabled={!canSend}
-                hitSlop={4}
-                style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}
+                style={styles.sendTarget}
                 accessibilityRole="button"
                 accessibilityLabel="Post comment"
                 accessibilityState={{ disabled: !canSend }}>
-                <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
+                <View style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}>
+                  <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
+                </View>
               </Pressable>
             </View>
           </View>
@@ -526,6 +546,9 @@ export function CommentsSheet({
 
 const REASONS = Object.keys(REPORT_REASONS) as ReportReason[];
 
+// On the web a multiline box is a <textarea>, which the browser makes two rows high unless told.
+const WEB_ONE_ROW = Platform.OS === 'web' ? { rows: 1 } : {};
+
 // A comment's shape while the list loads.
 function CommentSkeleton({ short }: { short?: boolean }) {
   return (
@@ -565,8 +588,10 @@ function CommentRow({
         disabled={!onAuthor}
         accessibilityRole={onAuthor ? 'button' : undefined}
         accessibilityLabel={onAuthor ? `See ${name}'s profile` : undefined}
-        hitSlop={4}>
-        <Avatar url={comment.author_avatar} name={name} size={36} />
+        style={styles.avatarTarget}>
+        <View style={styles.avatarRing}>
+          <Avatar url={comment.author_avatar} name={name} size={36} />
+        </View>
       </Pressable>
       <Pressable
         style={{ flex: 1, gap: 2 }}
@@ -648,13 +673,21 @@ const styles = themed(() => ({
     zIndex: 10,
     elevation: 10,
   },
-  backdrop: {
+  wrap: {
     flex: 1,
-    minHeight: 40,
+    justifyContent: 'flex-end',
+  },
+  wrapWide: {
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  backdrop: {
     backgroundColor: Colors.scrim,
   },
   sheet: {
     flexShrink: 1,
+    // A strip of the reel stays above the sheet (and the keyboard) to tap and close it.
+    marginTop: 40,
     overflow: 'hidden',
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -665,12 +698,24 @@ const styles = themed(() => ({
       ? { borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, borderColor: Colors.borderStrong }
       : null),
   },
+  sheetWide: {
+    width: 560,
+    maxWidth: '100%',
+    alignSelf: 'center',
+    marginTop: 0,
+    borderRadius: Radius.xl,
+    borderBottomWidth: Colors.scheme === 'dark' ? StyleSheet.hairlineWidth : 0,
+  },
   header: {
-    alignItems: 'center',
     paddingTop: Spacing.two,
-    paddingBottom: Spacing.tight,
+    paddingBottom: Spacing.one,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
+  },
+  titleRow: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   grabber: {
     alignSelf: 'center',
@@ -683,7 +728,7 @@ const styles = themed(() => ({
   close: {
     position: 'absolute',
     right: Spacing.two,
-    top: Spacing.two,
+    top: 0,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -709,6 +754,17 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
+  },
+  // 44 square around the 36 photo without moving it.
+  avatarTarget: {
+    margin: -4,
+    padding: 4,
+  },
+  // On dark sheets an initials circle is nearly the sheet's colour, so a hairline keeps its edge.
+  avatarRing: {
+    borderRadius: 19,
+    borderWidth: Colors.scheme === 'dark' ? StyleSheet.hairlineWidth : 0,
+    borderColor: Colors.borderStrong,
   },
   more: {
     width: 44,
@@ -744,10 +800,16 @@ const styles = themed(() => ({
     lineHeight: 22,
     ...(Platform.OS === 'web' ? { outlineWidth: 0 } : null),
   },
+  sendTarget: {
+    width: 44,
+    height: 44,
+    marginRight: -4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   send: {
     width: 36,
     height: 36,
-    marginVertical: 4,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',

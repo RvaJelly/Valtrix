@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from
 import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Body, Button, ErrorText, Text, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, EmptyState, ErrorText, IconButton, Text, TextField } from '@/components/ui';
+import { BRAND, Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { isBarcode } from '@/lib/food';
 
 // Food packs use these barcodes. Leaving out QR codes and the rest keeps scanning quick.
@@ -96,12 +96,16 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
             <View style={styles.shade} />
           </View>
           <View style={[styles.shade, { alignItems: 'center', paddingTop: Spacing.four }]}>
-            <Text style={styles.hint}>Line up the barcode inside the box</Text>
+            <Text variant="callout" style={styles.hint}>
+              Line up the barcode inside the box
+            </Text>
           </View>
         </View>
         <View style={[styles.cameraBar, { paddingTop: insets.top + Spacing.two }]}>
           <RoundButton icon="close" label="Close" onPress={onClose} />
-          <Text style={styles.cameraTitle}>Scan a barcode</Text>
+          <Text variant="headline" style={styles.onCamera}>
+            Scan a barcode
+          </Text>
           {Platform.OS !== 'web' ? (
             <RoundButton
               icon={torch ? 'flashlight' : 'flashlight-outline'}
@@ -115,16 +119,20 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
         <View style={[styles.cameraBottom, { paddingBottom: insets.bottom + Spacing.four }]}>
           {busy || message ? (
             <View style={styles.pill} accessibilityLiveRegion="polite">
-              {busy ? <ActivityIndicator color="#FFFFFF" /> : null}
-              <Text style={styles.pillText}>{busy ? 'Looking it up…' : message}</Text>
+              {busy ? <ActivityIndicator color={BRAND.white} /> : null}
+              <Text variant="callout" style={[styles.onCamera, { flexShrink: 1 }]}>
+                {busy ? 'Looking it up…' : message}
+              </Text>
             </View>
           ) : null}
           <Pressable
             accessibilityRole="button"
             onPress={() => setTyping(true)}
             style={({ pressed }) => [styles.typeButton, pressed && { opacity: 0.7 }]}>
-            <Ionicons name="keypad" size={20} color="#FFFFFF" />
-            <Text style={styles.typeButtonText}>Type the barcode number</Text>
+            <Ionicons name="keypad-outline" size={20} color={BRAND.white} />
+            <Text variant="button" style={styles.onCamera}>
+              Type the barcode number
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -133,7 +141,8 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
 
   let body;
   if (!checked) {
-    body = <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />;
+    // Asking the phone takes a moment; nothing shows rather than a spinner.
+    body = null;
   } else if (typing || !hasCamera) {
     body = (
       <TypeBarcode
@@ -187,15 +196,8 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          onPress={onClose}
-          hitSlop={8}
-          style={styles.barButton}>
-          <Ionicons name="close" size={26} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.barTitle}>{typing || !hasCamera ? 'Type a barcode' : 'Scan a barcode'}</Text>
+        <IconButton icon="close" label="Close" onPress={onClose} />
+        <Text variant="headline">{typing || !hasCamera ? 'Type a barcode' : 'Scan a barcode'}</Text>
         <View style={{ width: 44 }} />
       </View>
       <ScrollView
@@ -223,7 +225,7 @@ function RoundButton({
       onPress={onPress}
       hitSlop={8}
       style={({ pressed }) => [styles.round, pressed && { opacity: 0.7 }]}>
-      <Ionicons name={icon} size={24} color="#FFFFFF" />
+      <Ionicons name={icon} size={24} color={BRAND.white} />
     </Pressable>
   );
 }
@@ -240,18 +242,12 @@ function Explain({
   children: ReactNode;
 }) {
   return (
-    <View style={{ gap: Spacing.three }}>
-      <View style={styles.explain}>
-        <View style={styles.explainIcon}>
-          <Ionicons name={icon} size={34} color={Colors.accentText} />
-        </View>
-        <Text style={styles.explainTitle}>{title}</Text>
-        <Body secondary style={{ textAlign: 'center' }}>
-          {text}
-        </Body>
-      </View>
-      {children}
-    </View>
+    <EmptyState
+      icon={icon}
+      title={title}
+      message={text}
+      action={<View style={{ gap: Spacing.two, alignSelf: 'stretch' }}>{children}</View>}
+    />
   );
 }
 
@@ -319,13 +315,15 @@ const styles = themed(() => ({
     height: 170,
     borderRadius: Radius.large,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: BRAND.white,
   },
   hint: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    color: BRAND.white,
+    fontFamily: Fonts.textSemi,
     textAlign: 'center',
+  },
+  onCamera: {
+    color: BRAND.white,
   },
   cameraBar: {
     position: 'absolute',
@@ -336,11 +334,6 @@ const styles = themed(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.three,
-  },
-  cameraTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '800',
   },
   round: {
     width: 44,
@@ -369,12 +362,6 @@ const styles = themed(() => ({
     borderRadius: Radius.large,
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
-  pillText: {
-    flexShrink: 1,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
   typeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -384,11 +371,6 @@ const styles = themed(() => ({
     borderRadius: 26,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  typeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
   page: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -397,44 +379,15 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.tight,
     minHeight: 52,
   },
-  barButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  barTitle: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
   pageContent: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     gap: Spacing.three,
     width: '100%',
-    maxWidth: 560,
+    maxWidth: Layout.maxForm,
     alignSelf: 'center',
-  },
-  explain: {
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingVertical: Spacing.four,
-  },
-  explainIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  explainTitle: {
-    color: Colors.text,
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
   },
 }));

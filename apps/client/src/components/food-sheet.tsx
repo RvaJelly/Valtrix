@@ -17,6 +17,7 @@ import {
   startingAmount,
   unitsFor,
   type Food,
+  type Macros,
   type Unit,
 } from '@/lib/food';
 
@@ -141,8 +142,21 @@ function FoodDetails({
     }
   }
 
-  // A diary entry knows only the unit it was logged in, so don't show an empty row for the other.
-  const showPer100 = !!food.per100 || mode !== 'edit';
+  // The label's own figures are reference, so they sit quietly under the name. A diary entry knows
+  // only the unit it was logged in, so nothing shows for the other. Each figure keeps its name and
+  // unit on one line ("Fat 7.6 g"), so a narrow sheet wraps at the dots, never inside a figure.
+  const keep = (text: string) => text.replace(/ /g, '\u00A0');
+  const line = (label: string, n: Macros) =>
+    [
+      `${label}: ${keep(formatKcal(n.kcal))}`,
+      keep(`Protein ${formatGrams(n.protein)}`),
+      keep(`Carbs ${formatGrams(n.carbs)}`),
+      keep(`Fat ${formatGrams(n.fat)}`),
+    ].join(' · ');
+  const facts = [
+    food.per100 ? line(`Per 100 ${baseUnit(food)}`, food.per100) : null,
+    serving ? line(servingLabel(food), serving) : null,
+  ].filter((f): f is string => !!f);
   return (
     <>
       <View style={styles.header}>
@@ -163,35 +177,14 @@ function FoodDetails({
         </View>
       </View>
 
-      {showPer100 ? (
-        <View style={{ gap: Spacing.two }}>
-          <View style={styles.factsHeader}>
-            <Text variant="label" tone="secondary" style={{ flex: 1 }}>
-              Per 100 {baseUnit(food)}
+      {facts.length ? (
+        <View style={{ gap: Spacing.one }}>
+          {facts.map((fact) => (
+            <Text key={fact} variant="footnote" tone="secondary" style={Tabular}>
+              {fact}
             </Text>
-            <Text variant="footnote" tone="secondary" style={Tabular}>
-              {food.per100 ? formatKcal(food.per100.kcal) : 'Not listed'}
-            </Text>
-          </View>
-          {food.per100 ? (
-            <View style={styles.facts}>
-              <StatStrip
-                items={[
-                  { value: formatGrams(food.per100.protein), label: 'Protein' },
-                  { value: formatGrams(food.per100.carbs), label: 'Carbs' },
-                  { value: formatGrams(food.per100.fat), label: 'Fat' },
-                ]}
-              />
-            </View>
-          ) : null}
+          ))}
         </View>
-      ) : null}
-      {serving || mode !== 'edit' ? (
-        <Text variant="footnote" tone="secondary">
-          {serving
-            ? `${servingLabel(food)}: ${formatKcal(serving.kcal)} · Protein ${formatGrams(serving.protein)} · Carbs ${formatGrams(serving.carbs)} · Fat ${formatGrams(serving.fat)}`
-            : 'No serving size listed.'}
-        </Text>
       ) : null}
 
       {units.length ? (
@@ -221,28 +214,39 @@ function FoodDetails({
                 selectionColor={Colors.accent}
                 style={styles.amountInput}
               />
-              <Text variant="callout" tone="secondary">
-                {unit === 'serving' ? (amount === 1 ? 'serving' : 'servings') : unit}
-              </Text>
+              {/* In the text colour: grey on the box's fill is too faint in a dark sheet. */}
+              <Text variant="callout">{unit === 'serving' ? (amount === 1 ? 'serving' : 'servings') : unit}</Text>
             </View>
             <IconButton icon="add" label="More" variant="tonal" onPress={() => step(1)} style={styles.stepper} />
           </View>
         </View>
       ) : null}
 
+      {/* What the chosen amount adds up to: the loudest numbers on the sheet, updating as it changes. */}
       {units.length ? (
-        <View
-          style={styles.total}
-          accessible
-          accessibilityLabel={totals ? `Adds up to ${formatKcal(totals.kcal)}` : ''}>
-          <Text variant="stat" style={Tabular}>
-            {totals ? formatKcal(totals.kcal) : '–'}
-          </Text>
-          <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
-            {totals
-              ? `Protein ${formatGrams(totals.protein)} · Carbs ${formatGrams(totals.carbs)} · Fat ${formatGrams(totals.fat)}`
-              : 'Enter an amount'}
-          </Text>
+        <View style={styles.result}>
+          <View
+            style={styles.total}
+            accessible
+            accessibilityLabel={totals ? `Adds up to ${formatKcal(totals.kcal)}` : 'Enter an amount'}>
+            <Text variant="stat" style={Tabular}>
+              {totals ? formatKcal(totals.kcal) : '–'}
+            </Text>
+            {totals ? null : (
+              <Text variant="footnote" tone="secondary">
+                Enter an amount
+              </Text>
+            )}
+          </View>
+          <View style={styles.facts}>
+            <StatStrip
+              items={[
+                { value: totals ? formatGrams(totals.protein) : null, label: 'Protein' },
+                { value: totals ? formatGrams(totals.carbs) : null, label: 'Carbs' },
+                { value: totals ? formatGrams(totals.fat) : null, label: 'Fat' },
+              ]}
+            />
+          </View>
         </View>
       ) : null}
 
@@ -350,11 +354,6 @@ const styles = themed(() => ({
     borderRadius: Radius.medium,
     backgroundColor: Colors.tint,
   },
-  factsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
   facts: {
     borderRadius: Radius.large,
     borderCurve: 'continuous',
@@ -371,6 +370,8 @@ const styles = themed(() => ({
     height: 52,
     borderRadius: 26,
   },
+  // A field like any other: a fill at rest, and the whole box shows focus in the text colour (in
+  // place of the browser's outline around the number only).
   amountBox: {
     flex: 1,
     flexDirection: 'row',
@@ -378,29 +379,30 @@ const styles = themed(() => ({
     minHeight: 52,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: Colors.tint,
   },
   amountBoxFocused: {
-    // The whole box shows focus, in place of the browser's outline around the number only.
-    borderWidth: 2,
     borderColor: Colors.text,
-    paddingHorizontal: Spacing.three - 1,
   },
+  // Typed numbers are Inter with even-width figures; Chakra Petch is for numbers that stand still.
   amountInput: {
     flex: 1,
     minWidth: 0,
     outlineWidth: 0,
     color: Colors.text,
-    fontFamily: Fonts.displaySemi,
-    fontSize: 24,
+    fontFamily: Fonts.textSemi,
+    fontSize: 22,
     fontVariant: ['tabular-nums'],
     paddingVertical: Spacing.two,
+  },
+  result: {
+    gap: Spacing.tight,
   },
   total: {
     alignItems: 'center',
     gap: Spacing.one,
-    paddingVertical: Spacing.two,
+    paddingTop: Spacing.two,
   },
 }));

@@ -224,7 +224,7 @@ export function isMissedCall(call: Pick<CallInfo, 'status' | 'caller_id'>, myId:
 
 // One line for the chat list.
 export function previewOf(chat: ChatSummary, myId: string) {
-  if (!chat.last_kind) return 'Say hi 👋';
+  if (!chat.last_kind) return 'Say hi';
   if (chat.last_kind === 'call' && chat.last_call_status) {
     return callLabel(
       {

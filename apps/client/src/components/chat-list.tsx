@@ -5,7 +5,16 @@ import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
-import { Button, EmptyState, groupedItem, PageHeader, SkeletonRows, Text, useDelayed } from '@/components/ui';
+import {
+  Button,
+  EmptyState,
+  groupedItem,
+  PageHeader,
+  SearchField,
+  SkeletonRows,
+  Text,
+  useDelayed,
+} from '@/components/ui';
 import { Colors, Fonts, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { previewOf, shortWhen, type ChatSummary } from '@/lib/chat';
@@ -28,6 +37,7 @@ export function ChatList({
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
   const showSkeleton = useDelayed(300);
+  const [query, setQuery] = useState('');
 
   const reload = useCallback(async () => {
     const list = await refresh();
@@ -46,7 +56,10 @@ export function ChatList({
     setRefreshing(false);
   }
 
-  const rows = ready ? chats : [];
+  // A search box once the list is long enough to need one.
+  const searchable = ready && chats.length >= SEARCH_FROM;
+  const needle = searchable ? query.trim().toLowerCase() : '';
+  const rows = ready ? (needle ? chats.filter((c) => c.other_name.toLowerCase().includes(needle)) : chats) : [];
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <FlatList
@@ -61,6 +74,7 @@ export function ChatList({
         ListHeaderComponent={
           <View style={styles.header}>
             <PageHeader title={title} />
+            {searchable ? <SearchField value={query} onChangeText={setQuery} placeholder="Search chats" /> : null}
             {!ready && !failed && showSkeleton ? <SkeletonRows count={4} avatar /> : null}
           </View>
         }
@@ -72,6 +86,8 @@ export function ChatList({
               message="Check your internet connection and try again."
               action={<Button title="Try again" variant="secondary" onPress={pull} loading={refreshing} />}
             />
+          ) : ready && needle ? (
+            <EmptyState compact icon="search-outline" title="No chats match" message="Try another name." />
           ) : ready ? (
             <EmptyState icon="chatbubbles-outline" title={empty.title} message={empty.message} action={empty.action} />
           ) : null
@@ -108,7 +124,7 @@ function ChatRow({ chat, me, last }: { chat: ChatSummary; me: string; last: bool
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${chat.other_name}. ${preview}${unread ? `. ${chat.unread} unread` : ''}`}>
-      <Avatar url={chat.other_avatar} name={chat.other_name} size={48} />
+      <Avatar url={chat.other_avatar} name={chat.other_name} size={52} />
       <View style={[styles.body, !last && styles.line]}>
         <View style={styles.top}>
           <Text variant="rowTitle" numberOfLines={1} style={[{ flex: 1 }, unread && { fontFamily: Fonts.textSemi }]}>
@@ -158,6 +174,8 @@ function ChatRow({ chat, me, last }: { chat: ChatSummary; me: string; last: bool
     </Pressable>
   );
 }
+
+const SEARCH_FROM = 5;
 
 const styles = themed(() => ({
   screen: {

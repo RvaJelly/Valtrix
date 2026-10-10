@@ -132,7 +132,8 @@ const BASES: Record<Scheme, Base> = {
     text: '#FFFFFF',
     textSecondary: '#A3A3A4',
     textTertiary: '#8A8A8C',
-    danger: '#FF6B6B',
+    // Light enough for a red label on a tinted button inside a sheet (4.7:1 or better).
+    danger: '#FF8A8A',
     success: '#3DD68C',
     warning: '#F5B83D',
     toast: '#2B2B2C',

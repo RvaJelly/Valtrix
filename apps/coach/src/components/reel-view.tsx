@@ -2,7 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Text } from '@/components/ui';
@@ -58,6 +66,9 @@ export function ReelView({
   });
   const [ready, setReady] = useState(false);
   const name = authorName(reel);
+  // A phone reel is tall. In a landscape window (a computer) it is shown whole, with black at the
+  // sides, instead of cropped to its middle.
+  const landscape = useWindowDimensions().width > height;
 
   useEventListener(player, 'statusChange', ({ status }) => setReady(status === 'readyToPlay'));
 
@@ -72,7 +83,12 @@ export function ReelView({
 
   return (
     <View style={{ height, backgroundColor: BRAND.iron }}>
-      <VideoView player={player} style={styles.video} contentFit="cover" nativeControls={false} />
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit={landscape ? 'contain' : 'cover'}
+        nativeControls={false}
+      />
       {!ready ? <ActivityIndicator color={withAlpha(BRAND.white, 0.6)} style={StyleSheet.absoluteFill} /> : null}
       {/* A soft dark fade at the bottom keeps the name and caption readable on any video. */}
       <View style={[styles.scrim, SCRIM]} pointerEvents="none" />
@@ -237,6 +253,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    minHeight: 44,
   },
   name: {
     flexShrink: 1,

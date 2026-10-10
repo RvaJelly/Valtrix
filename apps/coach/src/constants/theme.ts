@@ -132,7 +132,8 @@ const BASES: Record<Scheme, Base> = {
     text: '#FFFFFF',
     textSecondary: '#A7ABB4',
     textTertiary: '#8A909D',
-    danger: '#FF6B6B',
+    // Light enough for a red label on a tinted button inside a sheet (4.7:1 or better).
+    danger: '#FF8A8A',
     success: '#3DD68C',
     warning: '#F5B83D',
     toast: '#222D45',
@@ -347,6 +348,7 @@ export const Layout = {
   touch: 44, // minimum hit area (use hitSlop when the visible control is smaller)
   maxClient: 640, // client screens on a wide window
   maxCoach: 720, // coach screens on a wide window
+  maxCoachWide: 1080, // a client's page, two columns on a wide window
   maxWelcome: 480, // welcome, sign-in and sign-up column
   maxForm: 560,
   sidebar: 232, // tab sidebar width at 1024 px and wider

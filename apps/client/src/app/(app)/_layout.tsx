@@ -61,6 +61,9 @@ export default function AppLayout() {
         <Stack.Screen name="settings/privacy" options={{ title: 'Privacy and blocked people' }} />
         <Stack.Screen name="settings/account" options={{ title: 'Account and password' }} />
         <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
+        <Stack.Screen name="settings/calendar" options={{ title: 'Calendar link' }} />
+        <Stack.Screen name="book" options={{ title: 'Book a session' }} />
+        <Stack.Screen name="health" options={{ title: 'Health form' }} />
         <Stack.Screen name="settings/trainer/[id]" options={{ title: '' }} />
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
         {/* No swipe back by mistake mid-workout; the workout stays on the phone anyway. */}

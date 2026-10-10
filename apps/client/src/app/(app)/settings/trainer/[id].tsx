@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -16,12 +16,15 @@ import {
   StatusPill,
   Text,
 } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, Tabular } from '@/constants/theme';
+import { loadBookingInfo, loadMyPacks, type MyPack } from '@/lib/booking';
 import { useChat } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
+import { dayMonth } from '@/lib/format';
 import { refreshReminders } from '@/lib/reminders';
 import { leaveTrainer, trainerTitle, type Trainer } from '@/lib/trainers';
+import { dayFromKey } from '@/lib/zones';
 
 // One of the client's trainers: what they see, their profile and chat, and Leave.
 export default function TrainerSettings() {
@@ -30,7 +33,28 @@ export default function TrainerSettings() {
   const { refresh } = useChat();
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Whether this trainer takes bookings in the app from the person, and their packs with them. Both
+  // are left out when they can't be loaded or the database is older.
+  const [canBook, setCanBook] = useState(false);
+  const [packs, setPacks] = useState<MyPack[]>([]);
   const trainer = trainers?.find((t) => t.trainer_id === id) ?? null;
+
+  useEffect(() => {
+    let alive = true;
+    loadBookingInfo(id)
+      .then((info) => {
+        if (alive) setCanBook(!!info?.can_book);
+      })
+      .catch(() => {});
+    loadMyPacks()
+      .then((list) => {
+        if (alive) setPacks((list ?? []).filter((p) => p.trainer_id === id && !p.ended));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   if (!trainers) {
     return (
@@ -60,7 +84,7 @@ export default function TrainerSettings() {
   async function leave(t: Trainer) {
     const sure = await confirm(
       `Leave ${name}?`,
-      `${first} will no longer see your food diary, workouts, progress (weight, measurements and photos), check-ins, habits, chat or calls, and you won't see the plans and sessions they set for you. ${first} keeps their own notes. You can join again if they send you a new invite.`,
+      `${first} will no longer see your food diary, workouts, progress (weight, measurements and photos), check-ins, habits, health form, chat or calls, and you won't see the plans and sessions they set for you. ${first} keeps their own notes. You can join again if they send you a new invite.`,
       'Leave',
     );
     if (!sure) return;
@@ -100,13 +124,14 @@ export default function TrainerSettings() {
 
       {archived ? (
         <Notice>
-          {first} archived you for now, so they don&apos;t see your food diary, workouts, progress, check-ins, habits or
-          chat. They will again if they make you active. Leave if you don&apos;t want that.
+          {first} archived you for now, so they don&apos;t see your food diary, workouts, progress, check-ins, habits,
+          health form or chat. They will again if they make you active. Leave if you don&apos;t want that.
         </Notice>
       ) : (
         <Section title={`${first} sees`}>
           <Text variant="callout" tone="secondary">
-            Your food diary, workouts, progress (including photos), check-ins, habits and your chats with them.
+            Your food diary, workouts, progress (including photos), check-ins, habits, your health form if you filled it
+            in, your sessions with them and your chats with them.
           </Text>
         </Section>
       )}
@@ -128,10 +153,34 @@ export default function TrainerSettings() {
                 params: { id: trainer.client_id, name, avatar: trainer.trainer_avatar ?? '' },
               })
             }
+            last={!canBook}
+          />
+        ) : null}
+        {!archived && canBook ? (
+          <ListRow
+            title="Book a session"
+            leading={<IconTile icon="calendar-outline" />}
+            onPress={() => router.push({ pathname: '/book', params: { trainer: trainer.trainer_id } })}
+            testID="trainer-book"
             last
           />
         ) : null}
       </Group>
+
+      {packs.length ? (
+        <Group testID="trainer-pack">
+          {packs.map((p, i) => (
+            <ListRow
+              key={p.id}
+              title={`Pack · ${p.sessions_left} of ${p.sessions_total} left`}
+              subtitle={p.expires_on ? `Ends ${dayMonth(dayFromKey(p.expires_on))}` : 'No end date'}
+              titleStyle={Tabular}
+              leading={<IconTile icon="albums-outline" />}
+              last={i === packs.length - 1}
+            />
+          ))}
+        </Group>
+      ) : null}
 
       <View style={{ gap: Spacing.two }}>
         <ErrorText>{error}</ErrorText>

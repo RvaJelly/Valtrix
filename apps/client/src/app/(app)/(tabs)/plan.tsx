@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AnswerNotice } from '@/components/answer-notice';
 import { Chips } from '@/components/chips';
 import { SessionRow } from '@/components/session-row';
+import { SessionSheet } from '@/components/session-sheet';
 import {
   Button,
   Card,
@@ -23,9 +25,19 @@ import {
   Text,
   useDelayed,
 } from '@/components/ui';
+import { WaitingSheet } from '@/components/waiting-sheet';
 import { Colors, Fonts, Layout, Spacing, Tabular, themed } from '@/constants/theme';
+import { firstOf } from '@/lib/book-times';
+import {
+  loadBookingInfo,
+  loadMyPacks,
+  loadMyTimeRequests,
+  type BookingInfo,
+  type MyPack,
+  type MyTimeRequest,
+} from '@/lib/booking';
 import { useChatEvents } from '@/lib/chat-live';
-import { dayMonth, longDate, shortDate } from '@/lib/format';
+import { ago, dayMonth, longDate, shortDate, timeRange } from '@/lib/format';
 import {
   dateOf,
   daysLabel,
@@ -44,6 +56,7 @@ import {
 } from '@/lib/plan';
 import { addDays, dayKey, endOf, formatDay, loadSessions, sameDay, type Session } from '@/lib/sessions';
 import { loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
+import { dayFromKey } from '@/lib/zones';
 
 type Tab = 'workouts' | 'sessions';
 type When = 'upcoming' | 'past';
@@ -52,6 +65,27 @@ const WHEN: Record<When, string> = { upcoming: 'Upcoming', past: 'Past' };
 
 // How far ahead and back the session lists reach.
 const DAYS = 180;
+
+// Booking in the app: what each trainer allows (by trainer id), the times the person asked for, and
+// their packs. Empty on an older database, which hides each part.
+type Booking = { infos: Record<string, BookingInfo>; requests: MyTimeRequest[]; packs: MyPack[] };
+const NO_BOOKING: Booking = { infos: {}, requests: [], packs: [] };
+
+// The trainers the person has, and what each allows, or null when they couldn't load.
+async function loadLinked() {
+  try {
+    const linked = await loadTrainers();
+    const answers = await Promise.all(linked.map((t) => loadBookingInfo(t.trainer_id).catch(() => null)));
+    const infos: Record<string, BookingInfo> = {};
+    linked.forEach((t, i) => {
+      const info = answers[i];
+      if (info) infos[t.trainer_id] = info;
+    });
+    return { linked, infos };
+  } catch {
+    return null;
+  }
+}
 
 function openWorkout(item: PlanItem) {
   router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } });
@@ -72,6 +106,7 @@ export default function Plan() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   // Only for the empty states' "Message {trainer}": a failure just leaves the action out.
   const [trainers, setTrainers] = useState<Trainer[] | null>(null);
+  const [booking, setBooking] = useState<Booking>(NO_BOOKING);
   const [when, setWhen] = useState<When>('upcoming');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,10 +124,13 @@ export default function Plan() {
     const mine = ++loads.current;
     const now = new Date();
     loadedFor.current = dayKey(now);
-    const [items, list, linked] = await Promise.all([
+    // A failed call is undefined (what was shown stays); null is an older database (the part hides).
+    const [items, list, linked, requests, packs] = await Promise.all([
       loadPlan(now).catch(() => null),
       loadSessions(addDays(now, -DAYS), addDays(now, DAYS)).catch(() => null),
-      loadTrainers().catch(() => null),
+      loadLinked(),
+      loadMyTimeRequests().catch(() => undefined),
+      loadMyPacks().catch(() => undefined),
     ]);
     // A week with nothing in it asks once what comes later.
     const ahead = items && !items.length ? await loadNextPlanned(now).catch(() => null) : null;
@@ -102,14 +140,20 @@ export default function Plan() {
       setNext(ahead);
     }
     if (list) setSessions(list);
-    if (linked) setTrainers(linked);
+    if (linked) setTrainers(linked.linked);
+    setBooking((old) => ({
+      infos: linked ? linked.infos : old.infos,
+      requests: requests === undefined ? old.requests : (requests ?? []),
+      packs: packs === undefined ? old.packs : (packs ?? []),
+    }));
     setError(items && list ? null : 'Could not load your plan. Check your internet connection.');
   }, []);
 
-  // A trainer changed the plan or a session, or a trainer link changed (or news may have been missed
-  // while the connection was down): load again once the news stops, a second after the last.
+  // A trainer changed the plan or a session, answered a time the person asked for, or a trainer link
+  // changed (or news may have been missed while the connection was down): load again once the news
+  // stops, a second after the last.
   useChatEvents((event) => {
-    if (!['plan', 'session', 'link', 'reconnected'].includes(event.type)) return;
+    if (!['plan', 'session', 'news', 'link', 'reconnected'].includes(event.type)) return;
     if (newsTimer.current) clearTimeout(newsTimer.current);
     newsTimer.current = setTimeout(() => {
       newsTimer.current = null;
@@ -183,7 +227,14 @@ export default function Plan() {
             <SkeletonRows count={3} />
           ) : null
         ) : sessions ? (
-          <Sessions sessions={sessions} trainers={trainers} when={when} onWhen={setWhen} />
+          <Sessions
+            sessions={sessions}
+            trainers={trainers}
+            booking={booking}
+            when={when}
+            onWhen={setWhen}
+            onChanged={load}
+          />
         ) : !error && showSkeleton ? (
           <SkeletonRows count={3} />
         ) : null}
@@ -530,21 +581,27 @@ function WeekRow({
 function Sessions({
   sessions,
   trainers,
+  booking,
   when,
   onWhen,
+  onChanged,
 }: {
   sessions: Session[];
   trainers: Trainer[] | null;
+  booking: Booking;
   when: When;
   onWhen: (when: When) => void;
+  onChanged: () => void;
 }) {
+  // The open sheets, by id, so a reload shows what is true now.
+  const [openSession, setOpenSession] = useState<string | null>(null);
+  const [openRequest, setOpenRequest] = useState<string | null>(null);
   const now = new Date();
-  const shown = sessions.filter((s) =>
-    when === 'upcoming' ? s.status === 'scheduled' && endOf(s) > now : endOf(s) <= now || s.status !== 'scheduled',
-  );
-  if (when === 'past') shown.reverse();
+  const upcoming = sessions.filter((s) => s.status === 'scheduled' && endOf(s) > now);
+  const shown =
+    when === 'upcoming' ? upcoming : sessions.filter((s) => endOf(s) <= now || s.status !== 'scheduled').reverse();
   // The trainer's name only matters when there are several.
-  const manyTrainers = new Set(sessions.map((s) => s.client_id)).size > 1;
+  const manyTrainers = new Set(sessions.map((s) => s.client_id)).size > 1 || (trainers?.length ?? 0) > 1;
 
   // Group by day, keeping the order.
   const days: { key: string; date: Date; items: Session[] }[] = [];
@@ -555,19 +612,100 @@ function Sessions({
     days.at(-1)!.items.push(s);
   }
   const single = trainers?.length === 1 ? firstName(trainerTitle(trainers[0])) : null;
+  // The only trainer paused this person's sessions: they can't book, so the empty state says so.
+  const paused = !!single && booking.infos[trainers![0].trainer_id]?.reason === 'paused';
+
+  // The trainers who take bookings in the app from this person, in the order of their links.
+  const bookable = (trainers ?? []).filter((t) => booking.infos[t.trainer_id]?.can_book);
+  const bookFirst =
+    bookable.length === 1 ? firstOf(booking.infos[bookable[0].trainer_id], firstName(trainerTitle(bookable[0]))) : null;
+  const openBook = () =>
+    router.push(bookable.length === 1 ? { pathname: '/book', params: { trainer: bookable[0].trainer_id } } : '/book');
+  const waiting = booking.requests
+    .filter((r) => r.status === 'pending' || r.status === 'expired')
+    .sort((a, b) => (a.starts_at < b.starts_at ? -1 : a.starts_at > b.starts_at ? 1 : 0));
+  // Times a trainer declined in the last 14 days, newest first, so an answer seen once can be found again.
+  const declined = booking.requests
+    .filter(
+      (r) => r.status === 'declined' && now.getTime() - Date.parse(r.answered_at ?? r.created_at) < 14 * 86_400_000,
+    )
+    .sort((a, b) => (a.starts_at < b.starts_at ? 1 : a.starts_at > b.starts_at ? -1 : 0));
+  // Nothing coming up and nothing waiting: the empty state holds the Book button instead of the card.
+  const empty = upcoming.length === 0 && waiting.length === 0;
+  const showCard = bookable.length > 0 && !(when === 'upcoming' && empty);
+  const packs = booking.packs;
+
+  const openedSession = openSession ? (sessions.find((s) => s.id === openSession) ?? null) : null;
+  const openedRequest = openRequest ? (booking.requests.find((r) => r.id === openRequest) ?? null) : null;
 
   return (
     <>
+      <AnswerNotice place="plan" testID="plan-answer" />
+      {showCard ? (
+        <Card hero testID="plan-book-card" style={{ gap: Spacing.one }}>
+          <Text variant="headline">{bookFirst ? `Book with ${bookFirst}` : 'Book a session'}</Text>
+          <Text variant="callout" tone="secondary">
+            {bookFirst ? 'Pick a time that suits you.' : 'Pick a trainer and a time that suits you.'}
+          </Text>
+          <Button title="Book a session" onPress={openBook} testID="plan-book" style={{ marginTop: Spacing.three }} />
+        </Card>
+      ) : null}
+      {packs.length ? <Packs packs={packs} many={new Set(packs.map((p) => p.trainer_id)).size > 1} /> : null}
+
       <Chips options={WHEN} value={when} onChange={(next) => next && onWhen(next)} />
+      {when === 'upcoming' && waiting.length ? (
+        <Section title="Waiting for an answer">
+          <Group>
+            {waiting.map((r, i) => (
+              <WaitingRow
+                key={r.id}
+                request={r}
+                showTrainer={manyTrainers}
+                last={i === waiting.length - 1}
+                onPress={() => setOpenRequest(r.id)}
+              />
+            ))}
+          </Group>
+        </Section>
+      ) : null}
+      {when === 'past' && declined.length ? (
+        <Section title="Not booked">
+          <Group>
+            {declined.map((r, i) => (
+              <WaitingRow
+                key={r.id}
+                request={r}
+                showTrainer={manyTrainers}
+                last={i === declined.length - 1}
+                onPress={() => setOpenRequest(r.id)}
+              />
+            ))}
+          </Group>
+        </Section>
+      ) : null}
       {days.length === 0 ? (
         when === 'upcoming' ? (
-          <EmptyState
-            icon="calendar-outline"
-            title="Nothing booked"
-            message={`Sessions ${single ?? 'your trainer'} books for you show up here.`}
-            action={<TrainerAction trainers={trainers} />}
-          />
-        ) : (
+          waiting.length ? null : (
+            <EmptyState
+              icon="calendar-outline"
+              title="Nothing booked"
+              message={
+                paused
+                  ? `Your sessions with ${single} are paused. Sessions ${single} books for you show here.`
+                  : bookable.length
+                    ? `Sessions you book, or ${single ?? 'your trainer'} books for you, show here.`
+                    : `Sessions ${single ?? 'your trainer'} books for you show here.`
+              }
+              action={
+                bookable.length ? (
+                  <Button title="Book a session" size="medium" onPress={openBook} testID="plan-book" />
+                ) : (
+                  <TrainerAction trainers={trainers} />
+                )
+              }
+            />
+          )
+        ) : declined.length ? null : (
           <EmptyState compact icon="time-outline" title="No past sessions" message="Finished sessions show up here." />
         )
       ) : null}
@@ -583,12 +721,103 @@ function Sessions({
                 muted={when === 'past'}
                 join={when === 'upcoming'}
                 last={i === d.items.length - 1}
+                onPress={() => setOpenSession(s.id)}
               />
             ))}
           </Group>
         </Section>
       ))}
+
+      <SessionSheet session={openedSession} onClose={() => setOpenSession(null)} onChanged={onChanged} />
+      <WaitingSheet request={openedRequest} onClose={() => setOpenRequest(null)} onChanged={onChanged} />
     </>
+  );
+}
+
+// A time the person asked for: the day and time, when they asked, Waiting (or, muted, Expired when the
+// time passed before the trainer answered, Declined when the trainer couldn't take it).
+function WaitingRow({
+  request,
+  showTrainer,
+  last,
+  onPress,
+}: {
+  request: MyTimeRequest;
+  showTrainer: boolean;
+  last: boolean;
+  onPress: () => void;
+}) {
+  const start = new Date(request.starts_at);
+  const end = new Date(start.getTime() + request.duration_minutes * 60_000);
+  const expired = request.status === 'expired';
+  const declined = request.status === 'declined';
+  const asked = `asked ${ago(new Date(request.created_at))}`;
+  const subtitle = showTrainer ? `With ${firstOf(request)} · ${asked}` : asked.charAt(0).toUpperCase() + asked.slice(1);
+  // When it wraps beside the pill, it breaks after the day ("Mon 19 Oct ·" / "10:00–11:00"), never inside.
+  const title = `${shortDate(start).replace(/ /g, '\u00a0')} · ${timeRange(start, end).replace('–', '\u2060–\u2060')}`;
+  const pill = expired ? 'Expired' : declined ? 'Declined' : 'Waiting';
+  return (
+    <ListRow
+      title={title}
+      titleTone={expired || declined ? 'secondary' : undefined}
+      titleStyle={Tabular}
+      titleLines={2}
+      subtitle={subtitle}
+      status={<StatusPill tone="neutral" label={pill} />}
+      onPress={onPress}
+      accessibilityLabel={`${title}, ${subtitle}, ${pill}`}
+      accessibilityHint="Opens the request"
+      testID={`plan-waiting-${request.id}`}
+      last={last}
+    />
+  );
+}
+
+// The person's packs of sessions: how many are left of how many, and until when. Never a price.
+function Packs({ packs, many }: { packs: MyPack[]; many: boolean }) {
+  return (
+    <Group testID="plan-pack">
+      {packs.map((p, i) => {
+        const ends = p.expires_on ? dayFromKey(p.expires_on) : null;
+        const title =
+          p.ended && ends
+            ? `Pack ended ${dayMonth(ends)}`
+            : p.sessions_left === 0
+              ? 'Pack used up'
+              : `Your pack · ${p.sessions_left} of ${p.sessions_total} left`;
+        const details = [
+          p.ended ? `${p.used} of ${p.sessions_total} used` : ends ? `ends ${dayMonth(ends)}` : 'no end date',
+          many ? `with ${firstOf(p)}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <ListRow
+            key={p.id}
+            title={title}
+            titleTone={p.ended ? 'secondary' : undefined}
+            titleStyle={Tabular}
+            leading={<IconTile icon="albums-outline" />}
+            subtitle={
+              <View style={{ gap: Spacing.two }}>
+                <Text variant="footnote" tone="secondary" style={Tabular}>
+                  {details.charAt(0).toUpperCase() + details.slice(1)}
+                </Text>
+                {p.ended ? null : (
+                  <ProgressBar
+                    progress={p.sessions_total ? p.sessions_left / p.sessions_total : 0}
+                    color={Colors.text}
+                  />
+                )}
+              </View>
+            }
+            accessibilityLabel={`${title}, ${details}`}
+            testID={`plan-pack-${p.id}`}
+            last={i === packs.length - 1}
+          />
+        );
+      })}
+    </Group>
   );
 }
 

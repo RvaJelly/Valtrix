@@ -144,8 +144,8 @@ export function InviteCard({
       </View>
       <Text variant="callout" tone="secondary">
         If you accept, {firstName} can see your food diary, workouts, progress (weight, measurements and photos),
-        check-ins and habits, including what you logged before, and your chats. You can message and call each other. You
-        can leave any time in Settings.
+        check-ins and habits, including what you logged before, your health form if you filled it in, your sessions with
+        them and your chats. You can message and call each other. You can leave any time in Settings.
       </Text>
       <View style={styles.buttons}>
         <Button

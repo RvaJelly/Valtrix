@@ -18,6 +18,8 @@ import { useAuth } from '@/lib/auth';
 import { CHAT_ROLE } from '@/lib/chat-role';
 import { loadChats, type ChatSummary, type Message } from '@/lib/chat';
 import { currentCall, fetchCall, isOver, rememberCall, RING_SECONDS, ringingCalls, type Call } from '@/lib/calls';
+import type { NewsKind } from '@/lib/news';
+import { refreshReminders } from '@/lib/reminders';
 import { playTone, stopTone } from '@/lib/ring';
 import { supabase } from '@/lib/supabase';
 
@@ -29,7 +31,9 @@ import { supabase } from '@/lib/supabase';
 // says a trainer replied to a check-in (kind 'reply'), so the check-in screen and
 // Home can show it. 'session' news says a trainer booked, moved, cancelled or marked
 // one of the person's sessions, and 'plan' news that their plan changed, so Home and
-// the Plan tab can load again.
+// the Plan tab can load again. 'news' says a trainer answered a request for a time or a
+// request to train (kept in the news table until seen), or that a request was settled
+// elsewhere (kind 'withdrawn'). Reminders follow every change to the person's sessions.
 
 export type ChatEvent =
   | { type: 'message'; message: Message }
@@ -40,6 +44,13 @@ export type ChatEvent =
   | { type: 'progress'; client_id: string | null; kind: ProgressKind; check_in_id: string | null }
   | { type: 'session'; client_id: string }
   | { type: 'plan'; client_id: string }
+  | {
+      type: 'news';
+      id: string | null;
+      kind: NewsKind | 'withdrawn';
+      client_id: string | null;
+      request_id: string | null;
+    }
   | { type: 'reconnected' };
 
 export type ProgressKind = 'workout' | 'weight' | 'measurements' | 'photo' | 'check_in' | 'reply';
@@ -74,6 +85,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const waiting = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const wasLocked = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(
     () =>
@@ -107,6 +119,16 @@ export function ChatProvider({ children }: PropsWithChildren) {
       refreshTimer.current = null;
       refresh();
     }, 250);
+  });
+
+  // A session was booked, moved, cancelled or approved: set the phone's reminders again once the news
+  // stops (one booking of 12 weekly sessions is one piece of news), so none fires for a time that moved.
+  const remindSoon = useEffectEvent(() => {
+    if (reminderTimer.current) clearTimeout(reminderTimer.current);
+    reminderTimer.current = setTimeout(() => {
+      reminderTimer.current = null;
+      refreshReminders();
+    }, 1000);
   });
 
   // Stops waiting for one call, or for all of them. The ringtone stops with the last one.
@@ -199,6 +221,17 @@ export function ChatProvider({ children }: PropsWithChildren) {
         })
         .on('broadcast', { event: 'session' }, ({ payload }) => {
           emit({ type: 'session', client_id: payload.client_id });
+          remindSoon();
+        })
+        .on('broadcast', { event: 'news' }, ({ payload }) => {
+          emit({
+            type: 'news',
+            id: payload.id ?? null,
+            kind: payload.kind,
+            client_id: payload.client_id ?? null,
+            request_id: payload.request_id ?? null,
+          });
+          if (payload.kind === 'booking_answered') remindSoon();
         })
         .on('broadcast', { event: 'plan' }, ({ payload }) => {
           emit({ type: 'plan', client_id: payload.client_id });
@@ -267,6 +300,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const onLeave = useEffectEvent(() => {
     stopWaiting();
     if (retryTimer.current) clearTimeout(retryTimer.current);
+    if (reminderTimer.current) clearTimeout(reminderTimer.current);
   });
   useEffect(() => () => onLeave(), []);
 

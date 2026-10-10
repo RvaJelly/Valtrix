@@ -1,16 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 
+import { AskSheet } from '@/components/ask-sheet';
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
 import { useToast } from '@/components/toast';
-import { Body, Button, EmptyState, Notice, Section, Skeleton, StatusPill, Text } from '@/components/ui';
+import {
+  Body,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Notice,
+  Section,
+  Skeleton,
+  StatusPill,
+  Text,
+  TextLink,
+} from '@/components/ui';
 import { BRAND, Colors, Fonts, Layout, Radius, Spacing, themed, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
+import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
+import { ago, dayMonth } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { loadReels, timeAgo, type Reel } from '@/lib/posts';
 import { serial, type Current } from '@/lib/serial';
@@ -19,11 +35,20 @@ import {
   distanceLabel,
   listTrainers,
   loadInvites,
+  loadRequestState,
   loadTrainers,
+  trainerTitle,
+  withdrawAsk,
   yearsLabel,
   type Invite,
   type PublicTrainer,
+  type RequestState,
 } from '@/lib/trainers';
+import { dayFromKey } from '@/lib/zones';
+
+// Whether the person can ask this trainer to train them: loading (undefined), an older database
+// without requests (null, round 2's share-your-email flow), failed, or the database's answer.
+type Ask = RequestState | null | undefined | 'failed';
 
 // A trainer's public profile.
 export default function TrainerProfile() {
@@ -38,7 +63,22 @@ export default function TrainerProfile() {
   const [invite, setInvite] = useState<Invite | null>(null);
   // Their latest reels, from the feed. Left out when the feed can't be loaded.
   const [reels, setReels] = useState<Reel[]>([]);
+  // The trainer the person already trains with, when it isn't this one.
+  const [otherTrainer, setOtherTrainer] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Ask>(undefined);
+  const [asking, setAsking] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const toast = useToast();
+
+  // What the person can do about training with this trainer; a failed reload keeps what shows.
+  const loadAsk = useCallback(
+    () => loadRequestState(id).then(setAsk, () => setAsk((shown) => (shown === undefined ? 'failed' : shown))),
+    [id],
+  );
+
+  useEffect(() => {
+    loadAsk();
+  }, [loadAsk]);
 
   const loadOnce = useCallback(
     (current: Current) =>
@@ -66,6 +106,8 @@ export default function TrainerProfile() {
           // A trainer known only from their invite stays while the invites can't be loaded.
           setTrainer((shown) => all.find((t) => t.id === id) ?? own ?? (invites ? null : (shown ?? null)));
           setChatId(link?.client_id ?? null);
+          const other = mine.find((t) => t.trainer_id !== id);
+          setOtherTrainer(other ? trainerTitle(other) : null);
           // When the invites couldn't be loaded, the invite on screen stays.
           setInvite((shown) => (invites ? asked : shown));
         })
@@ -106,7 +148,10 @@ export default function TrainerProfile() {
   // Answered on another phone, or the trainer sent or withdrew the invite. News sent while
   // the connection was down is missed, so load again when it is back.
   useChatEvents((event) => {
-    if (event.type === 'link' || event.type === 'reconnected') load();
+    if (event.type === 'link' || event.type === 'reconnected') {
+      load();
+      loadAsk();
+    } else if (event.type === 'news' && (event.kind === 'training_answered' || event.kind === 'withdrawn')) loadAsk();
   });
 
   if (trainer === undefined) {
@@ -159,7 +204,7 @@ export default function TrainerProfile() {
   ].filter(Boolean);
 
   // A trainer adds clients by email in Voltrix Coach: hand the client's email over to send them.
-  async function ask() {
+  async function shareEmail() {
     const message = `Hi ${firstName}, I'd like to train with you. Please add me in Voltrix Coach with ${email}.`;
     if (Platform.OS !== 'web') {
       await Share.share({ message }).catch(() => {});
@@ -235,16 +280,35 @@ export default function TrainerProfile() {
         ) : null}
 
         {!isMine && !isMe && !invite ? (
-          <View style={{ gap: Spacing.two }}>
-            <Button
-              title={`Ask to train with ${firstName}`}
-              icon={Platform.OS === 'web' ? 'copy-outline' : 'share-outline'}
-              onPress={ask}
-            />
-            <Text variant="footnote" tone="secondary">
-              {firstName} adds you in Voltrix Coach with your email{email ? `, ${email}` : ''}. Their invite then shows
-              up here for you to accept.
-            </Text>
+          <View testID="ask-area">
+            {ask === null ? (
+              // An older database: round 2's way, sharing the email for the trainer to add.
+              <View style={{ gap: Spacing.two }}>
+                <Button
+                  title={`Ask to train with ${firstName}`}
+                  icon={Platform.OS === 'web' ? 'copy-outline' : 'share-outline'}
+                  onPress={shareEmail}
+                />
+                <Text variant="footnote" tone="secondary">
+                  {firstName} adds you in Voltrix Coach with your email{email ? `, ${email}` : ''}. Their invite then
+                  shows up here for you to accept.
+                </Text>
+              </View>
+            ) : (
+              <AskArea
+                ask={ask}
+                first={firstName}
+                otherTrainer={otherTrainer}
+                retrying={retrying}
+                onRetry={async () => {
+                  setRetrying(true);
+                  await loadAsk();
+                  setRetrying(false);
+                }}
+                onOpen={() => setAsking(true)}
+                onChanged={loadAsk}
+              />
+            )}
           </View>
         ) : null}
 
@@ -293,7 +357,136 @@ export default function TrainerProfile() {
           </Section>
         ) : null}
       </View>
+      <AskSheet
+        visible={asking}
+        trainerId={trainer.id}
+        first={firstName}
+        onClose={() => setAsking(false)}
+        onSent={loadAsk}
+      />
     </ScrollView>
+  );
+}
+
+// The ask area of a profile, as the database decides it: Ask to train, the request sent (with
+// Withdraw), or why the person can't ask now.
+function AskArea({
+  ask,
+  first,
+  otherTrainer,
+  retrying,
+  onRetry,
+  onOpen,
+  onChanged,
+}: {
+  ask: Exclude<Ask, null>;
+  first: string;
+  otherTrainer: string | null;
+  retrying: boolean;
+  onRetry: () => void;
+  onOpen: () => void;
+  onChanged: () => void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (ask === undefined) return <Skeleton width="100%" height={52} radius={Radius.medium} />;
+  if (ask === 'failed') {
+    return (
+      <Notice tone="danger" action={{ label: 'Try again', onPress: onRetry, loading: retrying }}>
+        Couldn’t check whether you can ask {first}. Check your connection.
+      </Notice>
+    );
+  }
+
+  async function withdraw(id: string) {
+    if (busy) return;
+    const sure = await confirm(
+      'Withdraw your request?',
+      `${first} won’t see it any more. You can ask again later.`,
+      'Withdraw',
+    );
+    if (!sure) return;
+    setBusy(true);
+    setError(null);
+    try {
+      toast((await withdrawAsk(id)) ? 'Request withdrawn.' : `${first} has answered already.`);
+      onChanged();
+    } catch (e) {
+      haptic.warning();
+      setError(plainError(e, 'Couldn’t withdraw. Check your connection and try again.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const request = ask.request;
+  if (request?.status === 'pending') {
+    return (
+      <Card style={{ gap: Spacing.one }} testID="ask-pending">
+        <Text variant="headline">Request sent {ago(new Date(request.created_at))}</Text>
+        <Text variant="callout" tone="secondary">
+          {first} sees it in Voltrix Coach.
+        </Text>
+        <ErrorText>{error}</ErrorText>
+        <View style={{ alignSelf: 'flex-start', opacity: busy ? 0.5 : 1 }}>
+          <TextLink label="Withdraw request" onPress={() => withdraw(request.id)} testID="ask-withdraw" />
+        </View>
+      </Card>
+    );
+  }
+
+  if (ask.can_ask) {
+    return <Button title={`Ask to train with ${first}`} onPress={onOpen} testID="ask-open" />;
+  }
+
+  switch (ask.why) {
+    case 'waiting':
+      return (
+        <Footnote>
+          {ask.waiting_with
+            ? `You’ve asked ${ask.waiting_with}. Withdraw that request to ask ${first}.`
+            : `You’ve asked another trainer. Withdraw that request to ask ${first}.`}
+        </Footnote>
+      );
+    case 'declined':
+      return (
+        <Notice>
+          {ask.ask_again_on
+            ? `${first} can’t take you on right now. You can ask again from ${dayMonth(dayFromKey(ask.ask_again_on))}.`
+            : `${first} can’t take you on right now.`}
+        </Notice>
+      );
+    case 'not_taking':
+      return (
+        <View style={{ gap: Spacing.two, alignItems: 'flex-start' }}>
+          <StatusPill tone="neutral" label="Not taking new clients" />
+          <Footnote>{first} isn’t taking new clients right now.</Footnote>
+        </View>
+      );
+    case 'unconfirmed':
+      return <Footnote>Confirm your email, then you can ask {first} to train you.</Footnote>;
+    case 'limit':
+      return <Footnote>You’ve sent 3 requests today. Try again tomorrow.</Footnote>;
+    case 'has_trainer': {
+      const name = otherTrainer ?? 'your trainer';
+      return (
+        <Footnote>
+          You train with {name}. To ask someone new, leave {name} in Settings first.
+        </Footnote>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+function Footnote({ children }: { children: ReactNode }) {
+  return (
+    <Text variant="footnote" tone="secondary">
+      {children}
+    </Text>
   );
 }
 

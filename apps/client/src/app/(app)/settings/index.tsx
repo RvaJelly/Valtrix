@@ -1,5 +1,5 @@
-import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -18,7 +18,12 @@ import {
 } from '@/components/ui';
 import { ACCENTS, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import type { CalendarLink } from '@/lib/calendar-link';
+import { dayMonth } from '@/lib/format';
+import type { HealthForm } from '@/lib/health';
+import { loadMyForm } from '@/lib/my-health';
 import { leadLabel } from '@/lib/reminders';
+import { callRpc } from '@/lib/rpc';
 import { useSettings } from '@/lib/settings';
 import { trainerTitle } from '@/lib/trainers';
 
@@ -31,8 +36,54 @@ export default function Settings() {
   const [codeOpen, setCodeOpen] = useState(false);
   const name = profile?.full_name || 'Your profile';
   const email = session?.user.email ?? '';
+  // The health form and the calendar link: undefined until known, and left out on an older database
+  // or when they can't be loaded.
+  const [health, setHealth] = useState<HealthForm | null | undefined>(undefined);
+  const [calendarOn, setCalendarOn] = useState<boolean | undefined>(undefined);
 
-  const rows: { icon: IconName; title: string; subtitle: string; href: Href }[] = [
+  // Loaded each time Settings shows, so coming back from either page shows what changed.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      loadMyForm()
+        .then((form) => {
+          if (alive) setHealth(form);
+        })
+        .catch(() => {});
+      callRpc<Partial<CalendarLink> | null>('calendar_link', { p_make: false })
+        .then((answer) => {
+          if (alive) setCalendarOn(answer.missing ? undefined : !!answer.data?.token);
+        })
+        .catch(() => {});
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
+
+  const rows: { icon: IconName; title: string; subtitle: string; href: Href; testID?: string }[] = [
+    ...(health !== undefined
+      ? [
+          {
+            icon: 'medkit-outline' as const,
+            title: 'Health form',
+            subtitle: health ? `Signed ${dayMonth(new Date(health.signed_at))}` : 'Not filled in',
+            href: '/health' as const,
+            testID: 'settings-health',
+          },
+        ]
+      : []),
+    ...(calendarOn !== undefined
+      ? [
+          {
+            icon: 'link-outline' as const,
+            title: 'Calendar link',
+            subtitle: calendarOn ? 'On' : 'Off',
+            href: '/settings/calendar' as const,
+            testID: 'settings-calendar',
+          },
+        ]
+      : []),
     {
       icon: 'notifications-outline',
       title: 'Notifications',
@@ -138,6 +189,7 @@ export default function Settings() {
             subtitle={row.subtitle}
             leading={<IconTile icon={row.icon} />}
             onPress={() => router.push(row.href)}
+            testID={row.testID}
             last={i === rows.length - 1}
           />
         ))}

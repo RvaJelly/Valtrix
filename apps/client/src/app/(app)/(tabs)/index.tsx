@@ -1,16 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AnswerNotice } from '@/components/answer-notice';
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
 import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
+import { SessionSheet } from '@/components/session-sheet';
 import { StoriesRow } from '@/components/stories-row';
+import { useToast } from '@/components/toast';
 import { TodayCard } from '@/components/today-card';
 import { TrainerCircle } from '@/components/trainer-circle';
 import {
@@ -30,26 +34,50 @@ import {
   StatStrip,
   StatusPill,
   Text,
+  TextLink,
   useDelayed,
 } from '@/components/ui';
+import { WaitingSheet } from '@/components/waiting-sheet';
 import { BRAND, Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { firstOf, packForDay } from '@/lib/book-times';
+import {
+  loadBookingInfo,
+  loadMyPacks,
+  loadMyTimeRequests,
+  type BookingInfo,
+  type MyPack,
+  type MyTimeRequest,
+} from '@/lib/booking';
 import { useChatEvents } from '@/lib/chat-live';
-import { longDate, relative, timeRange } from '@/lib/format';
+import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
+import { ago, longDate, relative, shortDate, timeRange } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
+import type { HealthForm } from '@/lib/health';
+import { loadMyForm } from '@/lib/my-health';
+import { pruneOldNews } from '@/lib/news';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
 import { serial, type Current } from '@/lib/serial';
-import { addDays, endOf, formatDay, loadSessions, trainerName, type Session } from '@/lib/sessions';
+import { addDays, dayKey, endOf, formatDay, loadSessions, trainerName, type Session } from '@/lib/sessions';
 import { loadToday, mergeToday, type TodayData } from '@/lib/today';
 import {
   listTrainers,
   loadInvites,
+  loadMyAsks,
   loadTrainers,
   trainerTitle,
+  withdrawAsk,
   type Invite,
+  type MyPersonRequest,
   type PublicTrainer,
   type Trainer,
 } from '@/lib/trainers';
+
+// When the health card was put away ("Not now"): it stays away for 30 days.
+const HEALTH_HIDDEN_KEY = 'voltrix.healthCardHiddenAt';
+const HEALTH_HIDDEN_FOR = 30 * 86_400_000;
 
 function greeting() {
   const hour = new Date().getHours();
@@ -69,7 +97,30 @@ type HomeData = {
   doneThisMonth: number;
   stories: StoryGroup[];
   seen: Set<string>;
+  // Booking in the app. Each part is empty when it couldn't load or the database is older.
+  // What each trainer allows, by trainer id.
+  infos: Record<string, BookingInfo>;
+  // Times asked for: waiting, or answered lately (the waiting sheet shows what became of one).
+  requests: MyTimeRequest[];
+  packs: MyPack[];
+  // A request to train sent to a trainer, while it waits.
+  ask: MyPersonRequest | null;
+  // The person's health form: null when not filled in, undefined when it isn't known.
+  health: HealthForm | null | undefined;
 };
+
+// The trainers the person has, and what each allows them in the app.
+async function loadLinked() {
+  const linked = await loadTrainers().catch(() => null);
+  if (!linked) return { linked, infos: null };
+  const answers = await Promise.all(linked.map((t) => loadBookingInfo(t.trainer_id).catch(() => null)));
+  const infos: Record<string, BookingInfo> = {};
+  linked.forEach((t, i) => {
+    const info = answers[i];
+    if (info) infos[t.trainer_id] = info;
+  });
+  return { linked, infos };
+}
 
 // Home's loads overlap (focus, coming back to the app, live news), so they run one at a
 // time, in order: an older answer can't bring back an invite a newer one removed. A load
@@ -109,6 +160,19 @@ export default function Home() {
   const planTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // "I have an invite code": the sheet for a code from a trainer's WhatsApp message.
   const [codeOpen, setCodeOpen] = useState(false);
+  // The session or waiting request opened in its sheet, by id, so a reload shows what is true now.
+  const [openSession, setOpenSession] = useState<string | null>(null);
+  const [openRequest, setOpenRequest] = useState<string | null>(null);
+  // When the health card was put away; 0 when never (or the phone couldn't say).
+  const [healthHiddenAt, setHealthHiddenAt] = useState<number | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    AsyncStorage.getItem(HEALTH_HIDDEN_KEY)
+      .then((raw) => setHealthHiddenAt(Number(raw) || 0))
+      .catch(() => setHealthHiddenAt(0));
+  }, []);
 
   // The Today card loads on its own, so the rest of Home never waits for it. A part that
   // fails keeps the last answer for the same day.
@@ -131,14 +195,22 @@ export default function Home() {
   const loadOnce = useCallback(async (current: Current) => {
     const start = new Date();
     const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
-    const [trainers, invites, sessions, everyone, stories, seen] = await Promise.all([
-      loadTrainers().catch(() => null),
-      loadInvites().catch(() => null),
-      loadSessions(monthStart, addDays(start, 90)).catch(() => null),
-      listTrainers().catch(() => null),
-      loadStories().catch(() => null),
-      loadSeen(),
-    ]);
+    // Old news is tidied once a day.
+    pruneOldNews();
+    // Booking, request and health calls answer undefined when they fail, so what was shown stays.
+    const [{ linked: trainers, infos }, invites, sessions, everyone, stories, seen, requests, packs, asks, health] =
+      await Promise.all([
+        loadLinked(),
+        loadInvites().catch(() => null),
+        loadSessions(monthStart, addDays(start, 90)).catch(() => null),
+        listTrainers().catch(() => null),
+        loadStories().catch(() => null),
+        loadSeen(),
+        loadMyTimeRequests().catch(() => undefined),
+        loadMyPacks().catch(() => undefined),
+        loadMyAsks().catch(() => undefined),
+        loadMyForm().catch(() => undefined),
+      ]);
     const failed = 'Could not load everything. Check your internet connection.';
     // Nothing came back: say so, but leave the screen to an older load that may still answer.
     if (!trainers && !invites && !sessions && !everyone && !stories) {
@@ -163,6 +235,12 @@ export default function Home() {
       doneThisMonth: sessions ? sessions.filter((s) => s.status === 'completed').length : (old?.doneThisMonth ?? 0),
       stories: stories ?? old?.stories ?? [],
       seen,
+      infos: infos ?? old?.infos ?? {},
+      requests: requests === undefined ? (old?.requests ?? []) : (requests ?? []),
+      packs: packs === undefined ? (old?.packs ?? []) : (packs ?? []),
+      ask: asks === undefined ? (old?.ask ?? null) : ((asks ?? []).find((a) => a.status === 'pending') ?? null),
+      // An older database (undefined from loadMyForm) hides the card, as does a failed first load.
+      health: health === undefined ? old?.health : health,
     }));
     return Boolean(trainers && sessions);
   }, []);
@@ -187,8 +265,9 @@ export default function Home() {
     } else if (event.type === 'progress') {
       // A trainer replied to a check-in.
       loadTodayInOrder();
-    } else if (event.type === 'session') {
-      // A trainer booked, moved, cancelled or marked a session: the next session may have changed.
+    } else if (event.type === 'session' || event.type === 'news') {
+      // A trainer booked, moved, cancelled or marked a session, or answered a time the person asked
+      // for or their request to train: the next session or a waiting request may have changed.
       if (sessionTimer.current) clearTimeout(sessionTimer.current);
       sessionTimer.current = setTimeout(() => {
         sessionTimer.current = null;
@@ -258,6 +337,58 @@ export default function Home() {
 
   const waiting = !!data?.trainers && data.trainers.length === 0 && !data.invites.length;
 
+  // Booking in the app: the trainers who take bookings from this person.
+  const bookable = (data?.trainers ?? []).filter((t) => data?.infos[t.trainer_id]?.can_book);
+  const bookOne = bookable.length === 1 ? bookable[0] : null;
+  const bookFirst = bookOne ? firstOf(data!.infos[bookOne.trainer_id], firstOf(bookOne)) : null;
+  const openBook = () =>
+    router.push(bookOne ? { pathname: '/book', params: { trainer: bookOne.trainer_id } } : '/book');
+  const soleFirst = data?.trainers?.length === 1 ? firstOf(data.trainers[0]) : null;
+  const bookPack =
+    bookOne && data
+      ? packForDay(data.packs, bookOne.trainer_id, data.infos[bookOne.trainer_id]?.today ?? dayKey(now))
+      : null;
+  const requests =
+    data?.requests
+      .filter((r) => r.status === 'pending' && new Date(r.starts_at) > now)
+      .sort((a, b) => (a.starts_at < b.starts_at ? -1 : a.starts_at > b.starts_at ? 1 : 0)) ?? [];
+  const waitingFirsts = new Set(requests.map((r) => firstOf(r)));
+  const healthShown =
+    hasTrainers &&
+    data?.health === null &&
+    healthHiddenAt !== null &&
+    now.getTime() - healthHiddenAt >= HEALTH_HIDDEN_FOR;
+  const healthWho = data?.trainers?.length === 1 ? firstOf(data.trainers[0]) : null;
+  const openedSession = openSession ? (upcoming?.find((s) => s.id === openSession) ?? null) : null;
+  const openedRequest = openRequest ? (data?.requests.find((r) => r.id === openRequest) ?? null) : null;
+
+  function hideHealth() {
+    haptic.select();
+    const at = Date.now();
+    setHealthHiddenAt(at);
+    AsyncStorage.setItem(HEALTH_HIDDEN_KEY, String(at)).catch(() => {});
+  }
+
+  async function withdrawRequest(ask: MyPersonRequest) {
+    const who = firstOf(ask, 'The trainer');
+    const sure = await confirm(
+      'Withdraw your request?',
+      `${who} won’t see it any more. You can ask again later.`,
+      'Withdraw',
+    );
+    if (!sure) return;
+    setWithdrawing(true);
+    try {
+      toast((await withdrawAsk(ask.id)) ? 'Request withdrawn.' : `${who} has answered already.`);
+      load(false, true);
+    } catch (e) {
+      haptic.warning();
+      toast(plainError(e, 'Couldn’t withdraw. Check your connection and try again.'));
+    } finally {
+      setWithdrawing(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView
@@ -281,6 +412,8 @@ export default function Home() {
             />
           ) : null}
         </View>
+
+        {isClient ? <AnswerNotice place="home" testID="home-answer" /> : null}
 
         {/* A web page can't be pulled down to refresh, so there's always a button. */}
         {error && !sessionsMissing ? (
@@ -317,6 +450,25 @@ export default function Home() {
             <EnterCode onPress={() => setCodeOpen(true)} />
             <Button title="Check again" icon="refresh" variant="secondary" onPress={refresh} loading={refreshing} />
           </Card>
+        ) : null}
+
+        {/* A request to train that waits comes before Get started: it is what happens next. */}
+        {data && !hasTrainers && data.ask ? (
+          <EnterUp>
+            <Card style={{ gap: Spacing.one }} testID="home-request-sent">
+              <Text variant="headline">Request sent to {trainerTitle(data.ask)}</Text>
+              <Text variant="callout" tone="secondary">
+                {firstOf(data.ask, 'Your trainer')} sees it in Voltrix Coach. You’ll see the answer here.
+              </Text>
+              <View style={{ alignSelf: 'flex-start', opacity: withdrawing ? 0.5 : 1 }}>
+                <TextLink
+                  label="Withdraw"
+                  onPress={() => (withdrawing ? undefined : withdrawRequest(data.ask!))}
+                  testID="home-request-withdraw"
+                />
+              </View>
+            </Card>
+          </EnterUp>
         ) : null}
 
         {waiting && isClient ? (
@@ -362,7 +514,16 @@ export default function Home() {
                 compact
                 icon="calendar-clear-outline"
                 title="No session booked"
-                message="Your trainer books your sessions."
+                message={
+                  bookable.length
+                    ? `Book a time with ${bookFirst ?? 'your trainer'}.`
+                    : `${soleFirst ?? 'Your trainer'} books your sessions.`
+                }
+                action={
+                  bookable.length ? (
+                    <Button title="Book" variant="secondary" size="small" onPress={openBook} testID="home-book" />
+                  ) : undefined
+                }
               />
             )}
 
@@ -382,10 +543,91 @@ export default function Home() {
                       showTrainer={data.trainers!.length > 1}
                       variant="grouped"
                       last={i === later.length - 1}
+                      onPress={() => setOpenSession(s.id)}
                     />
                   ))}
                 </Group>
               </Section>
+            ) : null}
+
+            {/* Booking again, once something is booked: quiet, as Home's orange belongs to the Today card. */}
+            {bookable.length && next ? (
+              <EnterUp>
+                <Card
+                  onPress={openBook}
+                  accessibilityLabel={`Book another session${bookFirst ? ` with ${bookFirst}` : ''}`}
+                  testID="home-book-card">
+                  <View style={styles.bookRow}>
+                    <IconTile icon="calendar-outline" />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text variant="rowTitle">Book another session</Text>
+                      <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={2}>
+                        {[
+                          bookFirst ? `with ${bookFirst}` : 'with your trainers',
+                          bookPack
+                            ? `${bookPack.sessions_left} ${bookPack.sessions_left === 1 ? 'session' : 'sessions'} left on your pack`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+                  </View>
+                </Card>
+              </EnterUp>
+            ) : null}
+
+            {requests.length ? (
+              <EnterUp>
+                <View testID="home-waiting">
+                  <Section
+                    title={waitingFirsts.size === 1 ? `Waiting for ${[...waitingFirsts][0]}` : 'Waiting for an answer'}>
+                    <Group>
+                      {requests.map((r, i) => {
+                        const start = new Date(r.starts_at);
+                        const end = new Date(start.getTime() + r.duration_minutes * 60_000);
+                        return (
+                          <ListRow
+                            key={r.id}
+                            title={`${shortDate(start)} · ${timeRange(start, end)}`}
+                            titleStyle={Tabular}
+                            subtitle={`Waiting for ${firstOf(r)} · asked ${ago(new Date(r.created_at))}`}
+                            onPress={() => setOpenRequest(r.id)}
+                            accessibilityHint="Opens the request"
+                            testID={`home-waiting-${r.id}`}
+                            last={i === requests.length - 1}
+                          />
+                        );
+                      })}
+                    </Group>
+                  </Section>
+                </View>
+              </EnterUp>
+            ) : null}
+
+            {healthShown ? (
+              <EnterUp>
+                <Card style={{ gap: Spacing.tight }} testID="home-health">
+                  <View style={styles.healthTop}>
+                    <IconTile icon="medkit-outline" />
+                    <Text variant="headline" style={{ flex: 1 }}>
+                      {healthWho ? `Tell ${healthWho} about your health` : 'Tell your trainers about your health'}
+                    </Text>
+                    <IconButton icon="close" label="Not now" onPress={hideHealth} testID="home-health-later" />
+                  </View>
+                  <Text variant="callout" tone="secondary">
+                    8 questions, about 2 minutes. It helps {healthWho ?? 'them'} plan your training safely.
+                  </Text>
+                  <Button
+                    title="Fill in"
+                    variant="secondary"
+                    size="medium"
+                    onPress={() => router.push('/health')}
+                    style={{ marginTop: Spacing.one }}
+                  />
+                </Card>
+              </EnterUp>
             ) : null}
 
             {!upcoming || data.doneThisMonth > 0 || upcoming.length > 0 ? (
@@ -426,16 +668,6 @@ export default function Home() {
                 ))}
               </Group>
             </Section>
-
-            {/* Their trainer's face is already above, so other trainers are one row away. */}
-            <Group>
-              <ListRow
-                title="Explore trainers on Voltrix"
-                leading={<IconTile icon="compass-outline" />}
-                onPress={() => router.push('/trainers')}
-                last
-              />
-            </Group>
           </>
         ) : null}
 
@@ -454,6 +686,8 @@ export default function Home() {
         ) : null}
       </ScrollView>
       <InviteCodeSheet visible={codeOpen} onClose={() => setCodeOpen(false)} onJoined={answered} />
+      <SessionSheet session={openedSession} onClose={() => setOpenSession(null)} onChanged={() => load(true, true)} />
+      <WaitingSheet request={openedRequest} onClose={() => setOpenRequest(null)} onChanged={() => load(false, true)} />
     </SafeAreaView>
   );
 }
@@ -594,6 +828,16 @@ const styles = themed(() => ({
     paddingRight: Spacing.one,
     borderRadius: Radius.medium,
     backgroundColor: Colors.tint,
+  },
+  bookRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
+  },
+  healthTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
   },
   heroTop: {
     flexDirection: 'row',

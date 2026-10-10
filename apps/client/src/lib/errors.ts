@@ -60,6 +60,11 @@ type Problem = {
   __isStorageError?: unknown;
 };
 
+// "You've booked a lot today." from the database reads "You’ve booked a lot today." like the app's own words.
+function curly(message: string): string {
+  return message.replace(/'/g, '’');
+}
+
 export function plainError(error: unknown, fallback = TRY_AGAIN): string {
   if (!error) return fallback;
   const e = (typeof error === 'object' ? error : { message: String(error) }) as Problem;
@@ -74,8 +79,8 @@ export function plainError(error: unknown, fallback = TRY_AGAIN): string {
   const fromSupabase = !!code || 'details' in e || 'hint' in e || !!e.__isAuthError || !!e.__isStorageError;
   if (fromSupabase) {
     // A refused change the database explains itself (raise exception), but not its row-level
-    // security wording.
-    if (['P0001', '22023', '42501'].includes(code) && message && !TECHNICAL.test(message)) return message;
+    // security wording. Its straight apostrophes become the app's own ’.
+    if (['P0001', '22023', '42501'].includes(code) && message && !TECHNICAL.test(message)) return curly(message);
     return CODES[code] ?? fallback;
   }
   // A message the app wrote itself.
@@ -97,7 +102,7 @@ export function saveError(error: unknown, fallback = SAVE_FAILED): string {
     message &&
     !/row-level security|permission denied/i.test(message)
   ) {
-    return message;
+    return curly(message);
   }
   // A value out of range (a check constraint).
   if (e?.code === '23514') return 'Check the numbers and try again.';

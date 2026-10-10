@@ -14,13 +14,15 @@ import {
   displayName,
   distanceLabel,
   listTrainers,
+  listTrainersV2,
   loadTrainers,
   sortTrainers,
   townKey,
   trainerDistances,
+  trainerTitle,
   trainerTowns,
   yearsLabel,
-  type PublicTrainer,
+  type ListedTrainer,
   type TrainerSort,
 } from '@/lib/trainers';
 
@@ -42,6 +44,14 @@ const NOT_FOUND = "We couldn't work out how far away trainers are, so they're sh
 // After this long the client may have moved, so Nearest finds them again.
 const FRESH_FOR = 10 * 60_000;
 
+// The Trainers list, with whether each takes new clients; an older database answers round 2's list,
+// where everyone does.
+async function loadListed(): Promise<ListedTrainer[]> {
+  const listed = await listTrainersV2();
+  if (listed) return listed;
+  return (await listTrainers()).map((t) => ({ ...t, accepting_clients: true }));
+}
+
 // How far each trainer is from the client, by trainer id, and when that was worked out.
 type Nearby = { distances: Map<string, number>; at: number };
 
@@ -54,9 +64,11 @@ async function measure(): Promise<Nearby | 'denied' | 'failed'> {
 }
 
 export default function Trainers() {
-  const [trainers, setTrainers] = useState<PublicTrainer[] | null>(null);
+  const [trainers, setTrainers] = useState<ListedTrainer[] | null>(null);
   // The client's own trainers, marked on their cards. Left out when they can't be loaded.
   const [mine, setMine] = useState<Set<string>>(() => new Set());
+  // The first name of the trainer the person trains with: the list is for finding one.
+  const [ownTrainer, setOwnTrainer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [specialty, setSpecialty] = useState<string | null>(null);
@@ -72,9 +84,13 @@ export default function Trainers() {
 
   const load = useCallback(async () => {
     try {
-      const [all, linked] = await Promise.all([listTrainers(), loadTrainers().catch(() => null)]);
+      const [all, linked] = await Promise.all([loadListed(), loadTrainers().catch(() => null)]);
       setTrainers(all);
-      if (linked) setMine(new Set(linked.map((t) => t.trainer_id)));
+      if (linked) {
+        setMine(new Set(linked.map((t) => t.trainer_id)));
+        const own = linked[0] ? trainerTitle(linked[0]) : null;
+        setOwnTrainer(own ? own.split(' ')[0] || own : null);
+      }
       setError(null);
     } catch (e) {
       setError(plainError(e, 'Could not load trainers.'));
@@ -162,7 +178,7 @@ export default function Trainers() {
 
   const query = search.trim().toLowerCase();
   const nearest = sort === 'nearest' && nearby && !locating ? nearby.distances : null;
-  const shown = sortTrainers(
+  const sorted = sortTrainers(
     (trainers ?? []).filter(
       (t) =>
         (!specialty || t.specialties.includes(specialty)) &&
@@ -173,12 +189,31 @@ export default function Trainers() {
     sort,
     nearest,
   );
+  // Trainers not taking new clients come after the others, in the same order.
+  const shown = [...sorted.filter((t) => t.accepting_clients), ...sorted.filter((t) => !t.accepting_clients)];
   const noneNearby = nearest && shown.length > 0 && !shown.some((t) => nearest.has(t.id));
 
   const specialties = Object.fromEntries(offered.map((o) => [o, o]));
   const filtered = !!(query || specialty || activeTown);
-  const rows: PublicTrainer[][] = [];
+  const rows: ListedTrainer[][] = [];
   for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+
+  // Someone with a trainer doesn't browse for another: a calm page says where to go instead.
+  if (ownTrainer) {
+    return (
+      <ScrollView contentContainerStyle={styles.content}>
+        <EmptyState
+          icon="people-outline"
+          title="You have a trainer"
+          message={`You train with ${ownTrainer}. To find someone new, leave ${ownTrainer} in Settings first.`}
+          action={
+            <Button title="Open Settings" variant="secondary" size="medium" onPress={() => router.push('/settings')} />
+          }
+          testID="trainers-has-trainer"
+        />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -296,7 +331,7 @@ export default function Trainers() {
 }
 
 // A trainer as a card: photo, full name on up to two lines, town and years. Opens their profile.
-function TrainerCard({ trainer, mine, distanceKm }: { trainer: PublicTrainer; mine: boolean; distanceKm?: number }) {
+function TrainerCard({ trainer, mine, distanceKm }: { trainer: ListedTrainer; mine: boolean; distanceKm?: number }) {
   const name = displayName(trainer);
   const facts = [
     distanceKm != null ? distanceLabel(distanceKm) : trainer.city,
@@ -305,7 +340,14 @@ function TrainerCard({ trainer, mine, distanceKm }: { trainer: PublicTrainer; mi
   return (
     <Card
       style={styles.card}
-      accessibilityLabel={[name, mine ? 'your trainer' : null, ...facts].filter(Boolean).join(', ')}
+      accessibilityLabel={[
+        name,
+        mine ? 'your trainer' : null,
+        !mine && !trainer.accepting_clients ? 'not taking new clients' : null,
+        ...facts,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       onPress={() =>
         router.push({
           pathname: '/trainers/[id]',
@@ -325,6 +367,10 @@ function TrainerCard({ trainer, mine, distanceKm }: { trainer: PublicTrainer; mi
         {mine ? (
           <View style={{ marginTop: Spacing.one }}>
             <StatusPill tone="success" label="Your trainer" />
+          </View>
+        ) : !trainer.accepting_clients ? (
+          <View style={{ marginTop: Spacing.one }}>
+            <StatusPill tone="neutral" label="Not taking new clients" testID={`trainer-not-taking-${trainer.id}`} />
           </View>
         ) : null}
       </View>

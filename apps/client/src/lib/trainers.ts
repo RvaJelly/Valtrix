@@ -1,4 +1,5 @@
 import type { Coords } from '@/lib/location';
+import { callRpc } from '@/lib/rpc';
 import { supabase } from '@/lib/supabase';
 
 // A trainer the signed-in client is linked to (they accepted the trainer's invite).
@@ -75,7 +76,11 @@ function ascending(a: number | null | undefined, b: number | null | undefined) {
 
 // Trainers in the chosen order, A to Z for ties. A to Z goes by the name on each card,
 // which is the business name for trainers who left their own name out.
-export function sortTrainers(trainers: PublicTrainer[], sort: TrainerSort, distances?: Map<string, number> | null) {
+export function sortTrainers<T extends PublicTrainer>(
+  trainers: T[],
+  sort: TrainerSort,
+  distances?: Map<string, number> | null,
+): T[] {
   const byName = [...trainers].sort((a, b) =>
     displayName(a).localeCompare(displayName(b), undefined, { sensitivity: 'base' }),
   );
@@ -176,4 +181,106 @@ export async function leaveTrainer(clientId: string) {
 // The name on an invite or a trainer row: the trainer's own name, else their business.
 export function trainerTitle(t: { trainer_name: string | null; business_name: string | null }) {
   return t.trainer_name || t.business_name || 'Your trainer';
+}
+
+// ---------- Asking a trainer to train you ----------
+
+// Whether the signed-in person can ask this trainer now, and why not (the database decides):
+// unconfirmed (email not confirmed), self, unavailable, not_taking, has_trainer, waiting (a request to
+// someone else is waiting), declined (this trainer said no in the last 30 days), limit (3 today).
+export type RequestState = {
+  can_ask: boolean;
+  why: 'unconfirmed' | 'self' | 'unavailable' | 'not_taking' | 'has_trainer' | 'waiting' | 'declined' | 'limit' | null;
+  request: { id: string; status: string; created_at: string; answered_at: string | null } | null;
+  waiting_with: string | null;
+  ask_again_on: string | null;
+};
+
+export type MyPersonRequest = {
+  id: string;
+  trainer_id: string;
+  trainer_name: string | null;
+  business_name: string | null;
+  trainer_avatar: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+  answered_at: string | null;
+};
+
+// Null on an older database, where the profile keeps round 2's share-your-email flow.
+export async function loadRequestState(trainerId: string): Promise<RequestState | null> {
+  const answer = await callRpc<RequestState | null>('trainer_request_state', { p_trainer: trainerId });
+  if (answer.missing || !answer.data) return null;
+  const d = answer.data;
+  return {
+    can_ask: !!d.can_ask,
+    why: d.why ?? null,
+    request: d.request ?? null,
+    waiting_with: d.waiting_with ?? null,
+    ask_again_on: d.ask_again_on ? String(d.ask_again_on).slice(0, 10) : null,
+  };
+}
+
+// Sends the request. Pressing Send under the words of what the trainer will see is the person's
+// agreement, recorded with it. Returns the request's id.
+export async function askTrainer(trainerId: string, note: string | null, phone: string | null): Promise<string> {
+  const { data, error } = await supabase.rpc('ask_trainer', {
+    p_trainer: trainerId,
+    p_note: note,
+    p_phone: phone,
+    p_consent: true,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+// True when it was withdrawn now; false when the trainer had answered it already.
+export async function withdrawAsk(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('withdraw_request', { p_request: id });
+  if (error) throw error;
+  return data === true;
+}
+
+// The person's requests to trainers, waiting or from the last 30 days, newest first. Null on an older
+// database.
+export async function loadMyAsks(): Promise<MyPersonRequest[] | null> {
+  const answer = await callRpc<MyPersonRequest[] | null>('my_training_requests');
+  if (answer.missing) return null;
+  return answer.data ?? [];
+}
+
+export type ListedTrainer = PublicTrainer & { accepting_clients: boolean };
+
+// The Trainers list with whether each is taking new clients. Empty for anyone who has a trainer. Null
+// on an older database (the caller falls back to listTrainers).
+export async function listTrainersV2(): Promise<ListedTrainer[] | null> {
+  const answer = await callRpc<ListedTrainer[] | null>('list_trainers_v2');
+  if (answer.missing) return null;
+  return (answer.data ?? []).map((t) => ({ ...t, accepting_clients: t.accepting_clients !== false }));
+}
+
+// Whether a typed number can be a phone number, by the rules of the invite's WhatsApp numbers: South
+// Africa's 10 digits from 0 (082 555 0303), or an international number with its country code.
+export function isPhoneNumber(phone: string): boolean {
+  const kept = phone.trim().replace(/[^\d+]/g, '');
+  const plus = kept.startsWith('+');
+  let digits = kept.replace(/\+/g, '');
+  if (!digits) return false;
+  if (plus) {
+    // Already international.
+  } else if (digits.startsWith('00')) digits = digits.slice(2);
+  else if (digits.startsWith('0')) digits = `27${digits.slice(1)}`;
+  else if (!(digits.startsWith('27') && digits.length >= 11) && digits.length <= 10) digits = `27${digits}`;
+  if (digits.length < 8 || digits.length > 15 || digits.startsWith('0')) return false;
+  const known = [
+    { code: '27', digits: 9 },
+    { code: '1', digits: 10 },
+    { code: '61', digits: 9 },
+  ].find((c) => digits.startsWith(c.code));
+  if (known) {
+    const national = digits.slice(known.code.length);
+    if (national.length !== known.digits || national.startsWith('0')) return false;
+  }
+  return true;
 }

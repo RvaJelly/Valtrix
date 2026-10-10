@@ -6,18 +6,22 @@ import { Button } from '@/components/ui';
 import { Layout } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { serial } from '@/lib/serial';
-import { loadInvites, trainerTitle, type Invite } from '@/lib/trainers';
+import { loadInvites, loadTrainers, trainerTitle, type Invite, type Trainer } from '@/lib/trainers';
 
 export default function Chats() {
   // A trainer's invite waiting on Home: the chat starts once it is accepted.
   const [invites, setInvites] = useState<Invite[]>([]);
+  // The person's trainers: "Find a trainer" is only for someone without one. Null until known.
+  const [trainers, setTrainers] = useState<Trainer[] | null>(null);
 
   // One load at a time, so a slow older answer can't bring back an answered invite.
   const load = useMemo(
     () =>
       serial((current) =>
-        loadInvites().then((list) => {
-          if (current()) setInvites(list);
+        Promise.all([loadInvites(), loadTrainers().catch(() => null)]).then(([list, linked]) => {
+          if (!current()) return;
+          setInvites(list);
+          if (linked) setTrainers(linked);
         }),
       ),
     [],
@@ -34,6 +38,9 @@ export default function Chats() {
   });
 
   const first = invites[0];
+  const own = trainers?.[0];
+  const ownName = own ? trainerTitle(own) : '';
+  const ownFirst = ownName.split(' ')[0] || ownName;
   return (
     <ChatList
       title="Chats"
@@ -50,11 +57,31 @@ export default function Chats() {
                 />
               ),
             }
-          : {
-              title: 'No chats yet',
-              message: 'Once you accept your trainer’s invite, you can message and call them here.',
-              action: <Button title="Find a trainer" variant="secondary" onPress={() => router.push('/trainers')} />,
-            }
+          : own
+            ? {
+                title: 'No chats yet',
+                message: `Messages and calls with ${ownFirst} show up here.`,
+                action: (
+                  <Button
+                    title={`Message ${ownFirst}`}
+                    icon="chatbubble-outline"
+                    variant="secondary"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/chat/[id]',
+                        params: { id: own.client_id, name: ownName, avatar: own.trainer_avatar ?? '' },
+                      })
+                    }
+                  />
+                ),
+              }
+            : {
+                title: 'No chats yet',
+                message: 'Once you accept your trainer’s invite, you can message and call them here.',
+                action: trainers ? (
+                  <Button title="Find a trainer" variant="secondary" onPress={() => router.push('/trainers')} />
+                ) : undefined,
+              }
       }
     />
   );

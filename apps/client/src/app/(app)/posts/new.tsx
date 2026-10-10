@@ -67,7 +67,7 @@ export default function NewPost() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {rules === 'checking' ? <ActivityIndicator color={Colors.accentText} /> : null}
+        {rules === 'checking' ? <ActivityIndicator color={Colors.textSecondary} /> : null}
 
         {rules === 'ask' ? (
           <Card style={{ gap: Spacing.four }}>

@@ -94,7 +94,7 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
     <View style={{ gap: Spacing.two }}>
       {busy === 'preparing' || busy === 'uploading' ? (
         <View style={styles.row}>
-          <ActivityIndicator color={Colors.accentText} />
+          <ActivityIndicator color={Colors.textSecondary} />
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>{busy === 'preparing' ? 'Getting the video ready…' : 'Uploading video…'}</Text>
             <Text style={styles.note}>Keep Voltrix Coach open until it&apos;s done.</Text>

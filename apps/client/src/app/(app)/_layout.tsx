@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts, Layout } from '@/constants/theme';
 import { ChatProvider } from '@/lib/chat-live';
 import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
@@ -20,15 +20,25 @@ export default function AppLayout() {
         screenOptions={{
           headerStyle: { backgroundColor: Colors.background },
           headerTintColor: Colors.text,
-          headerTitleStyle: { fontWeight: '700' },
+          headerTitleStyle: { fontFamily: Fonts.textSemi, fontSize: 17 },
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           // Screen readers say "Back", not "(tabs), back" (the tabs group's name). The (tabs)
           // screen's title below is set to 'Back' for the same reason.
           headerBackTitle: 'Back',
-          contentStyle: { backgroundColor: Colors.background },
+          // On a wide window every pushed screen is a centred column, so nothing stretches across a PC
+          // screen. The tabs keep the full width for their sidebar.
+          contentStyle: {
+            backgroundColor: Colors.background,
+            width: '100%',
+            maxWidth: Layout.maxClient,
+            alignSelf: 'center',
+          },
         }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{ headerShown: false, title: 'Back', contentStyle: { backgroundColor: Colors.background } }}
+        />
         <Stack.Screen name="trainers/index" options={{ title: 'Trainers' }} />
         <Stack.Screen name="trainers/[id]" options={{ title: 'Trainer' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />

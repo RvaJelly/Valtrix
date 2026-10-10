@@ -130,7 +130,7 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
             </Pressable>
           </View>
         ) : !ready ? (
-          <ActivityIndicator color={Colors.accentText} style={{ marginVertical: Spacing.three }} />
+          <ActivityIndicator color={Colors.textSecondary} style={{ marginVertical: Spacing.three }} />
         ) : chats.length ? (
           <ScrollView style={{ maxHeight: height * 0.4 }}>
             {chats.map((chat) => (
@@ -159,7 +159,7 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
 
         {status ? (
           <View style={styles.status} accessibilityLiveRegion="polite">
-            {status.kind === 'busy' ? <ActivityIndicator color={Colors.accentText} /> : null}
+            {status.kind === 'busy' ? <ActivityIndicator color={Colors.textSecondary} /> : null}
             {status.kind === 'done' ? <Ionicons name="checkmark-circle" size={20} color={Colors.accentText} /> : null}
             <Text style={[styles.statusText, status.kind === 'error' && { color: Colors.danger }]}>{status.text}</Text>
           </View>

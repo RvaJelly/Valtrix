@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
-import { Body, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { groupedItem, IconButton, ListRow, Notice, SearchField, StatusPill, Text } from '@/components/ui';
+import { Colors, Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '@/lib/workouts';
 
@@ -73,9 +73,14 @@ export default function ExerciseLibrary() {
         options={{
           title: picking ? 'Add exercise' : 'Exercise library',
           headerRight: () => (
-            <Pressable accessibilityLabel="New exercise" hitSlop={12} onPress={() => router.push('/exercises/new')}>
-              <Ionicons name="add-circle" size={28} color={Colors.accentText} />
-            </Pressable>
+            // The web header has no right inset of its own; the phones' headers do.
+            <IconButton
+              variant="tonal"
+              icon="add"
+              label="New exercise"
+              onPress={() => router.push('/exercises/new')}
+              style={Platform.OS === 'web' ? { marginRight: Spacing.tight } : undefined}
+            />
           ),
         }}
       />
@@ -85,56 +90,41 @@ export default function ExerciseLibrary() {
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
-          <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search exercises"
-              placeholderTextColor={Colors.textSecondary}
-              selectionColor={Colors.accent}
-              style={styles.search}
-              autoCorrect={false}
-            />
+          <View style={styles.header}>
+            <SearchField value={search} onChangeText={setSearch} placeholder="Search exercises" />
             <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} allowClear />
-            {!picking ? (
-              <Body secondary style={{ fontSize: 13 }}>
-                Tap one of yours to change it. Built-in exercises can’t be changed. Tap + to add your own.
-              </Body>
-            ) : null}
-            <ErrorText>{error}</ErrorText>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
           </View>
         }
         ListEmptyComponent={
           exercises ? (
-            <Body secondary style={{ textAlign: 'center', marginTop: Spacing.four }}>
+            <Text variant="footnote" tone="secondary" style={{ textAlign: 'center', marginTop: Spacing.four }}>
               No exercises match. Tap + to add your own.
-            </Body>
+            </Text>
           ) : (
-            <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.five }} />
+            <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.five }} />
           )
         }
-        ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => open(item)}
-            // Built-in exercises open nothing outside the picker, so they don't look tappable.
-            disabled={!picking && !item.trainer_id}
-            style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Body secondary style={{ fontSize: 13 }}>
-                {MUSCLE_GROUPS[item.muscle_group]} · {EQUIPMENT[item.equipment]}
-                {item.trainer_id ? ' · Yours' : ''}
-              </Body>
-            </View>
-            {adding === item.id ? (
-              <ActivityIndicator color={Colors.accentText} />
-            ) : picking ? (
-              <Ionicons name="add" size={22} color={Colors.accentText} />
-            ) : item.trainer_id ? (
-              <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
-            ) : null}
-          </Pressable>
+        renderItem={({ item, index }) => (
+          <View style={groupedItem(index, visible.length)}>
+            <ListRow
+              title={item.name}
+              subtitle={[MUSCLE_GROUPS[item.muscle_group], EQUIPMENT[item.equipment]].filter(Boolean).join(' · ')}
+              // Built-in exercises open nothing outside the picker, so they don't look tappable.
+              onPress={picking || item.trainer_id ? () => open(item) : undefined}
+              status={item.trainer_id && !picking ? <StatusPill tone="neutral" label="Yours" /> : null}
+              trailing={
+                adding === item.id ? (
+                  <ActivityIndicator color={Colors.textSecondary} />
+                ) : picking ? (
+                  <Ionicons name="add" size={22} color={Colors.text} />
+                ) : null
+              }
+              chevron={!picking && !!item.trainer_id}
+              accessibilityLabel={picking ? `Add ${item.name}` : undefined}
+              last={index === visible.length - 1}
+            />
+          </View>
         )}
       />
     </>
@@ -143,27 +133,12 @@ export default function ExerciseLibrary() {
 
 const styles = themed(() => ({
   list: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.hero,
   },
-  search: {
-    minHeight: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    fontSize: 16,
-    paddingHorizontal: Spacing.three,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  header: {
+    gap: Spacing.tight,
+    marginBottom: Spacing.four,
   },
 }));

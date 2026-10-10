@@ -142,7 +142,7 @@ export default function PlanWorkout() {
     return (
       <View style={{ padding: Spacing.four }}>
         <Stack.Screen options={{ title: 'Workout' }} />
-        {error ? <Body secondary>{error}</Body> : <ActivityIndicator color={Colors.accentText} />}
+        {error ? <Body secondary>{error}</Body> : <ActivityIndicator color={Colors.textSecondary} />}
       </View>
     );
   }
@@ -234,7 +234,7 @@ export default function PlanWorkout() {
           />
         ) : doneToday ? (
           <View style={styles.done}>
-            <Ionicons name="checkmark-circle" size={28} color={Colors.accentText} />
+            <Ionicons name="checkmark-circle" size={28} color={Colors.success} />
             <View style={{ flex: 1 }}>
               <Text style={styles.doneTitle}>Done today</Text>
               <Body secondary style={{ fontSize: 13 }}>
@@ -249,7 +249,7 @@ export default function PlanWorkout() {
               hitSlop={8}
               style={({ pressed }) => [styles.undo, pressed && { backgroundColor: Colors.surfaceRaised }]}>
               {busy ? (
-                <ActivityIndicator size="small" color={Colors.accentText} />
+                <ActivityIndicator size="small" color={Colors.textSecondary} />
               ) : (
                 <Text style={styles.undoText}>Undo</Text>
               )}
@@ -331,12 +331,10 @@ const styles = themed(() => ({
     gap: Spacing.one,
     padding: Spacing.three,
     borderRadius: Radius.large,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.accent,
     backgroundColor: Colors.surface,
   },
   noteTitle: {
-    color: Colors.accentText,
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -359,9 +357,9 @@ const styles = themed(() => ({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.accent,
-    color: Colors.onAccent,
-    fontWeight: '800',
+    backgroundColor: Colors.tint,
+    color: Colors.text,
+    fontWeight: '700',
     textAlign: 'center',
     lineHeight: 32,
     overflow: 'hidden',
@@ -439,7 +437,7 @@ const styles = themed(() => ({
     justifyContent: 'center',
   },
   undoText: {
-    color: Colors.accentText,
+    color: Colors.text,
     fontSize: 16,
     fontWeight: '800',
   },

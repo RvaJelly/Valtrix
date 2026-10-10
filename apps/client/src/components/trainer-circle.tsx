@@ -1,15 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Fonts, Spacing, themed } from '@/constants/theme';
 import { displayName, distanceLabel, yearsLabel, type PublicTrainer } from '@/lib/trainers';
 
 // A trainer as a round photo with their name and main specialty. Opens their profile.
 export function TrainerCircle({
   trainer,
-  size = 76,
+  size = 72,
   width = 96,
   distanceKm,
   years,
@@ -41,16 +42,16 @@ export function TrainerCircle({
       }
       style={({ pressed }) => [styles.item, { width }, pressed && { opacity: 0.7 }]}>
       <Avatar url={trainer.avatar_url} name={name} size={size} />
-      <Text style={styles.name} numberOfLines={1}>
+      <Text variant="footnote" style={styles.name} numberOfLines={2}>
         {name}
       </Text>
-      <Text style={styles.specialty} numberOfLines={2}>
-        {trainer.specialties.slice(0, 2).join(' · ') || trainer.business_name || ' '}
+      <Text variant="footnote" tone="secondary" style={styles.specialty} numberOfLines={1}>
+        {trainer.specialties[0] || trainer.business_name || ' '}
       </Text>
       {extra ? (
         <View style={styles.extra}>
-          <Ionicons name={extra.icon} size={12} color={Colors.accentText} />
-          <Text style={styles.extraText} numberOfLines={1}>
+          <Ionicons name={`${extra.icon}-outline`} size={12} color={Colors.textSecondary} />
+          <Text variant="footnote" tone="secondary" style={styles.extraText} numberOfLines={1}>
             {extra.text}
           </Text>
         </View>
@@ -62,18 +63,15 @@ export function TrainerCircle({
 const styles = themed(() => ({
   item: {
     alignItems: 'center',
-    gap: Spacing.one,
+    gap: 2,
   },
+  // Full names on up to two lines, never cut to "Ryan van A…".
   name: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.textMedium,
     textAlign: 'center',
-    marginTop: Spacing.one,
+    marginTop: Spacing.two,
   },
   specialty: {
-    color: Colors.textSecondary,
-    fontSize: 12,
     textAlign: 'center',
   },
   extra: {
@@ -82,8 +80,6 @@ const styles = themed(() => ({
     gap: 2,
   },
   extraText: {
-    color: Colors.accentText,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Fonts.textMedium,
   },
 }));

@@ -123,7 +123,7 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
             <Option label="Done" onPress={finishReport} />
           </View>
         ) : null}
-        {busy ? <ActivityIndicator color={Colors.accentText} /> : null}
+        {busy ? <ActivityIndicator color={Colors.textSecondary} /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {step !== 'thanks' ? <Option label="Cancel" onPress={onClose} /> : null}
       </View>

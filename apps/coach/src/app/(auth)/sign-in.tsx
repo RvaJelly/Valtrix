@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
-import { Spacing, themed } from '@/constants/theme';
+import { Logo } from '@/components/logo';
+import { Body, Button, ErrorText, TextField, TextLink, Title } from '@/components/ui';
+import { Layout, Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 
 export default function SignIn() {
@@ -30,6 +31,7 @@ export default function SignIn() {
     <SafeAreaView style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Logo style={styles.logo} />
           <Title>Welcome back</Title>
           <Body secondary>Sign in to your Voltrix Coach account.</Body>
           <TextField
@@ -53,8 +55,8 @@ export default function SignIn() {
           />
           <ErrorText>{error}</ErrorText>
           <Button title="Sign in" onPress={signIn} loading={busy} />
-          <Button title="Forgot password?" variant="ghost" onPress={() => router.push('/forgot-password')} />
-          <Button title="New here? Create an account" variant="ghost" onPress={() => router.replace('/sign-up')} />
+          <TextLink label="Forgot password?" onPress={() => router.push('/forgot-password')} />
+          <TextLink lead="New here?" label="Create an account" onPress={() => router.replace('/sign-up')} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -62,9 +64,21 @@ export default function SignIn() {
 }
 
 const styles = themed(() => ({
+  // The welcome screen's 20 gutter and column, and room at the top for the back arrow.
   content: {
-    padding: Spacing.four,
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.six,
+    paddingBottom: Spacing.four,
     gap: Spacing.three,
+  },
+  logo: {
+    width: 148,
+    alignSelf: 'flex-start',
+    // The image carries the brand kit's clear space; this lines the V up with the text below.
+    marginLeft: -12,
+    marginBottom: Spacing.two,
   },
 }));

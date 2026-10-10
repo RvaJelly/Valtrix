@@ -52,7 +52,7 @@ export function PlanVideo({ path, label, title }: { path: string; label: string;
           disabled={saving}
           style={({ pressed }) => [styles.save, pressed && { backgroundColor: Colors.surfaceRaised }]}>
           {saving ? (
-            <ActivityIndicator size="small" color={Colors.accentText} />
+            <ActivityIndicator size="small" color={Colors.textSecondary} />
           ) : (
             <Ionicons name="download-outline" size={18} color={Colors.accentText} />
           )}

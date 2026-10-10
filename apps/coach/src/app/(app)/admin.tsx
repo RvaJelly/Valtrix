@@ -105,7 +105,7 @@ export default function AllTrainers() {
             No trainers match.
           </Body>
         ) : error ? null : (
-          <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.five }} />
+          <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.five }} />
         )
       }
       ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}

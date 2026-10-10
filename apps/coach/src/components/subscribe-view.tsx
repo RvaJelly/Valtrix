@@ -3,19 +3,19 @@ import { useState, type ComponentProps } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { Logo } from '@/components/logo';
-import { Body, Button } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, StatusPill } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { PRICE_LABEL, TRIAL_DAYS } from '@/lib/access';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const BENEFITS: { icon: IconName; text: string }[] = [
-  { icon: 'people', text: 'Unlimited clients, goals and notes' },
-  { icon: 'barbell', text: 'Workout builder with a ready-made exercise library' },
-  { icon: 'trending-up', text: 'Assign programs and track every client’s progress' },
-  { icon: 'calendar', text: 'Bookings and a calendar that fills itself' },
-  { icon: 'chatbubbles', text: 'Chat with clients in one place' },
-  { icon: 'sparkles', text: 'New features every month at no extra cost' },
+  { icon: 'people-outline', text: 'Unlimited clients, goals and notes' },
+  { icon: 'barbell-outline', text: 'Workout builder with a ready-made exercise library' },
+  { icon: 'trending-up-outline', text: 'Assign programs and track every client’s progress' },
+  { icon: 'calendar-clear-outline', text: 'Bookings and a calendar that fills itself' },
+  { icon: 'chatbubbles-outline', text: 'Chat with clients in one place' },
+  { icon: 'sparkles-outline', text: 'New features every month at no extra cost' },
 ];
 
 type Props = {
@@ -40,11 +40,7 @@ export function SubscribeView({ mode, onSignOut }: Props) {
       <Logo style={styles.logo} />
 
       <View style={{ gap: Spacing.two, alignItems: 'center' }}>
-        {starting ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{TRIAL_DAYS} DAYS FREE</Text>
-          </View>
-        ) : null}
+        {starting ? <StatusPill tone="success" label={`${TRIAL_DAYS} days free`} /> : null}
         <Text style={styles.headline}>
           {starting ? 'Build the business you’ve been training for' : 'Welcome back, coach'}
         </Text>
@@ -59,7 +55,7 @@ export function SubscribeView({ mode, onSignOut }: Props) {
         {BENEFITS.map((b) => (
           <View key={b.text} style={styles.benefit}>
             <View style={styles.benefitIcon}>
-              <Ionicons name={b.icon} size={18} color={Colors.accentText} />
+              <Ionicons name={b.icon} size={18} color={Colors.textSecondary} />
             </View>
             <Body style={{ flex: 1 }}>{b.text}</Body>
           </View>
@@ -72,12 +68,10 @@ export function SubscribeView({ mode, onSignOut }: Props) {
           {starting ? <Text style={styles.planTrial}>{TRIAL_DAYS}-day free trial</Text> : null}
         </View>
         <View style={styles.priceRow}>
-          <Text style={styles.price}>{PRICE_LABEL}</Text>
+          <Text style={[styles.price, Tabular]}>{PRICE_LABEL}</Text>
           <Body secondary>/ month</Body>
         </View>
-        <Body secondary style={{ fontSize: 14 }}>
-          Less than one personal training session a month.
-        </Body>
+        <Text style={styles.small}>Less than one personal training session a month.</Text>
       </View>
 
       {starting ? (
@@ -113,15 +107,13 @@ function Step({ icon, title, text, last }: { icon: IconName; title: string; text
     <View style={styles.step}>
       <View style={{ alignItems: 'center' }}>
         <View style={styles.stepIcon}>
-          <Ionicons name={icon} size={16} color={Colors.onAccent} />
+          <Ionicons name={icon} size={16} color={Colors.text} />
         </View>
         {last ? null : <View style={styles.stepLine} />}
       </View>
       <View style={{ flex: 1, gap: 2, paddingBottom: last ? 0 : Spacing.three }}>
         <Text style={styles.stepTitle}>{title}</Text>
-        <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
-          {text}
-        </Body>
+        <Text style={styles.small}>{text}</Text>
       </View>
     </View>
   );
@@ -129,35 +121,26 @@ function Step({ icon, title, text, last }: { icon: IconName; title: string; text
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.five,
-    gap: Spacing.four,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
     maxWidth: 560,
     width: '100%',
     alignSelf: 'center',
   },
   logo: {
-    width: 180,
+    width: 148,
     alignSelf: 'center',
   },
-  badge: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
-  },
-  badgeText: {
-    color: Colors.onAccent,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
   headline: {
+    ...Type.largeTitle,
     color: Colors.text,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '900',
     textAlign: 'center',
+  },
+  small: {
+    ...Type.footnote,
+    color: Colors.textSecondary,
   },
   benefit: {
     flexDirection: 'row',
@@ -168,16 +151,17 @@ const styles = themed(() => ({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The membership card: the one raised block, no orange border.
   plan: {
     gap: Spacing.two,
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     borderRadius: Radius.large,
-    borderWidth: 2,
-    borderColor: Colors.accent,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   planHeader: {
@@ -187,16 +171,13 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   planName: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...Type.title,
+    color: Colors.text,
   },
   planTrial: {
-    color: Colors.text,
-    fontSize: 13,
-    fontWeight: '700',
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
+    color: Colors.textSecondary,
   },
   priceRow: {
     flexDirection: 'row',
@@ -204,13 +185,14 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   price: {
+    ...Type.display,
     color: Colors.text,
-    fontSize: 48,
-    fontWeight: '900',
   },
   timeline: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.gutter,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   step: {
@@ -221,7 +203,7 @@ const styles = themed(() => ({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.tint,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -232,13 +214,11 @@ const styles = themed(() => ({
     backgroundColor: Colors.border,
   },
   stepTitle: {
+    ...Type.rowTitle,
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
   },
   fineprint: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...Type.footnote,
     textAlign: 'center',
   },
 }));

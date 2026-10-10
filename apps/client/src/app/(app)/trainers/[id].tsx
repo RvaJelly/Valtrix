@@ -1,12 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
-import { Body, Button, Card } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, Card, StatusPill } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { serial, type Current } from '@/lib/serial';
@@ -83,7 +82,8 @@ export default function TrainerProfile() {
     if (event.type === 'link' || event.type === 'reconnected') load();
   });
 
-  if (trainer === undefined) return <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
+  if (trainer === undefined)
+    return <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />;
   if (trainer === null) {
     return (
       <View style={{ padding: Spacing.four }}>
@@ -106,24 +106,20 @@ export default function TrainerProfile() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: name }} />
+      {/* The name shows once, under the photo. */}
+      <Stack.Screen options={{ title: '' }} />
       <View style={styles.hero}>
-        <Avatar url={avatar} name={name} size={132} />
+        <Avatar url={avatar} name={name} size={96} />
         <Text style={styles.name}>{name}</Text>
         {trainer.full_name && trainer.business_name ? (
           <Body secondary style={{ textAlign: 'center' }}>
             {trainer.business_name}
           </Body>
         ) : null}
-        {facts.length ? (
-          <Body secondary style={{ textAlign: 'center', fontSize: 14 }}>
-            {facts.join(' · ')}
-          </Body>
-        ) : null}
+        {facts.length ? <Text style={styles.facts}>{facts.join(' · ')}</Text> : null}
         {isMine ? (
-          <View style={styles.badge}>
-            <Ionicons name="checkmark-circle" size={16} color={Colors.onAccent} />
-            <Text style={styles.badgeText}>Your trainer</Text>
+          <View style={{ marginTop: Spacing.one }}>
+            <StatusPill tone="success" label="Your trainer" />
           </View>
         ) : null}
       </View>
@@ -174,9 +170,7 @@ export default function TrainerProfile() {
       {trainer.bio ? (
         <View style={{ gap: Spacing.two }}>
           <Text style={styles.section}>About {firstName}</Text>
-          <Card>
-            <Body>{trainer.bio}</Body>
-          </Card>
+          <Body>{trainer.bio}</Body>
         </View>
       ) : null}
 
@@ -204,41 +198,29 @@ export default function TrainerProfile() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    gap: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
   },
   hero: {
     alignItems: 'center',
     gap: Spacing.two,
   },
   name: {
+    ...Type.largeTitle,
     color: Colors.text,
-    fontSize: 26,
-    fontWeight: '900',
     textAlign: 'center',
     marginTop: Spacing.two,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
-    marginTop: Spacing.one,
-  },
-  badgeText: {
-    color: Colors.onAccent,
-    fontSize: 13,
-    fontWeight: '800',
+  facts: {
+    ...Type.footnote,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   section: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
   wrap: {
     flexDirection: 'row',
@@ -246,21 +228,19 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.accent,
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.tight,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   chipText: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
   cardTitle: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
   },
 }));

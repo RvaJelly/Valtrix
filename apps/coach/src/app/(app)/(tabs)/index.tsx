@@ -1,23 +1,51 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation, type Href } from 'expo-router';
-import { useCallback, useLayoutEffect, useState, type ComponentProps } from 'react';
-import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { AppState, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppStatusLabel } from '@/components/app-status';
 import { Avatar } from '@/components/avatar';
-import { JoinCall } from '@/components/join-call';
+import { canJoin, JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
-import { Body, Button, Card, Title } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  EmptyState,
+  EnterUp,
+  Group,
+  IconButton,
+  IconTile,
+  ListRow,
+  Notice,
+  PageHeader,
+  Section,
+  Skeleton,
+  SkeletonRows,
+  StatStrip,
+  Text,
+  useDelayed,
+  type IconName,
+} from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat } from '@/lib/chat-live';
-import { fullName, initials, type Client } from '@/lib/clients';
+import { appStatusOf, fullName, type Client } from '@/lib/clients';
+import { dayMonth, longDate, relative, timeRange } from '@/lib/format';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
-import { addDays, dayKey, SESSION_COLUMNS, sessionName, startOfDay, type Session } from '@/lib/sessions';
+import {
+  addDays,
+  dayKey,
+  endOf,
+  SESSION_COLUMNS,
+  sessionName,
+  startOfDay,
+  startOfWeek,
+  type Session,
+} from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
-
-type IconName = ComponentProps<typeof Ionicons>['name'];
 
 const NONE_SEEN = new Set<string>();
 
@@ -31,60 +59,88 @@ function greeting() {
 type Stats = {
   activeClients: number;
   workouts: number;
-  recent: Pick<Client, 'id' | 'first_name' | 'last_name' | 'goal'>[];
+  // Booked (not cancelled) sessions from Monday to Sunday.
+  thisWeek: number;
+  recent: Pick<Client, 'id' | 'first_name' | 'last_name' | 'goal' | 'user_id' | 'app_status'>[];
   today: Session[];
 };
+
+// One word each, so the five labels never run into each other; screen readers hear the full name.
+const SHORTCUTS: { icon: IconName; label: string; name: string; href: Href }[] = [
+  { icon: 'person-add-outline', label: 'Client', name: 'New client', href: '/clients/new' },
+  { icon: 'calendar-clear-outline', label: 'Session', name: 'Book a session', href: '/sessions/new' },
+  { icon: 'barbell-outline', label: 'Workout', name: 'New workout', href: '/workouts/new' },
+  { icon: 'list-outline', label: 'Library', name: 'Exercise library', href: '/exercises' },
+  { icon: 'play-circle-outline', label: 'Reels', name: 'Reels', href: '/reels' },
+];
 
 export default function Home() {
   const { profile } = useAuth();
   const { chats } = useChat();
-  const navigation = useNavigation();
   const [stats, setStats] = useState<Stats | null>(null);
+  // The day's numbers could not be loaded; what was on screen stays.
+  const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // Only the newest load may show its answer.
+  const loads = useRef(0);
   const [stories, setStories] = useState<{ groups: StoryGroup[]; seen: Set<string> } | null>(null);
+  // The time the screen was last drawn for, moved on every minute so a session that has
+  // ended leaves "Up next".
+  const [now, setNow] = useState(() => new Date());
+  const showSkeleton = useDelayed(300);
   const firstName = profile?.full_name?.split(' ')[0];
   const access = coachAccess(profile);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityLabel="Settings"
-          hitSlop={12}
-          onPress={() => router.push('/settings')}
-          style={{ marginRight: Spacing.three }}>
-          <Ionicons name="settings-outline" size={26} color={Colors.text} />
-        </Pressable>
-      ),
+  // RLS limits every query to the signed-in trainer's own rows. Every answer is checked: a failed
+  // load says so and keeps what was shown, and never passes for a new trainer with no clients.
+  const loadStats = useCallback(async () => {
+    const id = ++loads.current;
+    const today = startOfDay(new Date());
+    const week = startOfWeek(today);
+    const answers = await Promise.all([
+      supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      supabase.from('workouts').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('clients')
+        .select('id, first_name, last_name, goal, user_id, app_status')
+        .neq('status', 'archived')
+        .order('created_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('sessions')
+        .select(SESSION_COLUMNS)
+        .neq('status', 'cancelled')
+        .gte('starts_at', today.toISOString())
+        .lt('starts_at', addDays(today, 1).toISOString())
+        .order('starts_at'),
+      supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .neq('status', 'cancelled')
+        .gte('starts_at', week.toISOString())
+        .lt('starts_at', addDays(week, 7).toISOString()),
+    ]).catch(() => null);
+    if (id !== loads.current) return;
+    const [active, workouts, recent, todays, thisWeek] = answers ?? [];
+    if (!active || !workouts || !recent || !todays || !thisWeek || answers!.some((a) => a.error)) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
+    setStats({
+      activeClients: active.count ?? 0,
+      workouts: workouts.count ?? 0,
+      thisWeek: thisWeek.count ?? 0,
+      recent: (recent.data as Stats['recent']) ?? [],
+      today: (todays.data as unknown as Session[]) ?? [],
     });
-  }, [navigation]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      // RLS limits every query to the signed-in trainer's own rows.
-      Promise.all([
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('workouts').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('clients')
-          .select('id, first_name, last_name, goal')
-          .neq('status', 'archived')
-          .order('created_at', { ascending: false })
-          .limit(3),
-        supabase
-          .from('sessions')
-          .select(SESSION_COLUMNS)
-          .neq('status', 'cancelled')
-          .gte('starts_at', startOfDay(new Date()).toISOString())
-          .lt('starts_at', addDays(startOfDay(new Date()), 1).toISOString())
-          .order('starts_at'),
-      ]).then(([active, workouts, recent, today]) =>
-        setStats({
-          activeClients: active.count ?? 0,
-          workouts: workouts.count ?? 0,
-          recent: (recent.data as Stats['recent']) ?? [],
-          today: (today.data as unknown as Session[]) ?? [],
-        }),
-      );
+      setNow(new Date());
+      const timer = setInterval(() => setNow(new Date()), 60_000);
+      loadStats();
       // Stories from clients and trainers. If they can't load, "Your story" still shows.
       const refreshStories = () =>
         Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]).then(([groups, seen]) =>
@@ -94,306 +150,363 @@ export default function Home() {
       // Coming back to the app doesn't refocus Home, so check again then: stories
       // that ended while the phone was locked disappear, and new ones show up.
       const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') refreshStories();
+        if (state === 'active') {
+          refreshStories();
+          setNow(new Date());
+        }
       });
-      return () => sub.remove();
-    }, []),
+      return () => {
+        sub.remove();
+        clearInterval(timer);
+      };
+    }, [loadStats]),
   );
 
+  async function retry() {
+    setRetrying(true);
+    await loadStats();
+    setRetrying(false);
+  }
+
+  // The first booked session today that hasn't ended leads; the rest of the day sits under it.
+  const next = stats?.today.find((s) => s.status === 'scheduled' && endOf(s) > now);
+  const rest = stats?.today.filter((s) => s !== next) ?? [];
+  const profileMissing = !!profile && (!profile.avatar_url || !profile.specialties?.length);
+  const newTrainer = !!stats && stats.activeClients === 0;
+
+  const account: { key: string; title: string; subtitle: string; icon: IconName; color?: string; href: Href }[] = [];
+  if (profileMissing && !newTrainer) {
+    account.push({
+      key: 'profile',
+      title: 'Finish your profile',
+      subtitle: 'Photo and specialties for your clients',
+      icon: 'person-circle-outline',
+      href: '/settings',
+    });
+  }
+  if (access.kind === 'trial') {
+    account.push({
+      key: 'trial',
+      title: access.daysLeft === 1 ? 'Last day of your free trial' : `${access.daysLeft} days left in your free trial`,
+      subtitle: `Then ${PRICE_LABEL} a month from ${dayMonth(access.endsAt)}`,
+      icon: 'time-outline',
+      color: access.daysLeft <= 3 ? Colors.warning : undefined,
+      href: '/settings',
+    });
+  }
+  if (profile?.is_admin) {
+    account.push({
+      key: 'admin',
+      title: 'All trainers',
+      subtitle: 'See every trainer and give free access',
+      icon: 'shield-checkmark-outline',
+      href: '/admin',
+    });
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      {/* Shown straight away so Home doesn't jump when the stories arrive. */}
-      <StoriesRow
-        groups={stories?.groups ?? []}
-        seen={stories?.seen ?? NONE_SEEN}
-        me={{ name: profile?.full_name ?? profile?.business_name ?? null, avatar: profile?.avatar_url ?? null }}
-      />
-
-      <View style={styles.hello}>
-        <Pressable accessibilityLabel="Your profile" onPress={() => router.push('/settings')}>
-          <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.business_name} size={56} />
-        </Pressable>
-        <View style={{ flex: 1, gap: Spacing.one }}>
-          <Title>
-            {greeting()}
-            {firstName ? `, ${firstName}` : ''}
-          </Title>
-          <Body secondary>{profile?.business_name}</Body>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={{ gap: Spacing.gutter }}>
+          <PageHeader
+            brand
+            eyebrow={longDate(now)}
+            title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
+            actions={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />}
+          />
+          {/* Shown straight away so Home doesn't jump when the stories arrive. */}
+          <StoriesRow
+            groups={stories?.groups ?? []}
+            seen={stories?.seen ?? NONE_SEEN}
+            me={{ name: profile?.full_name ?? profile?.business_name ?? null, avatar: profile?.avatar_url ?? null }}
+          />
         </View>
-      </View>
 
-      {profile && (!profile.avatar_url || !profile.specialties?.length) ? (
-        <Pressable
-          onPress={() => router.push('/settings')}
-          style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="person-circle" size={26} color={Colors.accentText} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.clientName}>Finish your profile</Text>
-            <Body secondary style={{ fontSize: 14 }}>
-              Add a photo and your specialties. Clients see them in the Voltrix app.
-            </Body>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-        </Pressable>
-      ) : null}
-
-      {access.kind === 'trial' ? (
-        <Pressable onPress={() => router.push('/settings')} style={styles.trial}>
-          <Ionicons name="time-outline" size={22} color={Colors.onAccent} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.trialTitle}>
-              {access.daysLeft === 1 ? 'Last day of your free trial' : `${access.daysLeft} days left in your free trial`}
-            </Text>
-            <Text style={styles.trialBody}>
-              Your {PRICE_LABEL} monthly plan starts{' '}
-              {access.endsAt.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.onAccent} />
-        </Pressable>
-      ) : null}
-
-      {profile?.is_admin ? (
-        <Pressable
-          onPress={() => router.push('/admin')}
-          style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="shield-checkmark" size={22} color={Colors.accentText} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.clientName}>All trainers</Text>
-            <Body secondary style={{ fontSize: 14 }}>
-              See every trainer and give free access
-            </Body>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-        </Pressable>
-      ) : null}
-
-      <View style={styles.statsRow}>
-        <Stat label="Active clients" value={stats?.activeClients} onPress={() => router.navigate('/clients')} />
-        <Stat label="Workouts" value={stats?.workouts} onPress={() => router.navigate('/programs')} />
-      </View>
-
-      <View style={{ gap: Spacing.three }}>
-        <Text style={styles.section}>Quick actions</Text>
-        <View style={styles.grid}>
-          <Action icon="person-add" label="Add client" href="/clients/new" />
-          <Action icon="barbell" label="Build workout" href="/workouts/new" />
-          <Action icon="library" label="Exercises" href="/exercises" />
-          <Action icon="calendar" label="Book session" href="/sessions/new" />
-        </View>
-      </View>
-
-      <View style={{ gap: Spacing.three }}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.section, { flex: 1 }]}>Today’s sessions</Text>
-          <Pressable onPress={() => router.navigate('/calendar')} hitSlop={8}>
-            <Text style={styles.link}>Calendar</Text>
-          </Pressable>
-        </View>
-        {stats && stats.today.length === 0 ? (
-          <Card style={{ gap: Spacing.three }}>
-            <Body secondary>Nothing booked today.</Body>
-            <Button
-              title="Book a session"
-              variant="secondary"
-              onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(new Date()) } })}
-            />
-          </Card>
-        ) : (
-          stats?.today.map((session) => (
-            <View key={session.id} style={{ gap: Spacing.two }}>
-              <SessionRow session={session} />
-              <JoinCall
-                session={session}
-                name={sessionName(session)}
-                avatar={chats.find((c) => c.chat_id === session.client_id)?.other_avatar}
-                onApp={!!session.clients?.user_id}
-              />
-            </View>
-          ))
-        )}
-      </View>
-
-      <View style={{ gap: Spacing.three }}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.section, { flex: 1 }]}>Recent clients</Text>
-          {stats && stats.recent.length > 0 ? (
-            <Pressable onPress={() => router.navigate('/clients')} hitSlop={8}>
-              <Text style={styles.link}>See all</Text>
-            </Pressable>
+        <Section title="Today" action={{ label: 'Calendar', onPress: () => router.navigate('/calendar') }}>
+          {failed ? (
+            <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
+              {stats ? 'Could not refresh your day.' : 'Your day could not be loaded.'}
+            </Notice>
           ) : null}
+          {!stats ? (
+            showSkeleton && !failed ? (
+              <View style={{ gap: Spacing.tight }}>
+                <Skeleton height={168} radius={Radius.large} />
+                <SkeletonRows count={2} />
+              </View>
+            ) : null
+          ) : stats.today.length === 0 ? (
+            <EmptyState
+              compact
+              icon="calendar-clear-outline"
+              title="Nothing booked today"
+              message="Today's sessions show here."
+              action={
+                <Button
+                  title="Book"
+                  variant="ghost"
+                  size="small"
+                  onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(new Date()) } })}
+                />
+              }
+            />
+          ) : (
+            <View style={{ gap: Spacing.tight }}>
+              {next ? (
+                <EnterUp>
+                  <UpNext
+                    session={next}
+                    now={now}
+                    avatar={chats.find((c) => c.chat_id === next.client_id)?.other_avatar}
+                  />
+                </EnterUp>
+              ) : null}
+              {rest.length ? (
+                <EnterUp index={1}>
+                  <Group>
+                    {rest.map((s, i) => (
+                      <SessionRow
+                        key={s.id}
+                        session={s}
+                        variant="grouped"
+                        now={now.getTime()}
+                        last={i === rest.length - 1}
+                      />
+                    ))}
+                  </Group>
+                </EnterUp>
+              ) : null}
+            </View>
+          )}
+        </Section>
+
+        <View style={styles.shortcuts}>
+          {SHORTCUTS.map((s) => (
+            <Shortcut key={s.label} {...s} />
+          ))}
         </View>
-        {stats && stats.recent.length === 0 ? (
-          <Card>
-            <Body secondary>No clients yet. Tap “Add client” to get started.</Body>
-          </Card>
-        ) : (
-          stats?.recent.map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => router.push({ pathname: '/clients/[id]', params: { id: c.id } })}
-              style={({ pressed }) => [styles.clientRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials(c)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.clientName}>{fullName(c)}</Text>
-                <Body secondary numberOfLines={1} style={{ fontSize: 14 }}>
-                  {c.goal || 'No goal set yet'}
-                </Body>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-            </Pressable>
-          ))
-        )}
-      </View>
-    </ScrollView>
+
+        {stats ? (
+          newTrainer ? (
+            <Section title="Get started">
+              <Group>
+                <Step title="Add your first client" done={false} href="/clients/new" />
+                <Step title="Build a workout" done={stats.workouts > 0} href="/workouts/new" />
+                <Step title="Finish your profile" done={!profileMissing} href="/settings" />
+                <Step title="Book a session" done={stats.today.length > 0} href="/sessions/new" last />
+              </Group>
+            </Section>
+          ) : (
+            <StatStrip
+              items={[
+                { value: stats.activeClients, label: 'Active clients', onPress: () => router.navigate('/clients') },
+                { value: stats.workouts, label: 'Workouts', onPress: () => router.navigate('/programs') },
+                {
+                  value: stats.thisWeek,
+                  label: 'This week',
+                  spoken: `${stats.thisWeek} ${stats.thisWeek === 1 ? 'session' : 'sessions'} this week`,
+                  onPress: () => router.navigate('/calendar'),
+                },
+              ]}
+            />
+          )
+        ) : null}
+
+        {account.length ? (
+          <Section title="Account">
+            <Group>
+              {account.map((a, i) => (
+                <ListRow
+                  key={a.key}
+                  title={a.title}
+                  subtitle={a.subtitle}
+                  leading={<IconTile icon={a.icon} color={a.color} />}
+                  onPress={() => router.push(a.href)}
+                  last={i === account.length - 1}
+                />
+              ))}
+            </Group>
+          </Section>
+        ) : null}
+
+        {stats && stats.recent.length > 0 ? (
+          <Section title="Recent clients" action={{ label: 'See all', onPress: () => router.navigate('/clients') }}>
+            <Group>
+              {stats.recent.map((c, i) => {
+                const status = appStatusOf(c);
+                return (
+                  <ListRow
+                    key={c.id}
+                    title={fullName(c)}
+                    subtitle={
+                      <Text variant="footnote" tone={c.goal ? 'secondary' : 'tertiary'} numberOfLines={1}>
+                        {c.goal || 'No goal yet'}
+                      </Text>
+                    }
+                    leading={<Avatar name={fullName(c)} size={40} />}
+                    status={status !== 'joined' ? <AppStatusLabel status={status} short /> : null}
+                    onPress={() => router.push({ pathname: '/clients/[id]', params: { id: c.id } })}
+                    last={i === stats.recent.length - 1}
+                  />
+                );
+              })}
+            </Group>
+          </Section>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-function Stat({ label, value, onPress }: { label: string; value?: number; onPress: () => void }) {
+// The next session today as a hero card: who, when, where, and Join while the call is on. The card
+// opens the session; Join is its own button under it, not inside the card's.
+function UpNext({ session, now, avatar }: { session: Session; now: Date; avatar?: string | null }) {
+  const start = new Date(session.starts_at);
+  const end = endOf(session);
+  const live = start <= now && now < end;
+  // Only a start within two hours is worth saying; the time is printed right below.
+  const soon = !live && start.getTime() - now.getTime() < 2 * 3_600_000;
+  const name = sessionName(session);
+  const place = session.online ? 'Video call' : session.location;
+  const joinable = canJoin(session, now.getTime());
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.stat, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Text style={styles.statNumber}>{value ?? '–'}</Text>
-      <Body secondary style={{ fontSize: 14 }}>
-        {label}
-      </Body>
-    </Pressable>
+    <Card
+      hero
+      onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
+      accessibilityLabel={`${live ? 'Now' : 'Up next'}: ${name}, ${timeRange(start, end)}${place ? `, ${place}` : ''}`}
+      accessibilityHint="Opens the session"
+      footer={
+        joinable ? <JoinCall session={session} name={name} avatar={avatar} onApp={!!session.clients?.user_id} /> : null
+      }>
+      <View style={styles.heroTop}>
+        {live ? <View style={styles.liveDot} /> : null}
+        <Text
+          variant="label"
+          tone={live ? undefined : 'secondary'}
+          style={[{ flex: 1 }, live && { color: Colors.accentText }]}>
+          {live ? 'Now' : 'Up next'}
+        </Text>
+        {soon ? (
+          <Text variant="footnote" tone="secondary">
+            {relative(start, now)}
+          </Text>
+        ) : null}
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+      </View>
+      <Text variant="title" numberOfLines={2} style={{ marginTop: Spacing.two }}>
+        {name}
+      </Text>
+      <Text variant="headline" style={[Tabular, { marginTop: Spacing.one }]}>
+        {timeRange(start, end)}
+      </Text>
+      {place ? (
+        <View style={styles.heroMeta}>
+          <Ionicons
+            name={session.online ? 'videocam-outline' : 'location-outline'}
+            size={16}
+            color={Colors.textSecondary}
+          />
+          <Text variant="callout" tone="secondary" numberOfLines={2} style={{ flex: 1 }}>
+            {place}
+          </Text>
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
-function Action({ icon, label, href }: { icon: IconName; label: string; href: Href }) {
+function Shortcut({ icon, label, name, href }: { icon: IconName; label: string; name: string; href: Href }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={name}
       onPress={() => router.push(href)}
-      style={({ pressed }) => [styles.action, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={styles.actionIcon}>
-        <Ionicons name={icon} size={22} color={Colors.onAccent} />
-      </View>
-      <Text style={styles.actionLabel}>{label}</Text>
+      style={[styles.shortcut, Platform.OS === 'web' && { cursor: 'pointer' }]}>
+      {({ pressed }) => (
+        <>
+          <View style={[styles.shortcutCircle, pressed && { backgroundColor: Colors.tintPressed }]}>
+            <Ionicons name={icon} size={22} color={Colors.text} />
+          </View>
+          <Text variant="footnote" numberOfLines={2} style={styles.shortcutLabel}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
+  );
+}
+
+// One step of the new-trainer checklist.
+function Step({ title, done, href, last }: { title: string; done: boolean; href: Href; last?: boolean }) {
+  return (
+    <ListRow
+      title={title}
+      titleTone={done ? 'secondary' : 'primary'}
+      leading={
+        <Ionicons
+          name={done ? 'checkmark-circle' : 'ellipse-outline'}
+          size={22}
+          color={done ? Colors.success : Colors.textTertiary}
+        />
+      }
+      compact
+      onPress={() => router.push(href)}
+      accessibilityLabel={`${title}${done ? ', done' : ''}`}
+      last={last}
+    />
   );
 }
 
 const styles = themed(() => ({
-  hello: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
   content: {
-    padding: Spacing.four,
-    gap: Spacing.four,
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
   },
-  trial: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
-  },
-  trialTitle: {
-    color: Colors.onAccent,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  trialBody: {
-    color: Colors.onAccent,
-    fontSize: 14,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  stat: {
-    flex: 1,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    gap: Spacing.one,
-  },
-  statNumber: {
-    color: Colors.accentText,
-    fontSize: 36,
-    fontWeight: '800',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.three,
-  },
-  action: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  cardHeader: {
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  cardTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.accent,
   },
-  link: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  clientRow: {
+  heroMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
+    gap: 6,
+    marginTop: Spacing.one,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.accent,
+  shortcuts: {
+    flexDirection: 'row',
+    marginHorizontal: -Spacing.two, // a little more room for the five labels
+  },
+  shortcut: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  shortcutCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.tint,
   },
-  avatarText: {
-    color: Colors.onAccent,
-    fontWeight: '800',
-  },
-  clientName: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  shortcutLabel: {
+    fontFamily: Fonts.textMedium,
+    textAlign: 'center',
   },
 }));

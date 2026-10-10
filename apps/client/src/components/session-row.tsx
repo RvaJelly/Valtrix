@@ -1,76 +1,57 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { Body } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { endOf, formatDay, formatTime, ONLINE_LABEL, SESSION_STATUS, trainerName, type Session } from '@/lib/sessions';
+import { Group, ListRow, StatusPill, Text, type StatusTone } from '@/components/ui';
+import { Colors, Tabular } from '@/constants/theme';
+import { weekdayShort } from '@/lib/format';
+import { endOf, formatTime, SESSION_STATUS, trainerName, type Session, type SessionStatus } from '@/lib/sessions';
 
-// One session in a list: time on the left, trainer and where on the right.
-export function SessionRow({ session, showDay }: { session: Session; showDay?: boolean }) {
+const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
+  completed: 'success',
+  cancelled: 'neutral',
+  no_show: 'warning',
+};
+
+// One session in a list. With `showDay` a date block (MON / 12) leads the row; otherwise the
+// time does. The trainer's name shows when `showTrainer` (the client may have several).
+// `card` stands on its own; `grouped` is a row inside a Group (`last` drops its hairline).
+export function SessionRow({
+  session,
+  showDay,
+  showTrainer = true,
+  variant = 'card',
+  last,
+}: {
+  session: Session;
+  showDay?: boolean;
+  showTrainer?: boolean;
+  variant?: 'card' | 'grouped';
+  last?: boolean;
+}) {
   const start = new Date(session.starts_at);
-  const muted = session.status === 'cancelled' || session.status === 'no_show';
-  return (
-    <View style={styles.row}>
-      <View style={[styles.bar, { backgroundColor: muted ? Colors.border : Colors.accent }]} />
-      <View style={styles.time}>
-        <Text style={styles.start}>{formatTime(start)}</Text>
-        <Body secondary style={styles.small}>
-          {formatTime(endOf(session))}
-        </Body>
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[styles.name, muted && styles.struck]} numberOfLines={1}>
-          {showDay ? `${formatDay(start)} · ` : ''}
-          {trainerName(session)}
-        </Text>
-        <Body secondary style={styles.small} numberOfLines={1}>
-          {[
-            session.online ? ONLINE_LABEL : null,
-            session.location,
-            session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null,
-          ]
-            .filter(Boolean)
-            .join(' · ') || `${session.duration_minutes} min`}
-        </Body>
-      </View>
-      {session.status === 'completed' ? <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} /> : null}
-    </View>
+  const range = `${formatTime(start)}–${formatTime(endOf(session))}`;
+  const cancelled = session.status === 'cancelled';
+  const pill = PILLS[session.status];
+  const where = session.online ? 'Video call' : session.location || `${session.duration_minutes} min`;
+  const who = showTrainer ? trainerName(session).split(' ')[0] : null;
+  const row = (
+    <ListRow
+      title={range}
+      titleStyle={[Tabular, cancelled && { color: Colors.textTertiary, textDecorationLine: 'line-through' }]}
+      subtitle={[where, who].filter(Boolean).join(' · ')}
+      leading={
+        showDay ? (
+          <View style={{ minWidth: 44, alignItems: 'center' }}>
+            <Text variant="label" tone="secondary">
+              {weekdayShort(start)}
+            </Text>
+            <Text variant="title">{start.getDate()}</Text>
+          </View>
+        ) : undefined
+      }
+      status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
+      chevron={false}
+      last={variant === 'card' || last}
+    />
   );
+  return variant === 'card' ? <Group>{row}</Group> : row;
 }
-
-const styles = themed(() => ({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingRight: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  bar: {
-    width: 4,
-    alignSelf: 'stretch',
-  },
-  time: {
-    width: 52,
-  },
-  start: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  struck: {
-    color: Colors.textSecondary,
-    textDecorationLine: 'line-through',
-  },
-  small: {
-    fontSize: 13,
-  },
-}));

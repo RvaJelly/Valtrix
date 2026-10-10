@@ -1,22 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { PickerSheet, type PickerOption } from '@/components/picker-sheet';
 import { TrainerCircle } from '@/components/trainer-circle';
-import { Body, Card, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Card, Notice, SearchField, Text as UIText } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { findMe } from '@/lib/location';
 import {
   displayName,
@@ -180,15 +170,15 @@ export default function Trainers() {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
-      <Body secondary>Personal trainers on Voltrix. Tap a trainer to see what they do.</Body>
-      <TextInput
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
+      <UIText variant="callout" tone="secondary">
+        Personal trainers on Voltrix. Tap a trainer to see what they do.
+      </UIText>
+      <SearchField
         value={search}
         onChangeText={setSearch}
-        placeholder="Search by name, city or specialty"
-        placeholderTextColor={Colors.textSecondary}
+        placeholder="Name, city or specialty"
         accessibilityLabel="Search trainers"
-        style={styles.search}
       />
       {trainers?.length ? (
         <View style={styles.pills}>
@@ -211,7 +201,12 @@ export default function Trainers() {
         </View>
       ) : null}
       {offered.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
+        // The row runs to the screen edges, so a chip cut by the edge reads as "scroll for more".
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginHorizontal: -Spacing.gutter }}
+          contentContainerStyle={{ gap: Spacing.two, paddingHorizontal: Spacing.gutter }}>
           {[null, ...offered].map((s) => {
             const selected = specialty === s;
             return (
@@ -221,7 +216,7 @@ export default function Trainers() {
                 accessibilityState={{ selected }}
                 onPress={() => setSpecialty(s)}
                 style={[styles.chip, selected && styles.chipSelected]}>
-                <Text style={[styles.chipText, selected && { color: Colors.onAccent }]}>{s ?? 'All'}</Text>
+                <Text style={[styles.chipText, selected && { color: Colors.background }]}>{s ?? 'All'}</Text>
               </Pressable>
             );
           })}
@@ -230,7 +225,7 @@ export default function Trainers() {
 
       {locating ? (
         <View style={styles.note}>
-          <ActivityIndicator size="small" color={Colors.accentText} />
+          <ActivityIndicator size="small" color={Colors.textSecondary} />
           <Text style={styles.noteText}>Finding trainers near you…</Text>
         </View>
       ) : null}
@@ -241,8 +236,8 @@ export default function Trainers() {
         </View>
       ) : null}
 
-      <ErrorText>{error}</ErrorText>
-      {!trainers && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+      {!trainers && !error ? <ActivityIndicator color={Colors.textSecondary} /> : null}
       {trainers && shown.length === 0 ? (
         <Card>
           <Body secondary>{trainers.length ? 'No trainers match that search.' : 'No trainers yet.'}</Body>
@@ -295,14 +290,18 @@ function Pill({
   accessibilityLabel: string;
   onPress: () => void;
 }) {
-  const color = active ? Colors.onAccent : Colors.text;
+  const color = active ? Colors.background : Colors.text;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={({ pressed }) => [styles.pill, active && styles.chipSelected, pressed && { opacity: 0.7 }]}>
-      <Ionicons name={icon} size={16} color={active ? Colors.onAccent : Colors.accentText} />
+      style={({ pressed }) => [
+        styles.pill,
+        pressed && { backgroundColor: Colors.tintPressed },
+        active && styles.chipSelected,
+      ]}>
+      <Ionicons name={icon} size={16} color={active ? Colors.background : Colors.textSecondary} />
       <Text style={[styles.pillText, { color }]} numberOfLines={1}>
         {label}
       </Text>
@@ -313,18 +312,10 @@ function Pill({
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  search: {
-    minHeight: 48,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    fontSize: 16,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.tight,
   },
   pills: {
     flexDirection: 'row',
@@ -336,34 +327,30 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.two,
     maxWidth: '100%',
-    minHeight: 40,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   pillText: {
+    ...Type.callout,
+    fontFamily: Fonts.textMedium,
     flexShrink: 1,
-    fontSize: 14,
-    fontWeight: '700',
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   chipSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   chipText: {
+    ...Type.callout,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
   note: {
     flexDirection: 'row',
@@ -371,10 +358,9 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   noteText: {
+    ...Type.footnote,
     flex: 1,
     color: Colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
   },
   grid: {
     flexDirection: 'row',

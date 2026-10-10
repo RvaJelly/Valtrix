@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
-import { Body, Button, Card, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Card, Group, Notice, PageHeader, Segmented, SkeletonRows, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
+import { longDate } from '@/lib/format';
 import {
   daysLabel,
   dueOn,
@@ -41,6 +43,7 @@ export default function Plan() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const showSkeleton = useDelayed(300);
   // The day the plan was loaded for: its ticks and "Today" belong to that day.
   const loadedFor = useRef('');
 
@@ -89,46 +92,41 @@ export default function Plan() {
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
-      <View style={styles.segmented}>
-        {(['workouts', 'sessions'] as const).map((key) => {
-          const selected = key === tab;
-          return (
-            <Pressable
-              key={key}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => router.setParams({ view: key })}
-              style={[styles.segment, selected && { backgroundColor: Colors.accent }]}>
-              <Text style={[styles.segmentText, selected && { color: Colors.onAccent }]}>
-                {key === 'workouts' ? 'Workouts' : 'Sessions'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />
+        }>
+        <PageHeader title="Plan" />
+        <Segmented
+          options={[
+            { value: 'workouts', label: 'Workouts' },
+            { value: 'sessions', label: 'Sessions' },
+          ]}
+          value={tab}
+          onChange={(view) => router.setParams({ view })}
+        />
 
-      {/* A web page can't be pulled down to refresh, so there's always a button. */}
-      {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
-        </View>
-      ) : null}
-      {tab === 'workouts' ? (
-        plan ? (
-          <Workouts plan={plan} />
-        ) : !error ? (
-          <ActivityIndicator color={Colors.accentText} />
-        ) : null
-      ) : sessions ? (
-        <Sessions sessions={sessions} when={when} onWhen={setWhen} />
-      ) : !error ? (
-        <ActivityIndicator color={Colors.accentText} />
-      ) : null}
-    </ScrollView>
+        {/* A web page can't be pulled down to refresh, so there's always a button. */}
+        {error ? (
+          <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
+            {error}
+          </Notice>
+        ) : null}
+        {tab === 'workouts' ? (
+          plan ? (
+            <Workouts plan={plan} />
+          ) : !error && showSkeleton ? (
+            <SkeletonRows count={3} />
+          ) : null
+        ) : sessions ? (
+          <Sessions sessions={sessions} when={when} onWhen={setWhen} />
+        ) : !error && showSkeleton ? (
+          <SkeletonRows count={3} />
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -159,7 +157,7 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
         <HistoryLink />
         <Card style={{ gap: Spacing.three, alignItems: 'center', paddingVertical: Spacing.five }}>
           <View style={styles.emptyIcon}>
-            <Ionicons name="barbell" size={28} color={Colors.accentText} />
+            <Ionicons name="barbell-outline" size={28} color={Colors.textSecondary} />
           </View>
           <Text style={styles.cardTitle}>No workouts yet</Text>
           <Body secondary style={{ textAlign: 'center' }}>
@@ -176,9 +174,7 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
       <View style={{ gap: Spacing.two }}>
         <View style={styles.header}>
           <Text style={[styles.heading, { flex: 1 }]}>Today</Text>
-          <Text style={styles.date}>
-            {today.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-          </Text>
+          <Text style={styles.date}>{longDate(today)}</Text>
         </View>
         {due.length ? (
           due.map((item) => (
@@ -200,7 +196,7 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
         <View style={styles.header}>
           <Text style={[styles.heading, { flex: 1 }]}>This week</Text>
           <Text style={styles.progress}>
-            Done {progress.done} of {progress.planned}
+            {progress.done} of {progress.planned} done
           </Text>
         </View>
         <View style={styles.week}>
@@ -236,22 +232,26 @@ function WorkoutCard({ item, done, showTrainer }: { item: PlanItem; done: boolea
       accessibilityRole="button"
       accessibilityLabel={`${item.workout_name}${done ? ', done today' : ''}`}
       onPress={() => openWorkout(item)}
-      style={({ pressed }) => [styles.workout, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={[styles.workoutIcon, done && { backgroundColor: Colors.accent }]}>
-        <Ionicons name={done ? 'checkmark' : 'barbell'} size={22} color={done ? Colors.onAccent : Colors.accentText} />
+      style={({ pressed }) => [styles.workout, pressed && { backgroundColor: Colors.tint }]}>
+      <View style={styles.workoutIcon}>
+        <Ionicons
+          name={done ? 'checkmark-circle' : 'barbell-outline'}
+          size={done ? 24 : 20}
+          color={done ? Colors.success : Colors.textSecondary}
+        />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.workoutName}>{item.workout_name}</Text>
-        <Body secondary style={{ fontSize: 13 }}>
+        <Text style={styles.details} numberOfLines={1}>
           {done ? 'Done today' : details}
-        </Body>
+        </Text>
         {item.note ? (
           <Text style={styles.note} numberOfLines={2}>
             “{item.note}”
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+      <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
     </Pressable>
   );
 }
@@ -268,9 +268,9 @@ function WeekRow({
   items: { item: PlanItem; done: boolean }[];
 }) {
   return (
-    <View style={[styles.weekRow, isToday && { backgroundColor: Colors.surface }]}>
+    <View style={[styles.weekRow, isToday && { backgroundColor: Colors.tint }]}>
       <View style={styles.weekDay}>
-        <Text style={[styles.weekDayName, isToday && { color: Colors.accentText }]}>{label}</Text>
+        <Text style={[styles.weekDayName, isToday && { fontFamily: Fonts.textSemi }]}>{isToday ? 'Today' : label}</Text>
         <Text style={styles.weekDate}>{date}</Text>
       </View>
       <View style={styles.weekItems}>
@@ -281,13 +281,13 @@ function WeekRow({
               accessibilityRole="button"
               accessibilityLabel={`${label} ${date}: ${item.workout_name}${done ? ', done' : ''}`}
               onPress={() => openWorkout(item)}
-              style={({ pressed }) => [styles.pill, done && styles.pillDone, pressed && { opacity: 0.7 }]}>
+              style={({ pressed }) => [styles.pill, pressed && { backgroundColor: Colors.tintPressed }]}>
               <Ionicons
                 name={done ? 'checkmark-circle' : 'ellipse-outline'}
                 size={16}
-                color={done ? Colors.onAccent : Colors.textSecondary}
+                color={done ? Colors.success : Colors.textTertiary}
               />
-              <Text style={[styles.pillText, done && { color: Colors.onAccent }]} numberOfLines={1}>
+              <Text style={styles.pillText} numberOfLines={1}>
                 {item.workout_name}
               </Text>
             </Pressable>
@@ -328,7 +328,7 @@ function Sessions({ sessions, when, onWhen }: { sessions: Session[]; when: When;
               accessibilityState={{ selected }}
               onPress={() => onWhen(key)}
               style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && { color: Colors.onAccent }]}>
+              <Text style={[styles.chipText, selected && { color: Colors.background }]}>
                 {key === 'upcoming' ? 'Upcoming' : 'Past'}
               </Text>
             </Pressable>
@@ -345,13 +345,17 @@ function Sessions({ sessions, when, onWhen }: { sessions: Session[]; when: When;
         </Card>
       ) : null}
       {days.map((d) => (
-        <View key={d.key} style={{ gap: Spacing.two }}>
-          <Text style={styles.day}>{formatDay(d.date)}</Text>
+        <View key={d.key} style={{ gap: Spacing.tight }}>
+          <Text style={styles.day} accessibilityRole="header">
+            {formatDay(d.date)}
+          </Text>
+          <Group>
+            {d.items.map((s, i) => (
+              <SessionRow key={s.id} session={s} variant="grouped" last={i === d.items.length - 1} />
+            ))}
+          </Group>
           {d.items.map((s) => (
-            <View key={s.id} style={{ gap: Spacing.two }}>
-              <SessionRow session={s} />
-              <JoinCall session={s} />
-            </View>
+            <JoinCall key={s.id} session={s} />
           ))}
         </View>
       ))}
@@ -360,28 +364,18 @@ function Sessions({ sessions, when, onWhen }: { sessions: Session[]; when: When;
 }
 
 const styles = themed(() => ({
-  content: {
-    padding: Spacing.four,
-    gap: Spacing.four,
-  },
-  segmented: {
-    flexDirection: 'row',
-    padding: Spacing.one,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
-  segment: {
+  screen: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-    minHeight: 40,
-    justifyContent: 'center',
-    borderRadius: Radius.small,
+    backgroundColor: Colors.background,
   },
-  segmentText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+  content: {
+    width: '100%',
+    maxWidth: Layout.maxClient,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.four,
   },
   historyRow: {
     flexDirection: 'row',
@@ -399,24 +393,21 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   heading: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
+    ...Type.label,
+    color: Colors.textSecondary,
   },
   date: {
+    ...Type.footnote,
     color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
   },
   progress: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '800',
+    ...Type.footnote,
+    ...Tabular,
+    color: Colors.textSecondary,
   },
   cardTitle: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
   },
   emptyIcon: {
     width: 56,
@@ -424,62 +415,68 @@ const styles = themed(() => ({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
   },
   workout: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
+    gap: Spacing.tight,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.gutter,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   workoutIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
   },
   workoutName: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
+  },
+  details: {
+    ...Type.footnote,
+    color: Colors.textSecondary,
   },
   note: {
+    ...Type.footnote,
     color: Colors.text,
-    fontSize: 14,
     fontStyle: 'italic',
   },
   week: {
     borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.surface,
     overflow: 'hidden',
   },
   weekRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: Spacing.tight,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    minHeight: 52,
+    minHeight: 56,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   weekDay: {
-    width: 40,
+    width: 44,
     alignItems: 'center',
   },
   weekDayName: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '800',
   },
   weekDate: {
+    ...Type.footnote,
+    ...Tabular,
     color: Colors.textSecondary,
-    fontSize: 13,
   },
   weekItems: {
     flex: 1,
@@ -493,49 +490,41 @@ const styles = themed(() => ({
     gap: Spacing.one,
     maxWidth: '100%',
     minHeight: 36,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surfaceRaised,
-  },
-  pillDone: {
-    backgroundColor: Colors.accent,
+    paddingHorizontal: Spacing.tight,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   pillText: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     flexShrink: 1,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   rest: {
-    color: Colors.textSecondary,
-    fontSize: 14,
+    ...Type.footnote,
+    color: Colors.textTertiary,
   },
   pills: {
     flexDirection: 'row',
     gap: Spacing.two,
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    minHeight: 40,
+    paddingHorizontal: 14,
+    minHeight: 36,
     justifyContent: 'center',
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   chipSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   chipText: {
+    ...Type.callout,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   day: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
+    ...Type.label,
+    color: Colors.textSecondary,
   },
 }));

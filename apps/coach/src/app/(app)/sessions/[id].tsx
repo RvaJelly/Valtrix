@@ -68,7 +68,7 @@ export default function SessionDetail() {
         <Body secondary>{error}</Body>
       </View>
     ) : (
-      <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />
+      <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
     );
   }
 

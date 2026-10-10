@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Logo } from '@/components/logo';
 import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
-import { Spacing, themed } from '@/constants/theme';
+import { Layout, Spacing, themed } from '@/constants/theme';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -34,6 +35,7 @@ export default function ForgotPassword() {
     <SafeAreaView style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Logo style={styles.logo} />
           <Title>{sent ? 'Check your email' : 'Reset your password'}</Title>
           {sent ? (
             <Body secondary>
@@ -66,8 +68,19 @@ export default function ForgotPassword() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingTop: Spacing.six + Spacing.four,
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.six,
+    paddingBottom: Spacing.four,
     gap: Spacing.three,
+  },
+  logo: {
+    width: 148,
+    alignSelf: 'flex-start',
+    // The image carries the brand kit's clear space; this lines the V up with the text below.
+    marginLeft: -12,
+    marginBottom: Spacing.two,
   },
 }));

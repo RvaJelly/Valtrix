@@ -1,83 +1,84 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Body } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
-import { endOf, formatTime, ONLINE_LABEL, SESSION_STATUS, sessionName, type Session } from '@/lib/sessions';
+import { canJoin, JoinCall } from '@/components/join-call';
+import { Group, ListRow, StatusPill, Text, type StatusTone } from '@/components/ui';
+import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
+import { endOf, formatTime, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
 
-// One session in a list: time on the left, who and where on the right.
-export function SessionRow({ session }: { session: Session }) {
+const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
+  completed: 'success',
+  cancelled: 'neutral',
+  no_show: 'warning',
+};
+
+// One session in a list: the time on the left, who and where, and a pill once it isn't just booked.
+// `card` stands on its own; `grouped` is a row inside a Group (`last` drops its hairline).
+// With `now`, an online session that can be joined gets its Join button under the row (beside the
+// row's own button, not inside it, so screen readers reach both).
+export function SessionRow({
+  session,
+  variant = 'card',
+  last,
+  now,
+}: {
+  session: Session;
+  variant?: 'card' | 'grouped';
+  last?: boolean;
+  now?: number;
+}) {
   const start = new Date(session.starts_at);
-  const muted = session.status === 'cancelled' || session.status === 'no_show';
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={[styles.bar, { backgroundColor: muted ? Colors.border : Colors.accent }]} />
-      <View style={styles.time}>
-        <Text style={styles.start}>{formatTime(start)}</Text>
-        <Body secondary style={styles.small}>
-          {formatTime(endOf(session))}
-        </Body>
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[styles.name, muted && styles.struck]} numberOfLines={1}>
-          {sessionName(session)}
-        </Text>
-        <Body secondary style={styles.small} numberOfLines={1}>
-          {[
-            session.online ? ONLINE_LABEL : null,
-            session.location,
-            session.status !== 'scheduled' ? SESSION_STATUS[session.status] : null,
-          ]
-            .filter(Boolean)
-            .join(' · ') || `${session.duration_minutes} min`}
-        </Body>
-      </View>
-      {session.status === 'completed' ? (
-        <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
-      ) : (
-        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-      )}
-    </Pressable>
+  const cancelled = session.status === 'cancelled';
+  const pill = PILLS[session.status];
+  const where = session.online ? 'Video call' : session.location || `${session.duration_minutes} min`;
+  const joinable = now !== undefined && canJoin(session, now);
+  const lastLine = variant === 'card' || last;
+  const row = (
+    <>
+      <ListRow
+        title={sessionName(session)}
+        titleStyle={cancelled ? { color: Colors.textTertiary, textDecorationLine: 'line-through' } : undefined}
+        subtitle={where}
+        leading={
+          <View style={styles.time}>
+            <Text variant="rowTitle" style={Tabular}>
+              {formatTime(start)}
+            </Text>
+            <Text variant="footnote" tone="secondary" style={Tabular}>
+              {formatTime(endOf(session))}
+            </Text>
+          </View>
+        }
+        status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
+        onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
+        accessibilityLabel={`${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
+          pill ? `, ${SESSION_STATUS[session.status]}` : ''
+        }`}
+        last={lastLine || joinable}
+      />
+      {joinable ? (
+        <View style={[styles.join, !lastLine && styles.joinLine]}>
+          <JoinCall session={session} name={sessionName(session)} onApp={!!session.clients?.user_id} size="medium" />
+        </View>
+      ) : null}
+    </>
   );
+  return variant === 'card' ? <Group>{row}</Group> : row;
 }
 
 const styles = themed(() => ({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingRight: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-    overflow: 'hidden',
-  },
-  bar: {
-    width: 4,
-    alignSelf: 'stretch',
-  },
+  // Grows with large text instead of cutting the times.
   time: {
-    width: 52,
+    minWidth: 48,
   },
-  start: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
+  // Lines up with the row's title.
+  join: {
+    paddingLeft: Spacing.gutter + 48 + Spacing.tight,
+    paddingRight: Spacing.gutter,
+    paddingBottom: Spacing.tight,
   },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  struck: {
-    color: Colors.textSecondary,
-    textDecorationLine: 'line-through',
-  },
-  small: {
-    fontSize: 13,
+  joinLine: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
 }));

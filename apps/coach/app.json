@@ -31,6 +31,7 @@
     },
     "web": {
       "output": "single",
+      "themeColor": "#0A1630",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

@@ -1,35 +1,37 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppStatusLabel } from '@/components/app-status';
-import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Avatar } from '@/components/avatar';
+import {
+  Button,
+  EmptyState,
+  groupedItem,
+  IconButton,
+  ListRow,
+  Notice,
+  PageHeader,
+  SearchField,
+  SkeletonRows,
+  StatusPill,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
-import { appStatusOf, CLIENT_COLUMNS, fullName, initials, STATUS_LABELS, type Client } from '@/lib/clients';
+import { APP_STATUS_LABELS, appStatusOf, CLIENT_COLUMNS, fullName, STATUS_LABELS, type Client } from '@/lib/clients';
 import { supabase } from '@/lib/supabase';
 
+const addClient = () => router.push('/clients/new');
+
 export default function Clients() {
-  const navigation = useNavigation();
   const [clients, setClients] = useState<Client[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityLabel="Add client"
-          hitSlop={12}
-          onPress={() => router.push('/clients/new')}
-          style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
-        </Pressable>
-      ),
-    });
-  }, [navigation]);
+  const showSkeleton = useDelayed(300);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -69,114 +71,109 @@ export default function Clients() {
     return clients.filter((c) => `${fullName(c)} ${c.email ?? ''}`.toLowerCase().includes(term));
   }, [clients, search]);
 
+  const add = <IconButton variant="tonal" icon="add" label="Add client" onPress={addClient} />;
+
   if (clients && clients.length === 0) {
     return (
-      <EmptyState
-        icon="people-outline"
-        title="No clients yet"
-        message="Add your first client to start building their programs and booking sessions."
-        action={<Button title="Add a client" onPress={() => router.push('/clients/new')} />}
-      />
+      <SafeAreaView style={styles.screen} edges={['top']}>
+        <ScrollView contentContainerStyle={styles.list}>
+          {/* The empty state's button is the one way to add a client here. */}
+          <PageHeader title="Clients" />
+          <EmptyState
+            icon="people-outline"
+            title="Your client list starts here"
+            message="Add a client to plan their training and book sessions. Add their email and they get an invite to the Voltrix app."
+            action={<Button title="Add client" onPress={addClient} />}
+          />
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
+  const rows = visible ?? [];
   return (
-    <FlatList
-      data={visible ?? []}
-      keyExtractor={(c) => c.id}
-      contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}
-      ListHeaderComponent={
-        <View style={{ gap: Spacing.two }}>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search clients"
-            placeholderTextColor={Colors.textSecondary}
-            selectionColor={Colors.accent}
-            style={styles.search}
-            autoCorrect={false}
-          />
-          <ErrorText>{error}</ErrorText>
-        </View>
-      }
-      ListEmptyComponent={
-        clients && search.trim() ? (
-          <Body secondary style={{ textAlign: 'center', marginTop: Spacing.four }}>
-            No clients match “{search.trim()}”.
-          </Body>
-        ) : null
-      }
-      ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
-      renderItem={({ item }) => (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.id } })}
-          style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials(item)}</Text>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <FlatList
+        data={rows}
+        keyExtractor={(c) => c.id}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <PageHeader title="Clients" actions={add} />
+            {/* The count lives in the search box, so the header doesn't move when the list arrives. */}
+            <SearchField
+              value={search}
+              onChangeText={setSearch}
+              placeholder={
+                clients ? `Search ${clients.length} ${clients.length === 1 ? 'client' : 'clients'}` : 'Search clients'
+              }
+              style={styles.search}
+            />
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            {!clients && !error && showSkeleton ? <SkeletonRows count={6} avatar /> : null}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{fullName(item)}</Text>
-            <Body secondary numberOfLines={1} style={{ fontSize: 14 }}>
-              {item.goal || item.email || 'No goal set yet'}
-            </Body>
-            <View style={{ marginTop: Spacing.one }}>
-              <AppStatusLabel status={appStatusOf(item)} />
+        }
+        ListEmptyComponent={
+          clients && search.trim() ? (
+            <Text variant="footnote" tone="secondary" style={{ textAlign: 'center', marginTop: Spacing.four }}>
+              No clients match “{search.trim()}”.
+            </Text>
+          ) : null
+        }
+        renderItem={({ item, index }) => {
+          const app = appStatusOf(item);
+          const paused = item.status !== 'active';
+          const status = paused ? STATUS_LABELS[item.status] : app !== 'joined' ? APP_STATUS_LABELS[app] : null;
+          // The email belongs on the client's page; here a missing goal says so, as on Home.
+          const goal = item.goal;
+          return (
+            <View style={groupedItem(index, rows.length)}>
+              <ListRow
+                title={fullName(item)}
+                subtitle={
+                  <Text variant="footnote" tone={goal ? 'secondary' : 'tertiary'} numberOfLines={1}>
+                    {goal || 'No goal yet'}
+                  </Text>
+                }
+                leading={<Avatar name={fullName(item)} size={44} />}
+                status={
+                  paused ? (
+                    <StatusPill tone="neutral" label={STATUS_LABELS[item.status]} />
+                  ) : app !== 'joined' ? (
+                    <AppStatusLabel status={app} short />
+                  ) : null
+                }
+                onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.id } })}
+                accessibilityLabel={[fullName(item), goal, status].filter(Boolean).join(', ')}
+                last={index === rows.length - 1}
+              />
             </View>
-          </View>
-          {item.status !== 'active' ? <Text style={styles.badge}>{STATUS_LABELS[item.status]}</Text> : null}
-          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-        </Pressable>
-      )}
-    />
+          );
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = themed(() => ({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   list: {
-    padding: Spacing.three,
-    gap: Spacing.two,
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
+  },
+  header: {
+    gap: Spacing.three,
+    marginBottom: Spacing.three,
   },
   search: {
-    minHeight: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    fontSize: 16,
-    paddingHorizontal: Spacing.three,
-    marginBottom: Spacing.two,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: Colors.onAccent,
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  badge: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    marginTop: Spacing.two,
   },
 }));

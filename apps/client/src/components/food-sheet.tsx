@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { Sheet } from '@/components/sheet';
-import { Button, ErrorText } from '@/components/ui';
+import { Button, ErrorText, segmentOn } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import {
   baseUnit,
@@ -149,7 +149,7 @@ function FoodDetails({
           <Image source={{ uri: food.image }} style={styles.image} contentFit="cover" accessibilityLabel="" />
         ) : (
           <View style={[styles.image, styles.noImage]}>
-            <Ionicons name="nutrition" size={26} color={Colors.accentText} />
+            <Ionicons name="nutrition-outline" size={26} color={Colors.textSecondary} />
           </View>
         )}
         <View style={{ flex: 1 }}>
@@ -179,8 +179,8 @@ function FoodDetails({
                   accessibilityRole="button"
                   accessibilityState={{ selected: u === unit }}
                   onPress={() => switchUnit(u)}
-                  style={[styles.segment, u === unit && { backgroundColor: Colors.accent }]}>
-                  <Text style={[styles.segmentText, u === unit && { color: Colors.onAccent }]}>{unitName(u)}</Text>
+                  style={[styles.segment, u === unit && segmentOn()]}>
+                  <Text style={[styles.segmentText, u !== unit && { color: Colors.textSecondary }]}>{unitName(u)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -284,9 +284,9 @@ export function FoodRow({ food, onPress, loading }: { food: Food; onPress: () =>
       ) : (
         <View style={[styles.rowImage, styles.noImage]}>
           <Ionicons
-            name={food.source === 'recent' ? 'time-outline' : 'nutrition'}
+            name={food.source === 'recent' ? 'time-outline' : 'nutrition-outline'}
             size={20}
-            color={Colors.accentText}
+            color={Colors.textSecondary}
           />
         </View>
       )}
@@ -299,7 +299,7 @@ export function FoodRow({ food, onPress, loading }: { food: Food; onPress: () =>
         </Text>
       </View>
       {loading ? (
-        <ActivityIndicator color={Colors.accentText} />
+        <ActivityIndicator color={Colors.textSecondary} />
       ) : (
         <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
       )}
@@ -414,9 +414,9 @@ const styles = themed(() => ({
   },
   segmented: {
     flexDirection: 'row',
-    padding: Spacing.one,
+    padding: 3,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
   },
   segment: {
     flex: 1,
@@ -457,7 +457,7 @@ const styles = themed(() => ({
   amountBoxFocused: {
     // The whole box shows focus, in place of the browser's outline around the number only.
     borderWidth: 2,
-    borderColor: Colors.accentText,
+    borderColor: Colors.text,
     paddingHorizontal: Spacing.three - 1,
   },
   amountInput: {

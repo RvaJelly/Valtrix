@@ -6,8 +6,8 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, Vi
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { ACCENTS, Colors, Radius, Spacing, themed, type AccentName } from '@/constants/theme';
+import { Body, Button, Card, ErrorText, TextField, Segmented as SegmentedControl } from '@/components/ui';
+import { ACCENTS, Colors, Fonts, Radius, Spacing, themed, Type, type AccentName } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
 import { useChat, useChatEvents } from '@/lib/chat-live';
@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase';
 import { leaveTrainer, loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
 
 const APPEARANCE: Record<SettingsValues['appearance'], string> = {
-  light: 'White',
+  light: 'Light',
   dark: 'Dark',
   system: 'Auto',
 };
@@ -146,7 +146,7 @@ export default function Settings() {
             accessibilityRole="button"
             onPress={() => router.push('/rules')}
             style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-            <Ionicons name="people-outline" size={22} color={Colors.accentText} />
+            <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
             <Text style={[styles.linkLabel, { flex: 1 }]}>Community rules</Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
           </Pressable>
@@ -452,7 +452,7 @@ function ProfileForm({
     <Card style={{ gap: Spacing.three }}>
       <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
       <ErrorText>{error}</ErrorText>
-      {saved && !changed ? <Body style={{ color: Colors.accentText }}>Saved</Body> : null}
+      {saved && !changed ? <Body style={{ color: Colors.success }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} disabled={!changed} />
     </Card>
   );
@@ -488,7 +488,7 @@ function PasswordForm() {
         onSubmitEditing={save}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.accentText }}>Password changed</Body> : null}
+      {saved ? <Body style={{ color: Colors.success }}>Password changed</Body> : null}
       <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
     </Card>
   );
@@ -626,23 +626,11 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <View style={styles.segmented}>
-      {(Object.keys(options) as T[]).map((key) => {
-        const selected = key === value;
-        return (
-          <Pressable
-            key={key}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(key)}
-            style={[styles.segment, selected && { backgroundColor: Colors.accent }]}>
-            <Text style={[styles.segmentText, selected && { color: Colors.onAccent }]} numberOfLines={1}>
-              {options[key]}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl
+      options={(Object.keys(options) as T[]).map((key) => ({ value: key, label: options[key] }))}
+      value={value}
+      onChange={onChange}
+    />
   );
 }
 
@@ -665,24 +653,22 @@ const styles = themed(() => ({
     gap: Spacing.three,
   },
   switchLabel: {
+    ...Type.rowTitle,
     flex: 1,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   content: {
-    padding: Spacing.four,
-    gap: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
   },
   section: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   small: {
-    fontSize: 14,
+    ...Type.footnote,
   },
   swatches: {
     flexDirection: 'row',
@@ -700,40 +686,19 @@ const styles = themed(() => ({
     borderWidth: 3,
     borderColor: Colors.text,
   },
-  segmented: {
-    flexDirection: 'row',
-    padding: Spacing.one,
-    gap: Spacing.one,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surfaceRaised,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.two,
-  },
-  segmentText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
+    gap: Spacing.tight,
+    minHeight: 64,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.tight,
     borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
   linkLabel: {
+    ...Type.rowTitle,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   photoRow: {
     flexDirection: 'row',
@@ -741,9 +706,9 @@ const styles = themed(() => ({
     gap: Spacing.four,
   },
   removePhoto: {
+    ...Type.footnote,
+    fontFamily: Fonts.textSemi,
     color: Colors.danger,
-    fontSize: 14,
-    fontWeight: '700',
     textAlign: 'center',
   },
   blockedRow: {
@@ -752,16 +717,16 @@ const styles = themed(() => ({
     gap: Spacing.three,
   },
   unblock: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.small,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.tint,
   },
   unblockText: {
+    ...Type.footnote,
+    fontFamily: Fonts.textSemi,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
   },
   delete: {
     minHeight: 48,
@@ -769,8 +734,7 @@ const styles = themed(() => ({
     justifyContent: 'center',
   },
   deleteText: {
+    ...Type.button,
     color: Colors.danger,
-    fontSize: 16,
-    fontWeight: '700',
   },
 }));

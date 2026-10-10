@@ -169,7 +169,7 @@ export default function SearchFood() {
 
         {searching ? (
           <View style={styles.searching}>
-            <ActivityIndicator color={Colors.accentText} />
+            <ActivityIndicator color={Colors.textSecondary} />
             <Body secondary>Searching…</Body>
           </View>
         ) : null}
@@ -224,7 +224,7 @@ function Shortcut({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.shortcut, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={20} color={Colors.accentText} />
+      <Ionicons name={icon} size={20} color={Colors.text} />
       <Text style={styles.shortcutText}>{label}</Text>
     </Pressable>
   );

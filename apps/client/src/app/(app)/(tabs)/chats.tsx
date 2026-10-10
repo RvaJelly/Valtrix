@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { ChatList } from '@/components/chat-list';
 import { Button } from '@/components/ui';
+import { Layout } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { serial } from '@/lib/serial';
 import { loadInvites, trainerTitle, type Invite } from '@/lib/trainers';
@@ -35,6 +36,8 @@ export default function Chats() {
   const first = invites[0];
   return (
     <ChatList
+      title="Chats"
+      maxWidth={Layout.maxClient}
       empty={
         first
           ? {

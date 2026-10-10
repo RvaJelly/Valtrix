@@ -340,7 +340,7 @@ export function CommentsSheet({
           </View>
 
           {!shown && failedFor !== postId ? (
-            <ActivityIndicator color={Colors.accentText} style={{ flex: 1 }} />
+            <ActivityIndicator color={Colors.textSecondary} style={{ flex: 1 }} />
           ) : !shown ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>Could not load the comments. Check your internet.</Text>
@@ -357,7 +357,7 @@ export function CommentsSheet({
               keyboardShouldPersistTaps="handled"
               onEndReached={loadOlder}
               onEndReachedThreshold={0.3}
-              ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.accentText} /> : null}
+              ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.textSecondary} /> : null}
               ListEmptyComponent={
                 <View style={styles.empty}>
                   <Ionicons name="chatbubbles-outline" size={40} color={Colors.textSecondary} />
@@ -474,7 +474,7 @@ export function CommentsSheet({
                     <Option label="Done" onPress={() => setChosen(null)} />
                   </View>
                 ) : null}
-                {busy ? <ActivityIndicator color={Colors.accentText} /> : null}
+                {busy ? <ActivityIndicator color={Colors.textSecondary} /> : null}
                 {error ? <Text style={styles.error}>{error}</Text> : null}
                 {step !== 'thanks' ? <Option label="Cancel" onPress={() => setChosen(null)} /> : null}
               </View>

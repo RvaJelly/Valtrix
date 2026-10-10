@@ -13,6 +13,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -23,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { ReelCard } from '@/components/reel-card';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
   callLabel,
@@ -416,7 +417,7 @@ export default function ChatScreen() {
               style={styles.headerButton}
               accessibilityRole="button"
               accessibilityLabel={`Video call ${otherName}`}>
-              <Ionicons name="videocam" size={24} color={Colors.accentText} />
+              <Ionicons name="videocam-outline" size={24} color={Colors.text} />
             </Pressable>
             <Pressable
               onPress={() => call(false)}
@@ -424,7 +425,7 @@ export default function ChatScreen() {
               style={styles.headerButton}
               accessibilityRole="button"
               accessibilityLabel={`Voice call ${otherName}`}>
-              <Ionicons name="call" size={22} color={Colors.accentText} />
+              <Ionicons name="call-outline" size={22} color={Colors.text} />
             </Pressable>
           </>
         ) : null}
@@ -434,7 +435,7 @@ export default function ChatScreen() {
           screen smaller for the keyboard, and the message box would sit behind it. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         {loading ? (
-          <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />
+          <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
         ) : (
           <FlatList
             inverted={messages.length > 0}
@@ -444,7 +445,7 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps="handled"
             onEndReached={loadOlder}
             onEndReachedThreshold={0.3}
-            ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.accentText} /> : null}
+            ListFooterComponent={loadingMore ? <ActivityIndicator color={Colors.textSecondary} /> : null}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Avatar url={otherAvatar} name={otherName} size={72} />
@@ -513,13 +514,16 @@ export default function ChatScreen() {
               accessibilityLabel="Message"
               onKeyPress={Platform.OS === 'web' ? onKey : undefined}
             />
+            {/* Orange only once there is something to send. */}
             <Pressable
               onPress={send}
               disabled={!canSend}
-              style={[styles.send, !canSend && { opacity: 0.4 }]}
+              hitSlop={4}
+              style={[styles.send, { backgroundColor: canSend ? Colors.accent : Colors.tint }]}
               accessibilityRole="button"
-              accessibilityLabel="Send">
-              <Ionicons name="send" size={20} color={Colors.onAccent} />
+              accessibilityLabel="Send"
+              accessibilityState={{ disabled: !canSend }}>
+              <Ionicons name="arrow-up" size={20} color={canSend ? Colors.onAccent : Colors.textTertiary} />
             </Pressable>
           </View>
         </View>
@@ -589,7 +593,7 @@ function Bubble({
             <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" transition={150} />
           ) : (
             <View style={[styles.photo, styles.photoLoading]}>
-              <ActivityIndicator color={mine ? Colors.onAccent : Colors.textSecondary} />
+              <ActivityIndicator color={mine ? Colors.onBubble : Colors.textSecondary} />
             </View>
           )
         ) : null}
@@ -613,8 +617,8 @@ function Bubble({
                       : 'checkmark'
               }
               size={15}
-              color={Colors.onAccent}
-              style={{ opacity: message.read_at || message.pending === 'failed' ? 1 : 0.6 }}
+              color={Colors.onBubble}
+              style={{ opacity: message.read_at || message.pending === 'failed' ? 1 : 0.72 }}
             />
           ) : null}
         </View>
@@ -636,9 +640,9 @@ function CallRow({ message, me, onCall }: { message: Message; me: string; onCall
         accessibilityRole={onCall ? 'button' : undefined}
         accessibilityLabel={`${label}, ${timeOf(message.created_at)}${onCall ? '. Tap to call back.' : ''}`}>
         <Ionicons
-          name={call.video ? 'videocam' : missed ? 'call-outline' : 'call'}
+          name={call.video ? 'videocam-outline' : 'call-outline'}
           size={16}
-          color={missed ? Colors.danger : Colors.accentText}
+          color={missed ? Colors.danger : Colors.textSecondary}
         />
         <Text style={[styles.callText, missed && { color: Colors.danger }]}>{label}</Text>
         <Text style={styles.callTime}>{timeOf(message.created_at)}</Text>
@@ -658,29 +662,32 @@ const styles = themed(() => ({
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.two,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
     backgroundColor: Colors.background,
   },
   headerName: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 17,
-    fontWeight: '700',
   },
   typing: {
-    color: Colors.accentText,
-    fontSize: 13,
-    fontWeight: '600',
+    ...Type.footnote,
+    color: Colors.textSecondary,
   },
   headerButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   list: {
     flexGrow: 1,
-    padding: Spacing.three,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
     gap: Spacing.one,
   },
   empty: {
@@ -691,25 +698,25 @@ const styles = themed(() => ({
     padding: Spacing.five,
   },
   emptyTitle: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
     textAlign: 'center',
+    marginTop: Spacing.two,
   },
   emptyText: {
+    ...Type.callout,
     color: Colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 21,
     textAlign: 'center',
+    maxWidth: 320,
   },
   dayRow: {
     alignItems: 'center',
     paddingVertical: Spacing.two,
   },
   day: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
     backgroundColor: Colors.surface,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
@@ -717,7 +724,7 @@ const styles = themed(() => ({
     overflow: 'hidden',
   },
   bubbleRow: {
-    maxWidth: '82%',
+    maxWidth: '78%',
     marginVertical: 2,
   },
   rowMine: {
@@ -735,12 +742,12 @@ const styles = themed(() => ({
     borderRadius: 18,
   },
   mine: {
-    backgroundColor: Colors.accent,
-    borderBottomRightRadius: 4,
+    backgroundColor: Colors.bubble,
+    borderBottomRightRadius: 6,
   },
   theirs: {
     backgroundColor: Colors.surface,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
   },
   photoBubble: {
     padding: 4,
@@ -756,13 +763,13 @@ const styles = themed(() => ({
     backgroundColor: Colors.surfaceRaised,
   },
   body: {
-    color: Colors.text,
-    fontSize: 16,
+    ...Type.body,
     lineHeight: 22,
+    color: Colors.text,
     paddingTop: 2,
   },
   bodyMine: {
-    color: Colors.onAccent,
+    color: Colors.onBubble,
   },
   meta: {
     flexDirection: 'row',
@@ -772,16 +779,19 @@ const styles = themed(() => ({
     marginTop: 2,
   },
   time: {
+    ...Tabular,
+    fontFamily: Fonts.text,
     color: Colors.textSecondary,
     fontSize: 11,
+    lineHeight: 14,
   },
+  // Fully opaque, so the time stays readable on the bubble.
   timeMine: {
-    color: Colors.onAccent,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.72)',
   },
   failed: {
+    ...Type.footnote,
     color: Colors.danger,
-    fontSize: 12,
     marginTop: 2,
   },
   callRow: {
@@ -798,25 +808,26 @@ const styles = themed(() => ({
     backgroundColor: Colors.surface,
   },
   callText: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
   callTime: {
+    ...Type.footnote,
+    ...Tabular,
     color: Colors.textSecondary,
-    fontSize: 12,
   },
   errorBar: {
     backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
     paddingVertical: Spacing.two,
   },
   errorText: {
+    ...Type.callout,
     color: Colors.danger,
-    fontSize: 14,
   },
   composer: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     paddingTop: Spacing.two,
     paddingHorizontal: Spacing.two,
@@ -835,9 +846,9 @@ const styles = themed(() => ({
     borderRadius: 8,
   },
   photoReadyText: {
+    ...Type.footnote,
     flex: 1,
     color: Colors.textSecondary,
-    fontSize: 14,
   },
   inputRow: {
     flexDirection: 'row',
@@ -858,17 +869,18 @@ const styles = themed(() => ({
     paddingTop: 11,
     paddingBottom: 11,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
     color: Colors.text,
-    fontSize: 16,
+    ...Type.body,
+    lineHeight: 22,
   },
   send: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    marginVertical: 4,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
   },
   viewer: {
     flex: 1,

@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 
 type Props<T extends string> = {
   options: Record<T, string>;
@@ -21,43 +22,65 @@ export function Chips<T extends string>({ options, value, onChange, allowClear, 
         accessibilityRole="button"
         accessibilityState={{ selected }}
         onPress={() => onChange(selected && allowClear ? null : key)}
-        style={[styles.chip, selected && styles.selected]}>
-        <Text style={[styles.text, selected && { color: Colors.onAccent }]}>{options[key]}</Text>
+        style={styles.target}>
+        {({ pressed }) => (
+          <View style={[styles.chip, pressed && { backgroundColor: Colors.tintPressed }, selected && styles.selected]}>
+            <Text variant="callout" style={[styles.text, selected && { color: Colors.background }]}>
+              {options[key]}
+            </Text>
+          </View>
+        )}
       </Pressable>
     );
   });
   return wrap ? (
     <View style={[styles.row, styles.wrap]}>{chips}</View>
   ) : (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    // A sideways row runs to the screen edges (pages and cards both pad 20), so a chip cut by the
+    // edge reads as "more this way" rather than as clipped.
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.bleed}
+      contentContainerStyle={[styles.row, styles.bleedContent]}>
       {chips}
     </ScrollView>
   );
 }
 
+// Selected chips are inverted (text-coloured), not orange: orange is for the one main action.
+// Each chip is drawn 36 high inside a 44 high touch target (hitSlop does nothing on the web).
 const styles = themed(() => ({
   row: {
-    gap: Spacing.two,
+    columnGap: Spacing.two,
   },
   wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  bleed: {
+    marginHorizontal: -Spacing.gutter,
+  },
+  bleedContent: {
+    paddingHorizontal: Spacing.gutter,
+  },
+  target: {
+    minHeight: 44,
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+  },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   selected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   text: {
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
 }));

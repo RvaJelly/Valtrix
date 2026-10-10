@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { FoodSheet } from '@/components/food-sheet';
-import { Body, Button, ErrorText, TextField } from '@/components/ui';
+import { Body, Button, ErrorText, segmentOn, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { dayKey, isBarcode, isDayKey, isMeal, mealForNow, mealLabel } from '@/lib/food';
 import { addToDiary, saveMyFood, type SavedFood } from '@/lib/nutrition';
@@ -109,7 +109,7 @@ export default function CustomFood() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {scanned ? (
           <View style={styles.notice}>
-            <Ionicons name="barcode-outline" size={24} color={Colors.accentText} />
+            <Ionicons name="barcode-outline" size={24} color={Colors.textSecondary} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.noticeTitle}>
                 {params.name ? 'No calories listed for this one yet' : 'We don’t know this barcode yet'}
@@ -261,8 +261,8 @@ function Segmented<T extends string>({
           accessibilityRole="button"
           accessibilityState={{ selected: o.key === value }}
           onPress={() => onChange(o.key)}
-          style={[styles.segment, o.key === value && { backgroundColor: Colors.accent }]}>
-          <Text style={[styles.segmentText, o.key === value && { color: Colors.onAccent }]}>{o.label}</Text>
+          style={[styles.segment, o.key === value && segmentOn()]}>
+          <Text style={[styles.segmentText, o.key !== value && { color: Colors.textSecondary }]}>{o.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -298,9 +298,9 @@ const styles = themed(() => ({
   segmented: {
     flexDirection: 'row',
     minHeight: 52,
-    padding: Spacing.one,
+    padding: 3,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
   },
   segment: {
     flex: 1,

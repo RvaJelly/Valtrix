@@ -27,7 +27,9 @@ import { supabase } from '@/lib/supabase';
 // news says a trainer invite was sent, answered or withdrawn, or a link started
 // or ended, so screens showing invites and clients can load again. 'progress' news
 // says a trainer replied to a check-in (kind 'reply'), so the check-in screen and
-// Home can show it.
+// Home can show it. 'session' news says a trainer booked, moved, cancelled or marked
+// one of the person's sessions, and 'plan' news that their plan changed, so Home and
+// the Plan tab can load again.
 
 export type ChatEvent =
   | { type: 'message'; message: Message }
@@ -36,6 +38,8 @@ export type ChatEvent =
   | { type: 'call'; call: Call }
   | { type: 'link'; client_id: string; invite_status: string }
   | { type: 'progress'; client_id: string | null; kind: ProgressKind; check_in_id: string | null }
+  | { type: 'session'; client_id: string }
+  | { type: 'plan'; client_id: string }
   | { type: 'reconnected' };
 
 export type ProgressKind = 'workout' | 'weight' | 'measurements' | 'photo' | 'check_in' | 'reply';
@@ -192,6 +196,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
         .on('broadcast', { event: 'link' }, ({ payload }) => {
           emit({ type: 'link', client_id: payload.client_id, invite_status: payload.invite_status });
           refreshSoon();
+        })
+        .on('broadcast', { event: 'session' }, ({ payload }) => {
+          emit({ type: 'session', client_id: payload.client_id });
+        })
+        .on('broadcast', { event: 'plan' }, ({ payload }) => {
+          emit({ type: 'plan', client_id: payload.client_id });
         })
         .on('broadcast', { event: 'progress' }, ({ payload }) => {
           emit({

@@ -14,7 +14,8 @@ export type Trainer = {
   joined_at: string | null;
 };
 
-// A trainer who added the client's email in Voltrix Coach and is waiting for a yes or no.
+// A trainer who added the client's email in Voltrix Coach and is waiting for a yes or no, or
+// whose invite code the person entered.
 export type Invite = {
   client_id: string;
   trainer_id: string;
@@ -22,6 +23,9 @@ export type Invite = {
   business_name: string | null;
   trainer_avatar: string | null;
   invited_at: string;
+  // Only from an invite code: the first name the trainer gave the person they invited, so
+  // someone who got a code meant for another person sees it isn't theirs.
+  client_first_name?: string | null;
 };
 
 // A trainer's public profile, as every client can see it.

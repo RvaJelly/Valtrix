@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { APPEARANCE, DeleteAccount, LENGTHS, SettingsPage, UNITS, useMyTrainers } from '@/components/settings-parts';
 import {
   Group,
@@ -26,7 +27,8 @@ import { trainerTitle } from '@/lib/trainers';
 export default function Settings() {
   const { session, profile, refreshProfile, signOut } = useAuth();
   const { settings } = useSettings();
-  const { trainers, failed } = useMyTrainers();
+  const { trainers, failed, reload } = useMyTrainers();
+  const [codeOpen, setCodeOpen] = useState(false);
   const name = profile?.full_name || 'Your profile';
   const email = session?.user.email ?? '';
 
@@ -97,10 +99,10 @@ export default function Settings() {
                     status={archived ? <StatusPill tone="neutral" label="Archived" /> : null}
                     accessibilityLabel={archived ? `${title}, archived you for now` : title}
                     onPress={() => router.push({ pathname: '/settings/trainer/[id]', params: { id: t.trainer_id } })}
-                    last={i === trainers.length - 1}
                   />
                 );
               })}
+              <JoinWithCode onPress={() => setCodeOpen(true)} />
             </Group>
           ) : (
             <Group>
@@ -112,12 +114,17 @@ export default function Settings() {
                   </Text>
                 }
                 leading={<IconTile icon="person-add-outline" />}
-                last
               />
+              <JoinWithCode onPress={() => setCodeOpen(true)} />
             </Group>
           )
         ) : failed ? (
-          <Notice tone="danger">Your trainers could not be loaded. Check your connection.</Notice>
+          <>
+            <Notice tone="danger">Your trainers could not be loaded. Check your connection.</Notice>
+            <Group>
+              <JoinWithCode onPress={() => setCodeOpen(true)} />
+            </Group>
+          </>
         ) : (
           <SkeletonRows count={1} avatar />
         )}
@@ -146,6 +153,8 @@ export default function Settings() {
         />
       </Group>
 
+      <InviteCodeSheet visible={codeOpen} onClose={() => setCodeOpen(false)} onJoined={reload} />
+
       <View style={{ gap: Spacing.three }}>
         {/* Only a known client account can be deleted here; a trainer's would take their clients and calendar with it. */}
         {profile?.role === 'client' ? <DeleteAccount userId={session?.user.id} onDeleted={signOut} /> : null}
@@ -156,6 +165,24 @@ export default function Settings() {
         ) : null}
       </View>
     </SettingsPage>
+  );
+}
+
+// The last row of My trainers: the same code sheet as Home's "I have an invite code".
+function JoinWithCode({ onPress }: { onPress: () => void }) {
+  return (
+    <ListRow
+      title="Join a trainer with a code"
+      subtitle={
+        <Text variant="footnote" tone="secondary" numberOfLines={2}>
+          Enter the code from your trainer’s message
+        </Text>
+      }
+      leading={<IconTile icon="key-outline" />}
+      onPress={onPress}
+      testID="settings-join-code"
+      last
+    />
   );
 }
 

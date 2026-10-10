@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -24,17 +24,23 @@ import {
   useDelayed,
 } from '@/components/ui';
 import { Colors, Fonts, Layout, Spacing, Tabular, themed } from '@/constants/theme';
-import { dayMonth } from '@/lib/format';
+import { useChatEvents } from '@/lib/chat-live';
+import { dayMonth, longDate, shortDate } from '@/lib/format';
 import {
+  dateOf,
   daysLabel,
   dueOn,
+  loadNextPlanned,
   loadPlan,
+  programsIn,
+  programWeek,
   startOfWeek,
   trainerLabel,
   weekdayItems,
   WEEKDAYS,
   weekProgress,
   type PlanItem,
+  type PlanProgram,
 } from '@/lib/plan';
 import { addDays, dayKey, endOf, formatDay, loadSessions, sameDay, type Session } from '@/lib/sessions';
 import { loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
@@ -61,6 +67,8 @@ export default function Plan() {
   const params = useLocalSearchParams<{ view?: string }>();
   const tab: Tab = params.view === 'sessions' ? 'sessions' : 'workouts';
   const [plan, setPlan] = useState<PlanItem[] | null>(null);
+  // Only when nothing is planned this week: the first workout in the next 8 weeks, if any.
+  const [next, setNext] = useState<Ahead>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
   // Only for the empty states' "Message {trainer}": a failure just leaves the action out.
   const [trainers, setTrainers] = useState<Trainer[] | null>(null);
@@ -71,10 +79,14 @@ export default function Plan() {
   const showSkeleton = useDelayed(300);
   // The day the plan was loaded for: its ticks and "Today" belong to that day.
   const loadedFor = useRef('');
+  // Loads overlap (focus, live news, pull to refresh): only the newest one's answer shows.
+  const loads = useRef(0);
+  const newsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The plan and the sessions load on their own, so one failing doesn't hide the other,
   // and a failed refresh keeps what was already on screen.
   const load = useCallback(async () => {
+    const mine = ++loads.current;
     const now = new Date();
     loadedFor.current = dayKey(now);
     const [items, list, linked] = await Promise.all([
@@ -82,11 +94,34 @@ export default function Plan() {
       loadSessions(addDays(now, -DAYS), addDays(now, DAYS)).catch(() => null),
       loadTrainers().catch(() => null),
     ]);
-    if (items) setPlan(items);
+    // A week with nothing in it asks once what comes later.
+    const ahead = items && !items.length ? await loadNextPlanned(now).catch(() => null) : null;
+    if (mine !== loads.current) return;
+    if (items) {
+      setPlan(items);
+      setNext(ahead);
+    }
     if (list) setSessions(list);
     if (linked) setTrainers(linked);
     setError(items && list ? null : 'Could not load your plan. Check your internet connection.');
   }, []);
+
+  // A trainer changed the plan or a session, or a trainer link changed (or news may have been missed
+  // while the connection was down): load again once the news stops, a second after the last.
+  useChatEvents((event) => {
+    if (!['plan', 'session', 'link', 'reconnected'].includes(event.type)) return;
+    if (newsTimer.current) clearTimeout(newsTimer.current);
+    newsTimer.current = setTimeout(() => {
+      newsTimer.current = null;
+      load();
+    }, 1000);
+  });
+  useEffect(
+    () => () => {
+      if (newsTimer.current) clearTimeout(newsTimer.current);
+    },
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -143,7 +178,7 @@ export default function Plan() {
         ) : null}
         {tab === 'workouts' ? (
           plan ? (
-            <Workouts plan={plan} trainers={trainers} />
+            <Workouts plan={plan} next={next} trainers={trainers} />
           ) : !error && showSkeleton ? (
             <SkeletonRows count={3} />
           ) : null
@@ -188,28 +223,56 @@ function TrainerAction({ trainers }: { trainers: Trainer[] | null }) {
   );
 }
 
-function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | null }) {
+// The first workout in the next 8 weeks when nothing is planned this week, and the day it is first due.
+type Ahead = { item: PlanItem; day: string } | null;
+
+// Nothing this week, but something later: a rest week in a running program, or a program or
+// workout that starts later.
+function WeekAhead({ next, monday }: { next: { item: PlanItem; day: string }; monday: string }) {
+  const { item, day } = next;
+  const when = longDate(dateOf(day));
+  const running = !!item.program_starts_on && item.program_starts_on < monday;
+  return (
+    <EmptyState
+      icon="calendar-outline"
+      title={running ? 'Rest week' : 'Nothing planned this week'}
+      message={
+        running
+          ? `${item.program_name || 'Your program'} carries on ${when}.`
+          : `${item.program_name || item.workout_name} starts ${when}.`
+      }
+      testID="plan-week-ahead"
+    />
+  );
+}
+
+function Workouts({ plan, next, trainers }: { plan: PlanItem[]; next: Ahead; trainers: Trainer[] | null }) {
   const today = new Date();
   const todayKey = dayKey(today);
   const week = startOfWeek(today);
   const due = plan.filter((item) => dueOn(item, today));
   const anyDay = plan.filter((item) => !item.weekdays.length);
-  const progress = weekProgress(plan);
+  const progress = weekProgress(plan, week);
   // Say who each workout is from when more than one trainer planned something.
   const manyTrainers = new Set(plan.map((p) => p.trainer_id)).size > 1;
   // The screen's one orange button: Start on the first workout still to do today.
   const main = due.find((item) => !item.done_on.includes(todayKey));
+  const programs = programsIn(plan);
 
   if (!plan.length) {
     const single = trainers?.length === 1 ? firstName(trainerTitle(trainers[0])) : null;
     return (
       <View style={{ gap: Spacing.three }}>
-        <EmptyState
-          icon="barbell-outline"
-          title="No workouts yet"
-          message={`When ${single ?? 'your trainer'} adds workouts to your plan, they show up here, day by day.`}
-          action={<TrainerAction trainers={trainers} />}
-        />
+        {next ? (
+          <WeekAhead next={next} monday={dayKey(week)} />
+        ) : (
+          <EmptyState
+            icon="barbell-outline"
+            title="No workouts yet"
+            message={`When ${single ?? 'your trainer'} adds workouts to your plan, they show up here, day by day.`}
+            action={<TrainerAction trainers={trainers} />}
+          />
+        )}
         <Group>
           <ListRow
             title={HISTORY.label}
@@ -233,6 +296,7 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
     today: boolean;
     item: PlanItem | null;
     done: boolean;
+    until?: string | null;
   }[] = [];
   for (const d of WEEKDAYS) {
     const date = addDays(week, d.day - 1);
@@ -250,6 +314,8 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
       }),
     );
   }
+  // An any-day workout that stops before Sunday (its program was ended early) says until when.
+  const sunday = dayKey(addDays(week, 6));
   anyDay.forEach((item, i) =>
     rows.push({
       key: `any-${item.plan_item_id}`,
@@ -259,11 +325,20 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
       today: false,
       item,
       done: item.done_on.length > 0,
+      until: item.ends_on && item.ends_on < sunday ? `Until ${shortDate(dateOf(item.ends_on))}` : null,
     }),
   );
 
   return (
     <>
+      {programs.length ? (
+        <View style={{ gap: Spacing.tight }}>
+          {programs.map((p) => (
+            <ProgramCard key={p.assignment_id} program={p} today={todayKey} showTrainer={manyTrainers} />
+          ))}
+        </View>
+      ) : null}
+
       <Section title={`Today · ${dayMonth(today)}`} action={HISTORY}>
         {due.length ? (
           <View style={{ gap: Spacing.tight }}>
@@ -309,6 +384,43 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
   );
 }
 
+// A program on the plan: where the client is in it. Not pressable: its workouts are the rows below.
+function ProgramCard({ program, today, showTrainer }: { program: PlanProgram; today: string; showTrainer: boolean }) {
+  const { week, weeks, last } = programWeek(program, today);
+  const ends = dateOf(program.ends_on);
+  const from = showTrainer ? firstName(trainerLabel(program)) : null;
+  const where = last ? 'Last week' : `Week ${week} of ${weeks}`;
+  return (
+    <Card style={{ gap: Spacing.two }} testID={`plan-program-${program.assignment_id}`}>
+      <View
+        accessible
+        accessibilityLabel={`Program${from ? ` from ${from}` : ''}: ${program.name}. ${where}, ends ${longDate(ends)}.`}
+        style={{ gap: Spacing.one }}>
+        <Text variant="label" tone="secondary">
+          {from ? `Program · From ${from}` : 'Program'}
+        </Text>
+        <Text variant="headline" numberOfLines={2}>
+          {program.name}
+        </Text>
+        <Text variant="footnote" tone="secondary" style={Tabular}>
+          {`${where} · ends ${shortDate(ends)}`}
+        </Text>
+      </View>
+      <ProgressBar progress={week / weeks} color={Colors.text} />
+    </Card>
+  );
+}
+
+// "Strength Base · Week 3" for a workout that came with a program.
+function programLine(item: PlanItem, today: string) {
+  if (!item.assignment_id || !item.program_name || !item.program_starts_on || !item.program_weeks) return null;
+  const { week } = programWeek(
+    { starts_on: item.program_starts_on, weeks: item.program_weeks, ends_on: item.program_ends_on },
+    today,
+  );
+  return `${item.program_name} · Week ${week}`;
+}
+
 function WorkoutCard({
   item,
   done,
@@ -323,7 +435,10 @@ function WorkoutCard({
   const details = [
     item.exercise_count === 1 ? '1 exercise' : `${item.exercise_count} exercises`,
     showTrainer ? `With ${trainerLabel(item)}` : daysLabel(item.weekdays),
-  ].join(' · ');
+    programLine(item, dayKey(new Date())),
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <Card
       onPress={() => openWorkout(item)}
@@ -369,6 +484,7 @@ function WeekRow({
   today,
   item,
   done,
+  until,
   last,
 }: {
   day: string;
@@ -377,6 +493,7 @@ function WeekRow({
   today: boolean;
   item: PlanItem | null;
   done: boolean;
+  until?: string | null;
   last: boolean;
 }) {
   // The day column grows with the text size, so "Today" never runs into the workout's name.
@@ -400,9 +517,10 @@ function WeekRow({
     <ListRow
       compact
       title={item.workout_name}
+      subtitle={until ?? undefined}
       leading={leading}
       trailing={done ? <Ionicons name="checkmark-circle" size={22} color={Colors.success} /> : null}
-      accessibilityLabel={`${day === 'Today' ? 'Today' : `${day} ${date}`}: ${item.workout_name}${done ? ', done' : ''}`}
+      accessibilityLabel={`${day === 'Today' ? 'Today' : `${day} ${date}`}: ${item.workout_name}${until ? `, ${until.toLowerCase()}` : ''}${done ? ', done' : ''}`}
       onPress={() => openWorkout(item)}
       last={last}
     />

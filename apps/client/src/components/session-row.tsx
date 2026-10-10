@@ -9,7 +9,7 @@ import { endOf, formatTime, SESSION_STATUS, trainerName, type Session, type Sess
 const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
   completed: 'success',
   cancelled: 'neutral',
-  no_show: 'warning',
+  no_show: 'neutral',
 };
 
 // One session in a list. With `showDay` a date block (MON / 12) leads the row; otherwise the
@@ -56,7 +56,11 @@ export function SessionRow({
           </View>
         ) : undefined
       }
-      status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
+      status={
+        pill ? (
+          <StatusPill tone={pill} label={SESSION_STATUS[session.status]} testID={`session-status-${session.id}`} />
+        ) : null
+      }
       chevron={false}
       last={variant === 'card' || last || join}
     />

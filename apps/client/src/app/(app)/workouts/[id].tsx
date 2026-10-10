@@ -30,7 +30,7 @@ import {
 } from '@/lib/active-workout';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
-import { plainError } from '@/lib/errors';
+import { plainError, saveError } from '@/lib/errors';
 import {
   daysLabel,
   EQUIPMENT,
@@ -146,8 +146,10 @@ export default function PlanWorkout() {
       if (done) await markDone(id, today);
       else await undoDone(id, today);
       setDoneToday(done);
-    } catch {
-      setProblem('That didn’t save. Check your connection and try again.');
+    } catch (e) {
+      // The database's own sentence when the day is outside the plan's dates ("This workout isn't on
+      // your plan that day."), else the connection.
+      setProblem(saveError(e, 'That didn’t save. Check your connection and try again.'));
     }
     setBusy(false);
   }

@@ -31,11 +31,13 @@ export async function loadSessions(from: Date, to: Date) {
   return (data ?? []) as Session[];
 }
 
+// A session the client didn't come to reads "Missed", in a neutral grey: Voltrix Coach says
+// "No-show" to the trainer.
 export const SESSION_STATUS: Record<SessionStatus, string> = {
   scheduled: 'Booked',
   completed: 'Done',
   cancelled: 'Cancelled',
-  no_show: 'No-show',
+  no_show: 'Missed',
 };
 
 export function trainerName(s: Pick<Session, 'trainer_name' | 'business_name'>) {

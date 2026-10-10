@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
+import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
@@ -104,6 +105,10 @@ export default function Home() {
   const showSkeleton = useDelayed(300);
 
   const linkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const planTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // "I have an invite code": the sheet for a code from a trainer's WhatsApp message.
+  const [codeOpen, setCodeOpen] = useState(false);
 
   // The Today card loads on its own, so the rest of Home never waits for it. A part that
   // fails keeps the last answer for the same day.
@@ -182,11 +187,27 @@ export default function Home() {
     } else if (event.type === 'progress') {
       // A trainer replied to a check-in.
       loadTodayInOrder();
+    } else if (event.type === 'session') {
+      // A trainer booked, moved, cancelled or marked a session: the next session may have changed.
+      if (sessionTimer.current) clearTimeout(sessionTimer.current);
+      sessionTimer.current = setTimeout(() => {
+        sessionTimer.current = null;
+        load(false);
+      }, 1000);
+    } else if (event.type === 'plan') {
+      // The plan changed: today's workouts on the Today card may have too.
+      if (planTimer.current) clearTimeout(planTimer.current);
+      planTimer.current = setTimeout(() => {
+        planTimer.current = null;
+        loadTodayInOrder();
+      }, 1000);
     }
   });
   useEffect(
     () => () => {
-      if (linkTimer.current) clearTimeout(linkTimer.current);
+      for (const timer of [linkTimer, sessionTimer, planTimer]) {
+        if (timer.current) clearTimeout(timer.current);
+      }
     },
     [],
   );
@@ -293,6 +314,7 @@ export default function Home() {
               Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, their
               invite shows up here for you to accept.
             </Text>
+            <EnterCode onPress={() => setCodeOpen(true)} />
             <Button title="Check again" icon="refresh" variant="secondary" onPress={refresh} loading={refreshing} />
           </Card>
         ) : null}
@@ -304,9 +326,11 @@ export default function Home() {
             </Text>
             <Text variant="headline">Connect with your trainer</Text>
             <Text variant="callout" tone="secondary">
-              Ask your personal trainer to add you in Voltrix Coach with this email. Their invite shows up here.
+              Your trainer can send you an invite code on WhatsApp, or add you in Voltrix Coach with this email. Their
+              invite shows up here.
             </Text>
             <EmailRow email={session?.user.email ?? ''} />
+            <EnterCode onPress={() => setCodeOpen(true)} />
             <Button title="Check again" icon="refresh" variant="secondary" onPress={refresh} loading={refreshing} />
           </Card>
         ) : null}
@@ -429,7 +453,22 @@ export default function Home() {
           </Section>
         ) : null}
       </ScrollView>
+      <InviteCodeSheet visible={codeOpen} onClose={() => setCodeOpen(false)} onJoined={answered} />
     </SafeAreaView>
+  );
+}
+
+// For someone a trainer reached on WhatsApp. Secondary, like Check again under it: Home's one
+// orange button is elsewhere. The words match the WhatsApp message, which says to tap them.
+function EnterCode({ onPress }: { onPress: () => void }) {
+  return (
+    <Button
+      title="I have an invite code"
+      icon="key-outline"
+      variant="secondary"
+      onPress={onPress}
+      testID="home-enter-code"
+    />
   );
 }
 

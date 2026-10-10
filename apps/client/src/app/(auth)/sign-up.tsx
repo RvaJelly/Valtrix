@@ -2,8 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { AuthPage, CheckEmailActions } from '@/components/auth-page';
-import { Button, ErrorText, TextField, TextLink } from '@/components/ui';
+import { Button, ErrorText, Text, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
+import { Spacing } from '@/constants/theme';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -105,6 +106,10 @@ export default function SignUp() {
         placeholder="you@example.com"
         error={errorFor('email')}
       />
+      {/* People a trainer reached on WhatsApp have no email on the trainer's side: any email works. */}
+      <Text variant="footnote" tone="secondary" style={{ marginTop: -Spacing.two }}>
+        Got an invite code from your trainer? Sign up with any email, then enter the code on Home.
+      </Text>
       <TextField
         password
         label="Password"

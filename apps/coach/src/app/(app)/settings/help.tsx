@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { SettingsPage } from '@/components/settings-parts';
 import { Group, IconTile, ListRow, Text } from '@/components/ui';
 
-// The community rules and the app version.
+// The community rules, the privacy page and the app version.
 export default function HelpSettings() {
   return (
     <SettingsPage>
@@ -14,6 +14,13 @@ export default function HelpSettings() {
           subtitle="What’s allowed in stories and reels"
           leading={<IconTile icon="people-outline" />}
           onPress={() => router.push('/rules')}
+        />
+        <ListRow
+          title="Privacy"
+          subtitle="What Voltrix keeps and who sees it"
+          leading={<IconTile icon="shield-checkmark-outline" />}
+          onPress={() => router.push('/settings/privacy-policy')}
+          testID="help-privacy"
           last
         />
       </Group>

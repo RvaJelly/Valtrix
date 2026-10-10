@@ -228,6 +228,8 @@ export function Button({
           {
             minHeight: s.height,
             paddingHorizontal: s.padding,
+            // Room above and below a label that wraps to two lines at large text sizes.
+            paddingVertical: Spacing.two,
             borderRadius: s.radius,
             backgroundColor: fill(pressed || (hovered && !inactive)),
           },
@@ -510,6 +512,8 @@ export function Segmented<T extends string>({
   style?: StyleProp<ViewStyle>;
 }) {
   const reduceMotion = useReducedMotion();
+  // With large text a label may take two lines rather than being cut.
+  const large = useWindowDimensions().fontScale > 1.15;
   const found = options.findIndex((o) => o.value === value);
   const index = Math.max(0, found);
   const [width, setWidth] = useState(0);
@@ -547,6 +551,7 @@ export function Segmented<T extends string>({
         return (
           <Pressable
             key={o.value}
+            testID={testID ? `${testID}-${o.value}` : undefined}
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled: !!o.disabled }}
             disabled={o.disabled}
@@ -559,8 +564,8 @@ export function Segmented<T extends string>({
             <Text
               variant="callout"
               tone={selected ? 'primary' : o.disabled ? 'tertiary' : 'secondary'}
-              style={{ fontFamily: Fonts.textSemi }}
-              numberOfLines={1}>
+              style={{ fontFamily: Fonts.textSemi, textAlign: 'center' }}
+              numberOfLines={large ? 2 : 1}>
               {o.label}
             </Text>
           </Pressable>
@@ -904,7 +909,8 @@ export function ListRow({
 }
 
 // A titled block of a page: an uppercase label and maybe one quiet action on the right ("See all ›"),
-// always quieter than the label it sits beside.
+// always quieter than the label it sits beside. An action that doesn't go anywhere ("Clear") sets
+// `chevron: false`.
 export function Section({
   title,
   action,
@@ -912,7 +918,7 @@ export function Section({
   style,
 }: PropsWithChildren<{
   title: string;
-  action?: { label: string; onPress: () => void; accessibilityLabel?: string };
+  action?: { label: string; onPress: () => void; accessibilityLabel?: string; testID?: string; chevron?: boolean };
   style?: StyleProp<ViewStyle>;
 }>) {
   const { hovered, hover } = useHover();
@@ -927,6 +933,7 @@ export function Section({
             accessibilityRole="button"
             accessibilityLabel={action.accessibilityLabel}
             onPress={action.onPress}
+            testID={action.testID}
             {...hover}
             style={[styles.sectionAction, pointer]}>
             {({ pressed }) => (
@@ -937,11 +944,13 @@ export function Section({
                   style={{ fontFamily: Fonts.textMedium }}>
                   {action.label}
                 </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={12}
-                  color={pressed || hovered ? Colors.text : Colors.textTertiary}
-                />
+                {action.chevron === false ? null : (
+                  <Ionicons
+                    name="chevron-forward"
+                    size={12}
+                    color={pressed || hovered ? Colors.text : Colors.textTertiary}
+                  />
+                )}
               </>
             )}
           </Pressable>
@@ -1118,12 +1127,16 @@ export function StatStrip({
   }[];
 }) {
   const grid = useWindowDimensions().fontScale > 1.2 && items.length > 2;
+  // A long value ("R12 400") makes every number in the strip a little smaller, so none breaks over
+  // two lines and they still match.
+  const longest = Math.max(...items.map((item) => String(item.value ?? '–').length));
+  const size = grid || longest <= 5 ? null : longest === 6 ? 24 : longest === 7 ? 21 : 18;
   return (
     <View style={[styles.statStrip, grid && styles.statGrid]}>
       {items.map((item, i) => {
         const content = (
           <>
-            <Text variant="stat" style={Tabular}>
+            <Text variant="stat" style={[Tabular, size ? { fontSize: size, lineHeight: size + 4 } : null]}>
               {item.value ?? '–'}
             </Text>
             <Text variant="footnote" tone="secondary" numberOfLines={2} style={{ fontFamily: Fonts.textMedium }}>

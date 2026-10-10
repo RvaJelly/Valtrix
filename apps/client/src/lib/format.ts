@@ -77,3 +77,17 @@ export function relative(d: Date, now = new Date()): string {
   if (days === 1) return minutes < 12 * 60 ? `in ${Math.round(minutes / 60)} h` : 'tomorrow';
   return `in ${days} days`;
 }
+
+// 'just now', '5 min ago', '3 hours ago', 'yesterday', '4 days ago', else 'on 12 Oct'.
+export function ago(d: Date, now = new Date()): string {
+  const minutes = Math.floor((now.getTime() - d.getTime()) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
+  const hours = Math.floor(minutes / 60);
+  if (days === 0 || hours < 12) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return `on ${dayMonthShort(d)}`;
+}

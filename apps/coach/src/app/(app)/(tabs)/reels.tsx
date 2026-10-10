@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -11,15 +11,17 @@ import {
   RefreshControl,
   StyleSheet,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CommentsSheet } from '@/components/comments-sheet';
+import { OnVideoButton } from '@/components/on-video-button';
 import { PostMenu } from '@/components/post-menu';
 import { ReelView } from '@/components/reel-view';
 import { ShareSheet } from '@/components/share-sheet';
-import { Button, Text } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Button, Text, useDelayed } from '@/components/ui';
+import { BRAND, Spacing, withAlpha } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import { loadReels, setLiked, sharedCount, type Reel } from '@/lib/posts';
 import { loadCounts, type PostCounts } from '@/lib/social';
@@ -53,6 +55,7 @@ export default function Reels() {
   const onScreen = useRef(0);
   // Set when the feed loads again, to start from its first reel.
   const toTop = useRef(false);
+  const slow = useDelayed(400);
 
   const load = useCallback(async () => {
     try {
@@ -204,6 +207,7 @@ export default function Reels() {
               onComments={() => setCommentsReel(item)}
               onShare={() => setShareReel(item)}
               onMenu={() => setMenuReel(item)}
+              showMute={false}
             />
           )}
           pagingEnabled
@@ -220,50 +224,51 @@ export default function Reels() {
           windowSize={3}
           onEndReached={loadMore}
           onEndReachedThreshold={2}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#FFFFFF" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={BRAND.white} />}
         />
       ) : null}
 
       {reels && !reels.length ? (
         <View style={styles.empty}>
-          <Ionicons name="film-outline" size={48} color="#FFFFFF" />
-          <Text style={styles.emptyTitle}>No reels yet</Text>
-          <Text style={styles.emptyText}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="film-outline" size={28} color={BRAND.white} />
+          </View>
+          <Text variant="headline" style={styles.onVideo}>
+            No reels yet
+          </Text>
+          <Text variant="callout" style={styles.emptyText}>
             Share a short training video. Everyone on Voltrix, clients and trainers, can watch it.
           </Text>
-          <Button title="Post a reel" onPress={newReel} />
+          <Button title="Post a reel" icon="camera-outline" onPress={newReel} />
         </View>
       ) : null}
-      {!reels && !error ? <ActivityIndicator color="#FFFFFF" style={StyleSheet.absoluteFill} /> : null}
+      {!reels && !error && slow ? (
+        <ActivityIndicator color={withAlpha(BRAND.white, 0.6)} style={StyleSheet.absoluteFill} />
+      ) : null}
       {error ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>{error}</Text>
-          <Button title="Try again" onPress={refresh} />
+          <Text variant="callout" style={styles.emptyText}>
+            {error}
+          </Text>
+          <OnVideoButton title="Try again" onPress={refresh} loading={refreshing} />
         </View>
       ) : null}
 
+      {/* A soft fade at the top keeps the title and buttons readable on any video. */}
+      <View style={[styles.topScrim, { height: insets.top + 96 }, TOP_FADE]} pointerEvents="none" />
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]} pointerEvents="box-none">
-        <Text style={styles.title}>Reels</Text>
+        <Text variant="title" style={styles.onVideo} accessibilityRole="header">
+          Reels
+        </Text>
         <View style={styles.headerButtons}>
-          {/* Phones pull down to refresh; a mouse can't, so computers get a button. */}
-          {Platform.OS === 'web' && reels ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Refresh reels"
-              hitSlop={10}
-              onPress={refresh}
-              disabled={refreshing}
-              style={styles.headerButton}>
-              {refreshing ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Ionicons name="refresh" size={26} color="#FFFFFF" />
-              )}
-            </Pressable>
+          {reels?.length ? (
+            <TopButton
+              icon={muted ? 'volume-mute-outline' : 'volume-high-outline'}
+              label={muted ? 'Turn sound on' : 'Turn sound off'}
+              onPress={() => setMuted((m) => !m)}
+            />
           ) : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="Post a reel" hitSlop={10} onPress={newReel}>
-            <Ionicons name="camera-outline" size={28} color="#FFFFFF" />
-          </Pressable>
+          <TopButton icon="camera-outline" label="Post a reel" onPress={newReel} />
         </View>
       </View>
 
@@ -281,13 +286,43 @@ export default function Reels() {
   );
 }
 
+// A white outline icon on the video, 44 across for the finger.
+function TopButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.6 }]}>
+      <Ionicons name={icon} size={24} color={BRAND.white} />
+    </Pressable>
+  );
+}
+
 // Reels are always white on black, whatever the app's theme.
-const shadow = { textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } };
+const FADE = `linear-gradient(to bottom, ${withAlpha(BRAND.iron, 0.55)}, ${withAlpha(BRAND.iron, 0)})`;
+const TOP_FADE = (
+  Platform.OS === 'web' ? { backgroundImage: FADE } : { experimental_backgroundImage: FADE }
+) as ViewStyle;
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: BRAND.iron,
+  },
+  topScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
   },
   header: {
     position: 'absolute',
@@ -297,42 +332,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.three,
+    paddingLeft: Spacing.gutter,
+    paddingRight: Spacing.two,
     paddingBottom: Spacing.two,
   },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.four,
+    gap: Spacing.one,
   },
   headerButton: {
-    width: 28,
-    height: 28,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-    ...shadow,
+  onVideo: {
+    color: BRAND.white,
   },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.three,
+    gap: Spacing.tight,
     padding: Spacing.four,
   },
-  emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: withAlpha(BRAND.white, 0.12),
   },
   emptyText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 16,
+    color: withAlpha(BRAND.white, 0.75),
     textAlign: 'center',
+    maxWidth: 320,
     marginBottom: Spacing.two,
   },
 });

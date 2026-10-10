@@ -1,4 +1,4 @@
-import { StatusDot, type StatusTone } from '@/components/ui';
+import { StatusDot, StatusPill, type StatusTone } from '@/components/ui';
 import { APP_STATUS_LABELS, type AppStatus } from '@/lib/clients';
 
 const TONES: Record<AppStatus, StatusTone> = {
@@ -24,4 +24,9 @@ const SHORT: Record<AppStatus, string> = {
 // a word. `short` is for list rows. `size` is kept for older callers; the look is the same.
 export function AppStatusLabel({ status, short }: { status: AppStatus; short?: boolean; size?: number }) {
   return <StatusDot tone={TONES[status]} label={short ? SHORT[status] : APP_STATUS_LABELS[status]} />;
+}
+
+// The same status as a pill, for the client page's header.
+export function AppStatusPill({ status }: { status: AppStatus }) {
+  return <StatusPill tone={TONES[status]} label={APP_STATUS_LABELS[status]} />;
 }

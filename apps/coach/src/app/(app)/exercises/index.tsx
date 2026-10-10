@@ -1,14 +1,39 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, FlatList, Platform, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
-import { groupedItem, IconButton, ListRow, Notice, SearchField, StatusPill, Text } from '@/components/ui';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  EmptyState,
+  Group,
+  groupedItem,
+  IconButton,
+  IconTile,
+  ListRow,
+  Notice,
+  SearchField,
+  SkeletonRows,
+  StatusPill,
+} from '@/components/ui';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '@/lib/workouts';
+
+// A quiet icon per muscle group; an exercise with a demo video shows a play icon instead.
+const ICONS: Record<MuscleGroup, ComponentProps<typeof IconTile>['icon']> = {
+  chest: 'barbell-outline',
+  back: 'barbell-outline',
+  shoulders: 'barbell-outline',
+  arms: 'barbell-outline',
+  legs: 'walk-outline',
+  glutes: 'walk-outline',
+  core: 'body-outline',
+  full_body: 'body-outline',
+  cardio: 'heart-outline',
+};
 
 // Browse the exercise library. With a workoutId param it becomes a picker that
 // adds the tapped exercise to that workout.
@@ -75,12 +100,13 @@ export default function ExerciseLibrary() {
           title: picking ? 'Add exercise' : 'Exercise library',
           headerRight: () => (
             // The web header has no right inset of its own; the phones' headers do.
+            // The circle's edge lines up with the page's 20 gutter (the 44 target is 2 wider each side).
             <IconButton
               variant="tonal"
               icon="add"
               label="New exercise"
               onPress={() => router.push('/exercises/new')}
-              style={Platform.OS === 'web' ? { marginRight: Spacing.tight } : undefined}
+              style={Platform.OS === 'web' ? { marginRight: Spacing.gutter - 2 } : undefined}
             />
           ),
         }}
@@ -99,11 +125,26 @@ export default function ExerciseLibrary() {
         }
         ListEmptyComponent={
           exercises ? (
-            <Text variant="footnote" tone="secondary" style={{ textAlign: 'center', marginTop: Spacing.four }}>
-              No exercises match. Tap + to add your own.
-            </Text>
+            <EmptyState
+              compact
+              icon="search-outline"
+              title="No exercises match"
+              message={search.trim() ? `Nothing called “${search.trim()}” here.` : 'Nothing in this group yet.'}
+              action={
+                <Button
+                  title="New"
+                  icon="add"
+                  variant="secondary"
+                  size="small"
+                  accessibilityLabel="New exercise"
+                  onPress={() => router.push('/exercises/new')}
+                />
+              }
+            />
           ) : (
-            <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.five }} />
+            <Group>
+              <SkeletonRows count={6} />
+            </Group>
           )
         }
         renderItem={({ item, index }) => (
@@ -111,9 +152,10 @@ export default function ExerciseLibrary() {
             <ListRow
               title={item.name}
               subtitle={[MUSCLE_GROUPS[item.muscle_group], EQUIPMENT[item.equipment]].filter(Boolean).join(' · ')}
+              leading={<IconTile icon={item.video_path ? 'play-circle-outline' : ICONS[item.muscle_group]} />}
               // Built-in exercises open nothing outside the picker, so they don't look tappable.
               onPress={picking || item.trainer_id ? () => open(item) : undefined}
-              status={item.trainer_id && !picking ? <StatusPill tone="neutral" label="Yours" /> : null}
+              status={item.trainer_id || picking ? null : <StatusPill tone="muted" label="Built-in" />}
               trailing={
                 adding === item.id ? (
                   <ActivityIndicator color={Colors.textSecondary} />
@@ -134,6 +176,9 @@ export default function ExerciseLibrary() {
 
 const styles = themed(() => ({
   list: {
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.three,
     paddingBottom: Spacing.hero,

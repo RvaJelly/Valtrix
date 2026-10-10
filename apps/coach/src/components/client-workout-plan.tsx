@@ -1,22 +1,27 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState, type ComponentProps } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Platform, Pressable, View } from 'react-native';
 
-import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed, Type } from '@/constants/theme';
+import { Sheet as BottomSheet } from '@/components/sheet';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconButton,
+  IconTile,
+  ListRow,
+  SkeletonRows,
+  StatusPill,
+  Text,
+  TextField,
+} from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import {
   daysLabel,
   doneThisWeek,
@@ -38,6 +43,12 @@ type Sheet = { step: 'pick' } | { step: 'days'; workout: WorkoutChoice; item?: P
 
 const NOTE_MAX = 500;
 
+// How far along a workout is this week, in words.
+function doneText(done: number, times: number) {
+  if (times === 1) return done ? 'Done this week' : 'Not done yet this week';
+  return `${done} of ${times} done this week`;
+}
+
 // A client's workout plan on their page: workouts from the trainer's library on
 // chosen days, in order, with a note each, and how many they did this week.
 export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; clientName: string }) {
@@ -46,6 +57,11 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
   const [ticks, setTicks] = useState<Map<string, string[]>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
+  // The sheet keeps showing its last step while it slides away.
+  const [lastSheet, setLastSheet] = useState<Sheet | null>(null);
+  if (sheet && sheet !== lastSheet) setLastSheet(sheet);
+  // Reordering and removing happen in edit mode, so the plan reads calmly the rest of the time.
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -101,6 +117,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
       .from('plan_items')
       .insert({ client_id: clientId, workout_id: workout.id, position, weekdays, note });
     if (error) return addError(error);
+    haptic.success();
     setSheet(null);
     await load();
     return null;
@@ -122,7 +139,9 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
       setError(plainError(error));
       return false;
     }
-    setItems((list) => list?.filter((i) => i.id !== item.id) ?? null);
+    const left = items?.filter((i) => i.id !== item.id) ?? null;
+    setItems(left);
+    if (!left?.length) setEditing(false);
     return true;
   }
 
@@ -133,6 +152,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     if (!items) return;
     const other = index + direction;
     if (other < 0 || other >= items.length) return;
+    haptic.select();
     const swapped = [...items];
     swapped[index] = items[other];
     swapped[other] = items[index];
@@ -151,138 +171,160 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
   }
 
   const progress = items ? weekProgress(items, ticks) : null;
+  const shown = sheet ?? lastSheet;
 
   return (
-    <View style={{ gap: Spacing.three }}>
+    <View style={{ gap: Spacing.tight }}>
       <View style={styles.header}>
-        <Text style={[styles.section, { flex: 1 }]}>Workout plan</Text>
-        {progress && items?.length ? (
-          <Text style={styles.progress}>
-            Done {progress.done} of {progress.planned} this week
-          </Text>
+        <Text variant="label" tone="secondary" style={{ flex: 1 }} accessibilityRole="header">
+          Workout plan
+        </Text>
+        {items?.length ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={editing ? 'Done editing the plan' : 'Edit the plan order'}
+            onPress={() => setEditing((e) => !e)}
+            style={styles.edit}>
+            {({ pressed }) => (
+              <Text
+                variant="footnote"
+                tone={pressed ? 'primary' : 'secondary'}
+                style={{ fontFamily: editing ? Fonts.textSemi : Fonts.textMedium }}>
+                {editing ? 'Done' : 'Edit'}
+              </Text>
+            )}
+          </Pressable>
         ) : null}
       </View>
+      {progress && items?.length ? (
+        <Text variant="footnote" tone="secondary">
+          Done {progress.done} of {progress.planned} this week
+        </Text>
+      ) : null}
       <ErrorText>{error}</ErrorText>
-      {!items && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
+      {!items && !error ? (
+        <Group>
+          <SkeletonRows count={2} />
+        </Group>
+      ) : null}
       {items && items.length === 0 ? (
         <Card>
-          <Body secondary style={{ fontSize: 14 }}>
+          <Text variant="callout" tone="secondary">
             No workouts in {clientName}’s plan yet. Add workouts from your library and pick the days.
-          </Body>
+          </Text>
         </Card>
       ) : null}
-      {items?.map((item, index) => {
-        const name = item.workouts?.name ?? 'Workout';
-        const done = doneThisWeek(item, ticks.get(item.id));
-        const times = timesPerWeek(item);
-        return (
-          <View key={item.id} style={styles.card}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${name}, ${daysLabel(item.weekdays)}. Change days or note`}
-              onPress={() => setSheet({ step: 'days', workout: { id: item.workout_id, name }, item })}
-              style={({ pressed }) => [{ flex: 1, gap: Spacing.one }, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.name}>{name}</Text>
-              <View style={styles.meta}>
-                <Ionicons name="calendar-outline" size={15} color={Colors.textSecondary} />
-                <Text style={styles.metaText}>{daysLabel(item.weekdays)}</Text>
-              </View>
-              {item.note ? (
-                <Text style={styles.note} numberOfLines={3}>
-                  “{item.note}”
-                </Text>
-              ) : null}
-              <View style={styles.meta}>
-                <Ionicons
-                  name={done >= times ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={15}
-                  color={done ? Colors.accentText : Colors.textSecondary}
-                />
-                <Text style={[styles.metaText, done >= times && { color: Colors.accentText }]}>
-                  {times === 1
-                    ? done
-                      ? 'Done this week'
-                      : 'Not done yet this week'
-                    : `${done} of ${times} done this week`}
-                </Text>
-              </View>
-            </Pressable>
-            <View style={styles.tools}>
-              <IconButton icon="chevron-up" label="Move up" disabled={index === 0} onPress={() => move(index, -1)} />
-              <IconButton
-                icon="chevron-down"
-                label="Move down"
-                disabled={index === items.length - 1}
-                onPress={() => move(index, 1)}
+      {items?.length ? (
+        <Group>
+          {items.map((item, index) => {
+            const name = item.workouts?.name ?? 'Workout';
+            const done = doneThisWeek(item, ticks.get(item.id));
+            const times = timesPerWeek(item);
+            const finished = done >= times;
+            const last = index === items.length - 1;
+            return (
+              <ListRow
+                key={item.id}
+                title={name}
+                titleLines={2}
+                leading={<IconTile icon="barbell-outline" />}
+                subtitle={
+                  <View style={{ gap: 2 }}>
+                    <Text variant="footnote" tone="secondary">
+                      {daysLabel(item.weekdays)}
+                    </Text>
+                    {item.note ? (
+                      <Text variant="footnote" numberOfLines={2}>
+                        “{item.note}”
+                      </Text>
+                    ) : null}
+                  </View>
+                }
+                status={
+                  editing ? null : finished ? (
+                    <StatusPill tone="success" label="Done" />
+                  ) : times > 1 && done > 0 ? (
+                    <StatusPill tone="neutral" label={`${done} of ${times}`} />
+                  ) : null
+                }
+                trailing={
+                  editing ? (
+                    <View style={styles.tools}>
+                      <IconButton
+                        icon="chevron-up"
+                        label={`Move ${name} up`}
+                        tone="secondary"
+                        disabled={index === 0}
+                        onPress={() => move(index, -1)}
+                      />
+                      <IconButton
+                        icon="chevron-down"
+                        label={`Move ${name} down`}
+                        tone="secondary"
+                        disabled={last}
+                        onPress={() => move(index, 1)}
+                      />
+                      <IconButton
+                        icon="trash-outline"
+                        label={`Remove ${name}`}
+                        tone="secondary"
+                        onPress={() => remove(item)}
+                      />
+                    </View>
+                  ) : null
+                }
+                onPress={
+                  editing ? undefined : () => setSheet({ step: 'days', workout: { id: item.workout_id, name }, item })
+                }
+                accessibilityLabel={`${name}, ${daysLabel(item.weekdays)}, ${doneText(done, times)}. Change days or note`}
+                last={last}
               />
-              <IconButton icon="trash-outline" label={`Remove ${name}`} onPress={() => remove(item)} />
-            </View>
-          </View>
-        );
-      })}
-      {items ? <Button title="Add workout" variant="secondary" onPress={() => setSheet({ step: 'pick' })} /> : null}
+            );
+          })}
+        </Group>
+      ) : null}
+      {items && !editing ? (
+        <Button
+          title="Add workout"
+          icon="add"
+          variant="secondary"
+          size="medium"
+          onPress={() => setSheet({ step: 'pick' })}
+          style={{ marginTop: Spacing.one }}
+        />
+      ) : null}
 
-      <PlanSheet
-        sheet={sheet}
-        clientName={clientName}
-        planned={new Set(items?.map((i) => i.workout_id))}
+      <BottomSheet
+        visible={!!sheet}
         onClose={() => setSheet(null)}
-        onPick={(workout) => setSheet({ step: 'days', workout })}
-        onBack={() => setSheet({ step: 'pick' })}
-        onAdd={add}
-        onSave={save}
-        onRemove={async (item) => {
-          if (await remove(item)) setSheet(null);
-        }}
-      />
+        title={shown?.step === 'days' ? shown.workout.name : 'Add a workout'}>
+        {shown?.step === 'pick' ? (
+          <WorkoutPicker
+            planned={new Set(items?.map((i) => i.workout_id))}
+            onPick={(workout) => setSheet({ step: 'days', workout })}
+            onClose={() => setSheet(null)}
+          />
+        ) : null}
+        {shown?.step === 'days' ? (
+          <DaysForm
+            key={shown.item?.id ?? shown.workout.id}
+            item={shown.item}
+            clientName={clientName}
+            onSubmit={(weekdays, note) =>
+              shown.item ? save(shown.item, weekdays, note) : add(shown.workout, weekdays, note)
+            }
+            onBack={shown.item ? () => setSheet(null) : () => setSheet({ step: 'pick' })}
+            onRemove={
+              shown.item
+                ? async () => {
+                    if (await remove(shown.item!)) setSheet(null);
+                  }
+                : undefined
+            }
+          />
+        ) : null}
+      </BottomSheet>
     </View>
-  );
-}
-
-function PlanSheet({
-  sheet,
-  clientName,
-  planned,
-  onClose,
-  onPick,
-  onBack,
-  onAdd,
-  onSave,
-  onRemove,
-}: {
-  sheet: Sheet | null;
-  clientName: string;
-  planned: Set<string>;
-  onClose: () => void;
-  onPick: (workout: WorkoutChoice) => void;
-  onBack: () => void;
-  onAdd: (workout: WorkoutChoice, weekdays: number[], note: string | null) => Promise<string | null>;
-  onSave: (item: PlanItem, weekdays: number[], note: string | null) => Promise<string | null>;
-  onRemove: (item: PlanItem) => void;
-}) {
-  return (
-    <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          {sheet?.step === 'pick' ? <WorkoutPicker planned={planned} onPick={onPick} onClose={onClose} /> : null}
-          {sheet?.step === 'days' ? (
-            <DaysForm
-              key={sheet.item?.id ?? sheet.workout.id}
-              workout={sheet.workout}
-              item={sheet.item}
-              clientName={clientName}
-              onSubmit={(weekdays, note) =>
-                sheet.item ? onSave(sheet.item, weekdays, note) : onAdd(sheet.workout, weekdays, note)
-              }
-              onBack={sheet.item ? onClose : onBack}
-              onRemove={sheet.item ? () => onRemove(sheet.item!) : undefined}
-            />
-          ) : null}
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }
 
@@ -296,7 +338,6 @@ function WorkoutPicker({
   onPick: (workout: WorkoutChoice) => void;
   onClose: () => void;
 }) {
-  const { height } = useWindowDimensions();
   const [workouts, setWorkouts] = useState<WorkoutChoice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -313,52 +354,56 @@ function WorkoutPicker({
 
   return (
     <>
-      <Text style={styles.sheetTitle}>Add a workout</Text>
       <ErrorText>{error}</ErrorText>
-      {!workouts && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
-      {workouts && workouts.length === 0 ? (
-        <View style={{ gap: Spacing.three }}>
-          <Body secondary>You have no workouts yet. Build one first, then add it here.</Body>
-          <Button
-            title="Build a workout"
-            onPress={() => {
-              onClose();
-              router.push('/workouts/new');
-            }}
-          />
-        </View>
+      {!workouts && !error ? (
+        <Group>
+          <SkeletonRows count={3} />
+        </Group>
       ) : null}
-      <ScrollView style={{ maxHeight: height * 0.55 }}>
-        {workouts?.map((w) => (
-          <Pressable
-            key={w.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Add ${w.name}`}
-            onPress={() => onPick(w)}
-            style={({ pressed }) => [styles.option, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-            <Ionicons name="barbell-outline" size={22} color={Colors.accentText} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.optionLabel}>{w.name}</Text>
-              {planned.has(w.id) ? <Text style={styles.optionDetail}>Already in the plan</Text> : null}
-            </View>
-            <Ionicons name="add" size={22} color={Colors.accentText} />
-          </Pressable>
-        ))}
-      </ScrollView>
+      {workouts && workouts.length === 0 ? (
+        <EmptyState
+          icon="barbell-outline"
+          title="No workouts yet"
+          message="Build one first, then add it here."
+          action={
+            <Button
+              title="Build a workout"
+              onPress={() => {
+                onClose();
+                router.push('/workouts/new');
+              }}
+            />
+          }
+        />
+      ) : null}
+      {workouts?.length ? (
+        <Group style={{ backgroundColor: Colors.tint }}>
+          {workouts.map((w, index) => (
+            <ListRow
+              key={w.id}
+              title={w.name}
+              subtitle={planned.has(w.id) ? 'Already in the plan' : undefined}
+              leading={<IconTile icon="barbell-outline" />}
+              onPress={() => onPick(w)}
+              accessibilityLabel={`Add ${w.name}`}
+              compact
+              last={index === workouts.length - 1}
+            />
+          ))}
+        </Group>
+      ) : null}
     </>
   );
 }
 
 // Which days, and a note for the client.
 function DaysForm({
-  workout,
   item,
   clientName,
   onSubmit,
   onBack,
   onRemove,
 }: {
-  workout: WorkoutChoice;
   item?: PlanItem;
   clientName: string;
   onSubmit: (weekdays: number[], note: string | null) => Promise<string | null>;
@@ -371,6 +416,7 @@ function DaysForm({
   const [error, setError] = useState<string | null>(null);
 
   function toggle(day: number) {
+    haptic.select();
     setDays((current) =>
       current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort((a, b) => a - b),
     );
@@ -386,33 +432,43 @@ function DaysForm({
 
   return (
     <View style={{ gap: Spacing.three }}>
-      <Text style={styles.sheetTitle} numberOfLines={2}>
-        {workout.name}
-      </Text>
-      <Text style={styles.label}>Which days?</Text>
-      <View style={styles.days}>
-        <DayChip label="Any day" selected={days.length === 0} onPress={() => setDays([])} wide />
-        {WEEKDAYS.map((d) => (
+      <View style={{ gap: Spacing.two }}>
+        <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }}>
+          Which days?
+        </Text>
+        <View style={styles.days}>
           <DayChip
-            key={d.day}
-            label={d.short}
-            accessibilityLabel={d.long}
-            selected={days.includes(d.day)}
-            onPress={() => toggle(d.day)}
+            label="Any day"
+            selected={days.length === 0}
+            onPress={() => {
+              if (days.length) haptic.select();
+              setDays([]);
+            }}
           />
-        ))}
+          {WEEKDAYS.map((d) => (
+            <DayChip
+              key={d.day}
+              label={d.short}
+              accessibilityLabel={d.long}
+              selected={days.includes(d.day)}
+              onPress={() => toggle(d.day)}
+            />
+          ))}
+        </View>
+        <Text variant="footnote" tone="secondary">
+          {days.length === 0
+            ? `${clientName} can do it on any day, once a week.`
+            : `${clientName} sees it on ${days.length === 1 ? 'that day' : 'those days'} in the Voltrix app.`}
+        </Text>
       </View>
-      <Body secondary style={{ fontSize: 13 }}>
-        {days.length === 0
-          ? `${clientName} can do it on any day, once a week.`
-          : `${clientName} sees it on ${days.length === 1 ? 'that day' : 'those days'} in the Voltrix app.`}
-      </Body>
       <TextField
         label={`Note for ${clientName}`}
+        optional
         value={note}
         onChangeText={setNote}
         maxLength={NOTE_MAX}
-        placeholder="Optional, for example: Go light this week"
+        autoCapitalize="sentences"
+        placeholder="For example: Go light this week"
       />
       <ErrorText>{error}</ErrorText>
       <Button title={item ? 'Save' : 'Add to plan'} onPress={submit} loading={busy} />
@@ -422,18 +478,17 @@ function DaysForm({
   );
 }
 
+// A day to train on: a pill like the filter chips, filled with the text colour when chosen.
 function DayChip({
   label,
   accessibilityLabel,
   selected,
   onPress,
-  wide,
 }: {
   label: string;
   accessibilityLabel?: string;
   selected: boolean;
   onPress: () => void;
-  wide?: boolean;
 }) {
   return (
     <Pressable
@@ -441,32 +496,14 @@ function DayChip({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.day, wide && styles.dayWide, selected && styles.daySelected]}>
-      <Text style={[styles.dayText, selected && { color: Colors.onAccent }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function IconButton({
-  icon,
-  label,
-  onPress,
-  disabled,
-}: {
-  icon: ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => [styles.iconButton, (pressed || disabled) && { opacity: disabled ? 0.3 : 0.6 }]}>
-      <Ionicons name={icon} size={20} color={Colors.text} />
+      style={styles.dayTarget}>
+      {({ pressed }) => (
+        <View style={[styles.day, pressed && { backgroundColor: Colors.tintPressed }, selected && styles.daySelected]}>
+          <Text variant="callout" style={[styles.dayText, selected && { color: Colors.background }]}>
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -476,130 +513,47 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    minHeight: 20,
   },
-  section: {
-    ...Type.label,
-    color: Colors.textSecondary,
-  },
-  progress: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  metaText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  note: {
-    color: Colors.text,
-    fontSize: 14,
-    fontStyle: 'italic',
+  // A 44 high target around a short word, pulled back so the word lines up with the page edge.
+  edit: {
+    minHeight: 44,
+    minWidth: 44,
+    marginVertical: -12,
+    marginRight: -Spacing.two,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
   },
   tools: {
     flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    gap: Spacing.three,
-    padding: Spacing.four,
-    paddingBottom: Spacing.five,
-    borderTopLeftRadius: Radius.large,
-    borderTopRightRadius: Radius.large,
-    backgroundColor: Colors.background,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-  },
-  sheetTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 56,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.medium,
-  },
-  optionLabel: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  optionDetail: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
+    marginRight: -Spacing.two,
   },
   days: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
+    columnGap: Spacing.two,
+  },
+  dayTarget: {
+    minHeight: 44,
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
   },
   day: {
+    minHeight: 36,
     minWidth: 52,
-    minHeight: 44,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dayWide: {
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   daySelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   dayText: {
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
   },
 }));

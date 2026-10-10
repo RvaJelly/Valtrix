@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SessionRow } from '@/components/session-row';
 import {
   Button,
+  EmptyState,
   Group,
   IconButton,
   Notice,
@@ -15,8 +16,9 @@ import {
   Text,
   useDelayed,
 } from '@/components/ui';
-import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { longDate, monthYear, weekdayShort } from '@/lib/format';
 import {
   addDays,
@@ -80,7 +82,8 @@ export default function CalendarScreen() {
   );
 
   const dayList = (sessions ?? []).filter((s) => sameDay(new Date(s.starts_at), selected));
-  const booked = (sessions ?? []).filter((s) => s.status === 'scheduled' || s.status === 'completed');
+  // Every session that still happens or happened counts, the same for the summary and the day dots.
+  const counted = (sessions ?? []).filter((s) => s.status !== 'cancelled');
   const done = (sessions ?? []).filter((s) => s.status === 'completed').length;
   const monthLabel = monthYear(selected);
   const isToday = sameDay(selected, today);
@@ -102,7 +105,7 @@ export default function CalendarScreen() {
               </Text>
               <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
                 {sessions
-                  ? `${booked.length === 1 ? '1 session' : `${booked.length} sessions`} this week${
+                  ? `${counted.length === 1 ? '1 session' : `${counted.length} sessions`} this week${
                       done ? ` · ${done} done` : ''
                     }`
                   : ' '}
@@ -115,10 +118,7 @@ export default function CalendarScreen() {
             {days.map((d) => {
               const on = sameDay(d, selected);
               const dayIsToday = sameDay(d, today);
-              const count = (sessions ?? []).filter(
-                (s) => s.status === 'scheduled' && sameDay(new Date(s.starts_at), d),
-              ).length;
-              const ink = on ? Colors.background : Colors.text;
+              const count = counted.filter((s) => sameDay(new Date(s.starts_at), d)).length;
               return (
                 <Pressable
                   key={d.toISOString()}
@@ -127,28 +127,38 @@ export default function CalendarScreen() {
                     count ? `, ${count === 1 ? '1 session' : `${count} sessions`}` : ''
                   }`}
                   accessibilityState={{ selected: on }}
-                  onPress={() => setSelected(d)}
-                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
-                    styles.day,
-                    (pressed || hovered) && !on && { backgroundColor: Colors.tint },
-                    on && { backgroundColor: Colors.text },
-                  ]}>
-                  <Text variant="footnote" style={{ color: on ? Colors.background : Colors.textSecondary }}>
-                    {weekdayShort(d).slice(0, 1)}
-                  </Text>
-                  <Text variant="headline" style={[Tabular, { color: ink }]}>
-                    {d.getDate()}
-                  </Text>
-                  {/* Today gets the one orange dot; other days with sessions a quiet one. */}
-                  <View
-                    style={[
-                      styles.dot,
-                      {
-                        opacity: count || dayIsToday ? 1 : 0,
-                        backgroundColor: dayIsToday ? Colors.accent : on ? Colors.background : Colors.textSecondary,
-                      },
-                    ]}
-                  />
+                  onPress={() => {
+                    if (!on) haptic.select();
+                    setSelected(d);
+                  }}
+                  style={styles.day}>
+                  {({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => (
+                    <>
+                      <Text variant="label" tone={dayIsToday ? 'primary' : 'secondary'}>
+                        {weekdayShort(d)}
+                      </Text>
+                      <View
+                        style={[
+                          styles.circle,
+                          (pressed || hovered) && !on && { backgroundColor: Colors.tint },
+                          on && { backgroundColor: Colors.text },
+                        ]}>
+                        <Text variant="title" style={[Tabular, { color: on ? Colors.background : Colors.text }]}>
+                          {d.getDate()}
+                        </Text>
+                      </View>
+                      {/* Today gets the one orange dot; other days with sessions a quiet one. */}
+                      <View
+                        style={[
+                          styles.dot,
+                          {
+                            opacity: count || dayIsToday ? 1 : 0,
+                            backgroundColor: dayIsToday ? Colors.accent : Colors.textTertiary,
+                          },
+                        ]}
+                      />
+                    </>
+                  )}
                 </Pressable>
               );
             })}
@@ -159,14 +169,19 @@ export default function CalendarScreen() {
           title={formatDay(selected, today)}
           action={isToday ? undefined : { label: 'Today', onPress: () => setSelected(today) }}>
           {error ? <Notice tone="danger">{error}</Notice> : null}
-          {!sessions && !error && showSkeleton ? <SkeletonRows count={2} /> : null}
+          {!sessions && !error && showSkeleton ? (
+            <Group>
+              <SkeletonRows count={3} />
+            </Group>
+          ) : null}
           {sessions && dayList.length === 0 ? (
-            <View style={styles.empty}>
-              <Text variant="callout" tone="secondary" style={{ flex: 1 }}>
-                Nothing booked {isToday ? 'today' : 'on this day'}.
-              </Text>
-              <Button title="Book" icon="add" variant="secondary" size="small" onPress={book} />
-            </View>
+            <EmptyState
+              compact
+              icon="calendar-clear-outline"
+              title={`Nothing booked ${isToday ? 'today' : 'on this day'}`}
+              message="Free for a session or a break."
+              action={<Button title="Book" icon="add" variant="secondary" size="small" onPress={book} />}
+            />
           ) : null}
           {dayList.length > 0 ? (
             <Group>
@@ -200,35 +215,28 @@ const styles = themed(() => ({
     alignItems: 'center',
     marginHorizontal: -Spacing.tight,
   },
+  // Seven light columns: the weekday, the date in a circle (filled when chosen) and a dot.
   week: {
     flexDirection: 'row',
-    gap: Spacing.one,
-    padding: Spacing.one,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
+    marginHorizontal: -Spacing.one,
   },
   day: {
     flex: 1,
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.medium,
-    borderCurve: 'continuous',
+    gap: 6,
+    paddingVertical: Spacing.one,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
+  },
+  circle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
     width: 5,
     height: 5,
-    borderRadius: 3,
-  },
-  empty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.tight,
-    minHeight: 64,
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.tight,
-    borderRadius: Radius.large,
-    borderCurve: 'continuous',
-    backgroundColor: Colors.surface,
+    borderRadius: 2.5,
   },
 }));

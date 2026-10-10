@@ -1,13 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, View, type TextInput } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { Field } from '@/components/field';
+import { SettingsPage } from '@/components/settings-parts';
+import { StickyFooter } from '@/components/sticky-footer';
 import { useToast } from '@/components/toast';
-import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
+import { Button, ErrorText, Group, IconTile, ListRow, Section, Text } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { findMe, townAt, type Coords } from '@/lib/location';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { MAX_SPECIALTIES, SPECIALTIES } from '@/lib/specialties';
@@ -20,7 +23,8 @@ const LOCATION_DENIED =
     ? "Your browser didn't share your location. Allow location for this site, then try again."
     : "Voltrix Coach can't see your location. Allow it in your phone's settings, then try again.";
 
-// The trainer's profile, as clients see it in the Voltrix app.
+// The trainer's profile, as clients see it in the Voltrix app: the photo and location save at once,
+// the rest with the Save button that stays at the bottom.
 export function ProfileEditor({ profile, onSaved }: Props) {
   const [name, setName] = useState(profile.full_name ?? '');
   const [business, setBusiness] = useState(profile.business_name ?? '');
@@ -29,7 +33,9 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   const [years, setYears] = useState(profile.years_experience == null ? '' : String(profile.years_experience));
   const [bio, setBio] = useState(profile.bio ?? '');
   const [busy, setBusy] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState<'change' | 'remove' | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ business?: string; years?: string; specialties?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   const [location, setLocation] = useState<Coords | null>(
@@ -39,10 +45,14 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   );
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const businessRef = useRef<TextInput>(null);
+  const cityRef = useRef<TextInput>(null);
+  const yearsRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
 
   async function changePhoto() {
-    setError(null);
-    setPhotoBusy(true);
+    setPhotoError(null);
+    setPhotoBusy('change');
     try {
       const url = await pickProfilePhoto(profile.id);
       if (url) {
@@ -50,19 +60,25 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         if (error) throw error;
         await removeProfilePhoto(profile.avatar_url);
         await onSaved();
+        toast('Photo saved');
       }
     } catch (e) {
-      setError(plainError(e, 'The photo could not be saved.'));
+      setPhotoError(plainError(e, 'The photo could not be saved.'));
     }
-    setPhotoBusy(false);
+    setPhotoBusy(null);
   }
 
   async function removePhoto() {
-    setError(null);
+    setPhotoError(null);
+    setPhotoBusy('remove');
     const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
-    if (error) return setError(plainError(error));
+    if (error) {
+      setPhotoBusy(null);
+      return setPhotoError(plainError(error));
+    }
     await removeProfilePhoto(profile.avatar_url);
     await onSaved();
+    setPhotoBusy(null);
   }
 
   // Saves a rough location straight away, and fills in the town if it is empty.
@@ -85,6 +101,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
     if (error) return setLocationError(plainError(error));
     setLocation(found.coords);
     if (town) setCity(town);
+    toast('Location saved');
     await onSaved();
   }
 
@@ -97,18 +114,30 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   }
 
   function toggle(specialty: string) {
-    if (specialties.includes(specialty)) setSpecialties(specialties.filter((s) => s !== specialty));
-    else if (specialties.length < MAX_SPECIALTIES) setSpecialties([...specialties, specialty]);
-    else setError(`Pick up to ${MAX_SPECIALTIES} specialties.`);
+    if (specialties.includes(specialty)) {
+      haptic.select();
+      setSpecialties(specialties.filter((s) => s !== specialty));
+      setErrors((e) => ({ ...e, specialties: undefined }));
+    } else if (specialties.length < MAX_SPECIALTIES) {
+      haptic.select();
+      setSpecialties([...specialties, specialty]);
+    } else {
+      setErrors((e) => ({ ...e, specialties: `You can pick up to ${MAX_SPECIALTIES}. Tap one to remove it first.` }));
+    }
   }
 
   async function save() {
     setError(null);
-    if (!business.trim()) return setError('Enter a name for your business.');
     const yearsNumber = years.trim() ? Number(years.trim()) : null;
-    if (yearsNumber !== null && (!Number.isInteger(yearsNumber) || yearsNumber < 0 || yearsNumber > 60)) {
-      return setError('Years of experience should be a number from 0 to 60.');
-    }
+    const found = {
+      business: business.trim() ? undefined : 'Enter the name clients will know your business by.',
+      years:
+        yearsNumber !== null && (!Number.isInteger(yearsNumber) || yearsNumber < 0 || yearsNumber > 60)
+          ? 'Enter a whole number of years, from 0 to 60.'
+          : undefined,
+    };
+    setErrors(found);
+    if (found.business || found.years) return;
     setBusy(true);
     const { error } = await supabase
       .from('profiles')
@@ -128,157 +157,202 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   }
 
   return (
-    <Card style={{ gap: Spacing.three }}>
-      <View style={styles.photoRow}>
-        <Avatar url={profile.avatar_url} name={profile.full_name ?? profile.business_name} size={88} />
-        <View style={{ flex: 1, gap: Spacing.two }}>
+    <SettingsPage
+      footer={
+        <StickyFooter>
+          <ErrorText>{error}</ErrorText>
+          <Button title="Save profile" onPress={save} loading={busy} />
+        </StickyFooter>
+      }>
+      <View style={styles.photo}>
+        <Avatar url={profile.avatar_url} name={profile.full_name ?? profile.business_name} size={96} />
+        <View style={styles.photoButtons}>
           <Button
             title={profile.avatar_url ? 'Change photo' : 'Add a photo'}
             variant="secondary"
+            size="medium"
             onPress={changePhoto}
-            loading={photoBusy}
+            loading={photoBusy === 'change'}
           />
           {profile.avatar_url ? (
-            <Pressable accessibilityRole="button" onPress={removePhoto} hitSlop={8}>
-              <Text style={styles.remove}>Remove photo</Text>
-            </Pressable>
+            <Button
+              title="Remove"
+              variant="ghost"
+              size="medium"
+              accessibilityLabel="Remove photo"
+              onPress={removePhoto}
+              loading={photoBusy === 'remove'}
+            />
           ) : null}
         </View>
-      </View>
-      <Body secondary style={styles.small}>
-        Clients see your photo, specialties and info in the Voltrix app.
-      </Body>
-      <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
-      <TextField label="Business name" value={business} onChangeText={setBusiness} autoCapitalize="words" />
-
-      <Text style={styles.label}>
-        What you specialise in ({specialties.length}/{MAX_SPECIALTIES})
-      </Text>
-      <View style={styles.wrap}>
-        {SPECIALTIES.map((s) => {
-          const selected = specialties.includes(s);
-          return (
-            <Pressable
-              key={s}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => toggle(s)}
-              style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && { color: Colors.background }]}>{s}</Text>
-            </Pressable>
-          );
-        })}
+        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
+          Clients see your profile in the Voltrix app.
+        </Text>
+        <ErrorText>{photoError}</ErrorText>
       </View>
 
-      {/* Locked while finding the location, which may fill it in, so nothing typed meanwhile is lost. */}
-      <TextField
-        label="City"
-        value={city}
-        onChangeText={setCity}
-        editable={!locating}
-        autoCapitalize="words"
-        placeholder="For example: Cape Town"
-        style={locating ? { opacity: 0.5 } : null}
-      />
+      <View style={styles.fields}>
+        <Field
+          label="Your name"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+          autoComplete="name"
+          enterKeyHint="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => businessRef.current?.focus()}
+        />
+        <Field
+          ref={businessRef}
+          label="Business name"
+          value={business}
+          onChangeText={(text) => {
+            setBusiness(text);
+            if (errors.business) setErrors((e) => ({ ...e, business: undefined }));
+          }}
+          autoCapitalize="words"
+          autoComplete="organization"
+          enterKeyHint="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => cityRef.current?.focus()}
+          error={errors.business}
+        />
+        {/* Locked while finding the location, which may fill it in, so nothing typed meanwhile is lost. */}
+        <Field
+          ref={cityRef}
+          label="City"
+          optional
+          value={city}
+          onChangeText={setCity}
+          editable={!locating}
+          autoCapitalize="words"
+          placeholder="For example: Cape Town"
+          enterKeyHint="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => yearsRef.current?.focus()}
+          style={locating ? { opacity: 0.5 } : null}
+        />
+        <Field
+          ref={yearsRef}
+          label="Years of experience"
+          optional
+          value={years}
+          onChangeText={(text) => {
+            setYears(text);
+            if (errors.years) setErrors((e) => ({ ...e, years: undefined }));
+          }}
+          keyboardType="number-pad"
+          enterKeyHint="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => bioRef.current?.focus()}
+          error={errors.years}
+        />
+        <Field
+          ref={bioRef}
+          label="About you"
+          optional
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          maxLength={1000}
+          placeholder="Your story, qualifications and how you train"
+          style={styles.bio}
+        />
+      </View>
 
-      <Text style={styles.label}>Location</Text>
-      <View style={styles.locationRow}>
-        <View style={styles.locationIcon}>
-          <Ionicons name={location ? 'location' : 'location-outline'} size={20} color={Colors.textSecondary} />
+      <Section title={`Specialties · ${specialties.length} of ${MAX_SPECIALTIES}`}>
+        <View style={styles.chips}>
+          {SPECIALTIES.map((s) => {
+            const selected = specialties.includes(s);
+            return (
+              <Pressable
+                key={s}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => toggle(s)}
+                style={styles.chipTarget}>
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.chip,
+                      pressed && { backgroundColor: Colors.tintPressed },
+                      selected && styles.chipOn,
+                    ]}>
+                    <Text variant="callout" style={[styles.chipText, selected && { color: Colors.background }]}>
+                      {s}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
         </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.locationTitle}>{location ? 'Location set' : 'Not set'}</Text>
-          <Body secondary style={styles.small}>
-            {location
-              ? 'Clients near you can find you. They only see how far away you are.'
-              : 'Let clients near you find you. They only see how far away you are, never your address.'}
-          </Body>
-        </View>
-      </View>
-      <Button
-        title={location ? 'Update my location' : 'Use my location'}
-        variant="secondary"
-        onPress={saveMyLocation}
-        loading={locating}
-      />
-      {location ? (
-        // Waits for an update in progress, which would otherwise save the location again.
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: locating }}
-          disabled={locating}
-          onPress={removeLocation}
-          hitSlop={8}
-          style={locating ? { opacity: 0.5 } : null}>
-          <Text style={styles.remove}>Remove location</Text>
-        </Pressable>
-      ) : null}
-      <ErrorText>{locationError}</ErrorText>
+        <ErrorText>{errors.specialties ?? null}</ErrorText>
+      </Section>
 
-      <TextField
-        label="Years of experience"
-        value={years}
-        onChangeText={setYears}
-        keyboardType="number-pad"
-        placeholder="Optional"
-      />
-      <TextField
-        label="About you"
-        value={bio}
-        onChangeText={setBio}
-        multiline
-        maxLength={1000}
-        placeholder="Your story, qualifications and how you like to train clients"
-        style={{ minHeight: 110, paddingTop: Spacing.three, textAlignVertical: 'top' }}
-      />
-      <ErrorText>{error}</ErrorText>
-      <Button title="Save profile" onPress={save} loading={busy} />
-    </Card>
+      <Section title="Location">
+        <Group>
+          <ListRow
+            title={location ? 'Location set' : 'Not set'}
+            subtitle={location ? 'Clients only see how far away you are' : 'Let clients near you find you'}
+            leading={<IconTile icon={location ? 'location' : 'location-outline'} />}
+            last
+          />
+        </Group>
+        <View style={styles.locationButtons}>
+          <Button
+            title={location ? 'Update my location' : 'Use my location'}
+            variant="secondary"
+            size="medium"
+            onPress={saveMyLocation}
+            loading={locating}
+          />
+          {location ? (
+            // Waits for an update in progress, which would otherwise save the location again.
+            <Button
+              title="Remove location"
+              variant="ghost"
+              size="medium"
+              onPress={removeLocation}
+              disabled={locating}
+            />
+          ) : null}
+        </View>
+        <ErrorText>{locationError}</ErrorText>
+      </Section>
+    </SettingsPage>
   );
 }
 
 const styles = themed(() => ({
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.four,
-  },
-  remove: {
-    color: Colors.danger,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  small: {
-    fontSize: 14,
-  },
-  locationRow: {
-    flexDirection: 'row',
+  photo: {
     alignItems: 'center',
     gap: Spacing.three,
   },
-  locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  locationTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  wrap: {
+  photoButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: Spacing.two,
+  },
+  fields: {
+    gap: Spacing.gutter,
+  },
+  bio: {
+    minHeight: 110,
+    paddingTop: Spacing.tight,
+    textAlignVertical: 'top',
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: Spacing.two,
+  },
+  // Each chip is drawn 36 high inside a 44 high touch target, like the shared chips.
+  chipTarget: {
+    minHeight: 44,
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
   },
   chip: {
     minHeight: 36,
@@ -287,13 +361,16 @@ const styles = themed(() => ({
     borderRadius: Radius.pill,
     backgroundColor: Colors.tint,
   },
-  chipSelected: {
+  chipOn: {
     backgroundColor: Colors.text,
   },
   chipText: {
-    color: Colors.text,
     fontFamily: Fonts.textMedium,
-    fontSize: 15,
-    lineHeight: 21,
+    color: Colors.text,
+  },
+  locationButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
 }));

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Modal, Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { View } from 'react-native';
 
-import { Text } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Sheet } from '@/components/sheet';
+import { Button, ErrorText, Group, IconTile, ListRow, Text, type IconName } from '@/components/ui';
+import { Colors, Spacing } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
 import { authorName, blockPerson, deletePost, REPORT_REASONS, reportPost, type ReportReason } from '@/lib/posts';
@@ -18,22 +19,29 @@ type Props = {
   onRemoved: (post: Post, why: 'deleted' | 'reported' | 'blocked') => void;
 };
 
-// The "..." menu on a story or reel: delete your own, or report or block someone else.
+// The "..." menu on a story or reel: delete your own, or report or block someone else. A sheet of
+// grouped rows; the actions that remove something are red.
 export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
   const [step, setStep] = useState<'menu' | 'report' | 'thanks'>('menu');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shownFor, setShownFor] = useState<string | null>(null);
-  const name = post ? authorName(post) : '';
+  // Keeps the last post on screen while the sheet slides away.
+  const [lastPost, setLastPost] = useState(post);
+  if (post && post !== lastPost) setLastPost(post);
+  const current = post ?? lastPost;
+  const name = current ? authorName(current) : '';
 
   // Start at the top of the menu each time it opens for a post.
-  if ((post?.id ?? null) !== shownFor) {
-    setShownFor(post?.id ?? null);
+  if (post && post.id !== shownFor) {
+    setShownFor(post.id);
     setStep('menu');
     setError(null);
   }
+  if (!post && shownFor !== null) setShownFor(null);
 
   async function run(action: () => Promise<void>) {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -45,7 +53,7 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
   }
 
   async function remove() {
-    if (!post) return;
+    if (!post || busy) return;
     const sure = await confirm(
       kind === 'story' ? 'Delete this story?' : 'Delete this reel?',
       'It will be removed for everyone.',
@@ -67,7 +75,7 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
   }
 
   async function block() {
-    if (!post) return;
+    if (!post || busy) return;
     const sure = await confirm(
       `Block ${name}?`,
       `You won't see each other's stories or reels. ${name} won't be told. You can unblock them in Settings.`,
@@ -84,52 +92,59 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
     if (post) onRemoved(post, 'reported');
   }
 
+  const reasons = Object.keys(REPORT_REASONS) as ReportReason[];
   return (
-    <Modal
+    <Sheet
       visible={!!post}
-      transparent
-      animationType="slide"
-      onRequestClose={step === 'thanks' ? finishReport : onClose}>
-      <Pressable
-        style={styles.backdrop}
-        onPress={step === 'thanks' ? finishReport : onClose}
-        accessibilityLabel="Close"
-      />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-        {step === 'menu' && post?.is_mine ? (
-          <Option icon="trash-outline" label="Delete" danger onPress={remove} disabled={busy} />
-        ) : null}
-        {step === 'menu' && post && !post.is_mine ? (
-          <>
-            <Option icon="flag-outline" label="Report" danger onPress={() => setStep('report')} disabled={busy} />
-            <Option icon="hand-left-outline" label={`Block ${name}`} danger onPress={block} disabled={busy} />
-          </>
-        ) : null}
-        {step === 'report' ? (
-          <>
-            <Text style={styles.title}>Why are you reporting this {kind}?</Text>
-            <Text style={styles.note}>Your report is private. {name} won&apos;t know it was you.</Text>
-            {(Object.keys(REPORT_REASONS) as ReportReason[]).map((reason) => (
-              <Option key={reason} label={REPORT_REASONS[reason]} onPress={() => report(reason)} disabled={busy} />
+      onClose={step === 'thanks' ? finishReport : onClose}
+      title={step === 'report' ? `Why are you reporting this ${kind}?` : undefined}>
+      {step === 'menu' && current ? (
+        <Group>
+          {current.is_mine ? (
+            <Option icon="trash-outline" label={busy ? 'Deleting…' : 'Delete'} danger onPress={remove} last />
+          ) : (
+            <>
+              <Option icon="flag-outline" label="Report" danger onPress={() => setStep('report')} />
+              <Option icon="hand-left-outline" label={`Block ${name}`} danger onPress={block} last />
+            </>
+          )}
+        </Group>
+      ) : null}
+      {step === 'report' ? (
+        <>
+          <Text variant="callout" tone="secondary">
+            Your report is private. {name} won&apos;t know it was you.
+          </Text>
+          <Group>
+            {reasons.map((reason, i) => (
+              <Option
+                key={reason}
+                label={REPORT_REASONS[reason]}
+                onPress={() => report(reason)}
+                last={i === reasons.length - 1}
+              />
             ))}
-          </>
-        ) : null}
-        {step === 'thanks' ? (
-          <View style={{ gap: Spacing.three, paddingVertical: Spacing.two }}>
-            <Ionicons name="checkmark-circle" size={40} color={Colors.accentText} style={{ alignSelf: 'center' }} />
-            <Text style={[styles.title, { textAlign: 'center' }]}>Thanks for letting us know</Text>
-            <Text style={[styles.note, { textAlign: 'center' }]}>
-              We won&apos;t show you this {kind} again. Posts that several people report are hidden while we check them.
-            </Text>
-            <Option label="Done" onPress={finishReport} />
-          </View>
-        ) : null}
-        {busy ? <ActivityIndicator color={Colors.textSecondary} /> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {step !== 'thanks' ? <Option label="Cancel" onPress={onClose} /> : null}
-      </View>
-    </Modal>
+          </Group>
+        </>
+      ) : null}
+      {step === 'thanks' ? (
+        <View style={{ gap: Spacing.tight, alignItems: 'center', paddingTop: Spacing.two }}>
+          <Ionicons name="checkmark-circle" size={44} color={Colors.success} />
+          <Text variant="headline" accessibilityRole="header" style={{ textAlign: 'center' }}>
+            Thanks for letting us know
+          </Text>
+          <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
+            We won&apos;t show you this {kind} again. Posts that several people report are hidden while we check them.
+          </Text>
+        </View>
+      ) : null}
+      <ErrorText>{error}</ErrorText>
+      {step === 'thanks' ? (
+        <Button title="Done" variant="secondary" onPress={finishReport} />
+      ) : (
+        <Button title="Cancel" variant="ghost" onPress={onClose} disabled={busy} />
+      )}
+    </Sheet>
   );
 }
 
@@ -138,75 +153,24 @@ function Option({
   label,
   danger,
   onPress,
-  disabled,
+  last,
 }: {
-  icon?: ComponentProps<typeof Ionicons>['name'];
+  icon?: IconName;
   label: string;
   danger?: boolean;
   onPress: () => void;
-  disabled?: boolean;
+  last?: boolean;
 }) {
-  const color = danger ? Colors.danger : Colors.text;
   return (
-    <Pressable
-      accessibilityRole="button"
+    <ListRow
+      title={label}
+      titleTone={danger ? 'danger' : undefined}
+      leading={icon ? <IconTile icon={icon} color={danger ? Colors.danger : undefined} /> : undefined}
+      chevron={false}
+      accessibilityLabel={label}
       onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [styles.option, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      {icon ? <Ionicons name={icon} size={22} color={color} /> : null}
-      <Text style={[styles.optionText, { color }]}>{label}</Text>
-    </Pressable>
+      compact
+      last={last}
+    />
   );
 }
-
-const styles = themed(() => ({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    gap: Spacing.one,
-    padding: Spacing.three,
-    paddingBottom: Spacing.five,
-    borderTopLeftRadius: Radius.large,
-    borderTopRightRadius: Radius.large,
-    backgroundColor: Colors.background,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    marginBottom: Spacing.two,
-    backgroundColor: Colors.border,
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    paddingHorizontal: Spacing.two,
-  },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    paddingHorizontal: Spacing.two,
-    marginBottom: Spacing.two,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 52,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  error: {
-    color: Colors.danger,
-    fontSize: 14,
-    paddingHorizontal: Spacing.two,
-  },
-}));

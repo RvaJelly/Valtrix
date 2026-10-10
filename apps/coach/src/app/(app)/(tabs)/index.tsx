@@ -181,7 +181,7 @@ export default function Home() {
       title: 'Finish your profile',
       subtitle: 'Photo and specialties for your clients',
       icon: 'person-circle-outline',
-      href: '/settings',
+      href: '/settings/profile',
     });
   }
   if (access.kind === 'trial') {
@@ -292,7 +292,7 @@ export default function Home() {
               <Group>
                 <Step title="Add your first client" done={false} href="/clients/new" />
                 <Step title="Build a workout" done={stats.workouts > 0} href="/workouts/new" />
-                <Step title="Finish your profile" done={!profileMissing} href="/settings" />
+                <Step title="Finish your profile" done={!profileMissing} href="/settings/profile" />
                 <Step title="Book a session" done={stats.today.length > 0} href="/sessions/new" last />
               </Group>
             </Section>

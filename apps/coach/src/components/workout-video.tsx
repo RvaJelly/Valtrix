@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { Button, ErrorText, IconButton, Text } from '@/components/ui';
 import { VideoViewer } from '@/components/video-viewer';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -95,10 +95,14 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
     <View style={{ gap: Spacing.two }}>
       {busy === 'preparing' || busy === 'uploading' ? (
         <View style={styles.row}>
-          <ActivityIndicator color={Colors.textSecondary} />
+          <View style={styles.icon}>
+            <ActivityIndicator color={Colors.textSecondary} />
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>{busy === 'preparing' ? 'Getting the video ready…' : 'Uploading video…'}</Text>
-            <Text style={styles.note}>Keep Voltrix Coach open until it&apos;s done.</Text>
+            <Text variant="rowTitle">{busy === 'preparing' ? 'Getting the video ready…' : 'Uploading video…'}</Text>
+            <Text variant="footnote" tone="secondary">
+              Keep Voltrix Coach open until it&apos;s done.
+            </Text>
           </View>
         </View>
       ) : shown ? (
@@ -107,31 +111,43 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
             accessibilityRole="button"
             accessibilityLabel={`Play ${label.toLowerCase()}`}
             onPress={() => setPlaying(shown)}
-            style={({ pressed }) => [styles.play, pressed && { opacity: 0.7 }]}>
-            <View style={styles.playIcon}>
-              <Ionicons name="play" size={18} color={Colors.onAccent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{label}</Text>
-              <Text style={styles.note} numberOfLines={1}>
-                {path ? 'Tap to play' : fallback?.note}
-              </Text>
-            </View>
+            style={[styles.play, pointer]}>
+            {({ pressed }) => (
+              <>
+                <View style={[styles.icon, pressed && { backgroundColor: Colors.tintPressed }]}>
+                  <Ionicons name="play" size={18} color={Colors.text} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text variant="rowTitle" numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <Text variant="footnote" tone="secondary" numberOfLines={1}>
+                    {path ? 'Tap to play' : fallback?.note}
+                  </Text>
+                </View>
+              </>
+            )}
           </Pressable>
           {path ? (
-            <SmallButton label="Replace" accessibilityLabel="Replace video" onPress={add} />
+            <Button title="Replace" accessibilityLabel="Replace video" variant="secondary" size="small" onPress={add} />
           ) : (
             // Only the fallback (the exercise's own demo) shows: this adds one for here, and
             // leaves the exercise's video as it is.
-            <SmallButton label="Use another video" accessibilityLabel="Add a video for this workout" onPress={add} />
+            <Button
+              title="Use another"
+              accessibilityLabel="Add a video for this workout"
+              variant="secondary"
+              size="small"
+              onPress={add}
+            />
           )}
           {path ? (
-            <SmallButton
-              label="Remove"
-              accessibilityLabel="Remove video"
+            <IconButton
+              icon="trash-outline"
+              tone="secondary"
+              label="Remove video"
               onPress={remove}
-              danger
-              loading={busy === 'removing'}
+              disabled={busy === 'removing'}
             />
           ) : null}
         </View>
@@ -140,109 +156,53 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
           accessibilityRole="button"
           accessibilityLabel="Add video"
           onPress={add}
-          style={({ pressed }) => [styles.row, styles.add, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="videocam-outline" size={22} color={Colors.accentText} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.label, { color: Colors.accentText }]}>Add video</Text>
-            <Text style={styles.note}>
-              {label}, {VIDEO_HINT}
-            </Text>
-          </View>
+          style={[styles.row, pointer]}>
+          {({ pressed }) => (
+            <>
+              <View style={[styles.icon, pressed && { backgroundColor: Colors.tintPressed }]}>
+                <Ionicons name="videocam-outline" size={20} color={Colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="rowTitle" numberOfLines={1}>
+                  {label}
+                </Text>
+                <Text variant="footnote" tone="secondary">
+                  Add a video, {VIDEO_HINT}
+                </Text>
+              </View>
+              <Ionicons name="add" size={20} color={Colors.textSecondary} />
+            </>
+          )}
         </Pressable>
       )}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ErrorText>{error}</ErrorText>
       <VideoViewer path={playing} title={title ?? label} onClose={() => setPlaying(null)} />
     </View>
   );
 }
 
-function SmallButton({
-  label,
-  accessibilityLabel,
-  onPress,
-  danger,
-  loading,
-}: {
-  label: string;
-  accessibilityLabel: string;
-  onPress: () => void;
-  danger?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      disabled={loading}
-      hitSlop={4}
-      style={({ pressed }) => [styles.small, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      {loading ? (
-        <ActivityIndicator size="small" color={Colors.text} />
-      ) : (
-        <Text style={[styles.smallText, danger && { color: Colors.danger }]}>{label}</Text>
-      )}
-    </Pressable>
-  );
-}
+const pointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as const) : null;
 
 const styles = themed(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    minHeight: 48,
-  },
-  add: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    gap: Spacing.three,
+    gap: Spacing.tight,
+    minHeight: 56,
   },
   play: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.tight,
     minHeight: 44,
   },
-  playIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.medium,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
-  },
-  label: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  note: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-  },
-  small: {
-    minHeight: 36,
-    minWidth: 44,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.small,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smallText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  error: {
-    color: Colors.danger,
-    fontSize: 14,
+    backgroundColor: Colors.tint,
   },
 }));

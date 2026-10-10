@@ -4,7 +4,15 @@ import { StyleSheet, View } from 'react-native';
 import { canJoin, JoinCall } from '@/components/join-call';
 import { Group, ListRow, StatusPill, Text, type StatusTone } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
-import { endOf, formatTime, SESSION_STATUS, sessionName, type Session, type SessionStatus } from '@/lib/sessions';
+import {
+  endOf,
+  formatDay,
+  formatTime,
+  SESSION_STATUS,
+  sessionName,
+  type Session,
+  type SessionStatus,
+} from '@/lib/sessions';
 
 const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
   completed: 'success',
@@ -15,17 +23,20 @@ const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
 // One session in a list: the time on the left, who and where, and a pill once it isn't just booked.
 // `card` stands on its own; `grouped` is a row inside a Group (`last` drops its hairline).
 // With `now`, an online session that can be joined gets its Join button under the row (beside the
-// row's own button, not inside it, so screen readers reach both).
+// row's own button, not inside it, so screen readers reach both). `showDay` is for a list of one
+// client's sessions: the row names the day instead of repeating the client.
 export function SessionRow({
   session,
   variant = 'card',
   last,
   now,
+  showDay,
 }: {
   session: Session;
   variant?: 'card' | 'grouped';
   last?: boolean;
   now?: number;
+  showDay?: boolean;
 }) {
   const start = new Date(session.starts_at);
   const cancelled = session.status === 'cancelled';
@@ -33,10 +44,11 @@ export function SessionRow({
   const where = session.online ? 'Video call' : session.location || `${session.duration_minutes} min`;
   const joinable = now !== undefined && canJoin(session, now);
   const lastLine = variant === 'card' || last;
+  const title = showDay ? formatDay(start) : sessionName(session);
   const row = (
     <>
       <ListRow
-        title={sessionName(session)}
+        title={title}
         titleStyle={cancelled ? { color: Colors.textTertiary, textDecorationLine: 'line-through' } : undefined}
         subtitle={where}
         leading={
@@ -51,7 +63,7 @@ export function SessionRow({
         }
         status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
         onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
-        accessibilityLabel={`${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
+        accessibilityLabel={`${showDay ? `${title}, ` : ''}${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
           pill ? `, ${SESSION_STATUS[session.status]}` : ''
         }`}
         last={lastLine || joinable}

@@ -5,14 +5,22 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { LikersSheet } from '@/components/likers-sheet';
 import { PostMenu } from '@/components/post-menu';
 import { Text } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { BRAND, Fonts, Spacing, withAlpha } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import {
   authorName,
@@ -194,7 +202,13 @@ export default function StoryViewer() {
     return (
       <View style={[styles.screen, styles.center]}>
         <StatusBar style="light" />
-        {error ? <Text style={styles.message}>{error}</Text> : <ActivityIndicator color="#FFFFFF" />}
+        {error ? (
+          <Text variant="callout" style={styles.message}>
+            {error}
+          </Text>
+        ) : (
+          <ActivityIndicator color={withAlpha(BRAND.white, 0.6)} />
+        )}
         {error ? <CloseButton top={insets.top} /> : null}
       </View>
     );
@@ -230,7 +244,9 @@ export default function StoryViewer() {
           />
         )}
       </View>
-      {readyId !== story.id ? <ActivityIndicator color="#FFFFFF" style={StyleSheet.absoluteFill} /> : null}
+      {readyId !== story.id ? (
+        <ActivityIndicator color={withAlpha(BRAND.white, 0.6)} style={StyleSheet.absoluteFill} />
+      ) : null}
 
       <Pressable
         style={StyleSheet.absoluteFill}
@@ -241,7 +257,7 @@ export default function StoryViewer() {
         onPressOut={() => setHeld(false)}
       />
 
-      <View style={[styles.top, { paddingTop: insets.top + Spacing.two }]} pointerEvents="box-none">
+      <View style={[styles.top, TOP_FADE, { paddingTop: insets.top + Spacing.two }]} pointerEvents="box-none">
         <View style={styles.bars}>
           {group.stories.map((s, i) => (
             <View key={s.id} style={styles.bar}>
@@ -255,21 +271,25 @@ export default function StoryViewer() {
           ))}
         </View>
         <View style={styles.header} pointerEvents="box-none">
-          <Avatar url={group.author_avatar} name={name} size={34} />
-          <Text style={styles.name} numberOfLines={1}>
-            {group.is_mine ? 'Your story' : name}
+          <View style={styles.author}>
+            <Avatar url={group.author_avatar} name={name} size={32} />
+            <Text variant="callout" style={styles.name} numberOfLines={1}>
+              {group.is_mine ? 'Your story' : name}
+            </Text>
+          </View>
+          <Text variant="footnote" style={styles.time}>
+            {timeAgo(story.created_at)}
           </Text>
-          <Text style={styles.time}>{timeAgo(story.created_at)}</Text>
           <View style={{ flex: 1 }} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="More options"
-            hitSlop={10}
-            onPress={() => setMenuPost(story)}>
-            <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+            onPress={() => setMenuPost(story)}
+            style={styles.topButton}>
+            <Ionicons name="ellipsis-horizontal" size={24} color={BRAND.white} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={10} onPress={close}>
-            <Ionicons name="close" size={30} color="#FFFFFF" />
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.topButton}>
+            <Ionicons name="close" size={28} color={BRAND.white} />
           </Pressable>
         </View>
       </View>
@@ -282,8 +302,8 @@ export default function StoryViewer() {
             onPress={() => setLikersFor(story.id)}
             hitSlop={8}
             style={styles.likesPill}>
-            <Ionicons name="heart" size={18} color="#FF3B5C" />
-            <Text style={styles.likesText}>
+            <Ionicons name="heart" size={18} color={BRAND.white} />
+            <Text variant="callout" style={styles.likesText}>
               {likes ? `${compactCount(likes)} ${likes === 1 ? 'like' : 'likes'}` : 'No likes yet'}
             </Text>
           </Pressable>
@@ -295,7 +315,7 @@ export default function StoryViewer() {
             onPress={() => toggleLike(story.id)}
             hitSlop={8}
             style={({ pressed }) => [styles.heart, pressed && { transform: [{ scale: 0.92 }] }]}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={32} color={liked ? '#FF3B5C' : '#FFFFFF'} />
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={28} color={BRAND.white} />
           </Pressable>
         )}
       </View>
@@ -352,16 +372,21 @@ function CloseButton({ top }: { top: number }) {
       hitSlop={10}
       onPress={close}
       style={{ position: 'absolute', top: top + Spacing.three, right: Spacing.three }}>
-      <Ionicons name="close" size={30} color="#FFFFFF" />
+      <Ionicons name="close" size={28} color={BRAND.white} />
     </Pressable>
   );
 }
 
 // Stories are always shown on black, whatever the app's theme.
+const FADE = `linear-gradient(to bottom, ${withAlpha(BRAND.iron, 0.55)}, ${withAlpha(BRAND.iron, 0)})`;
+const TOP_FADE = (
+  Platform.OS === 'web' ? { backgroundImage: FADE } : { experimental_backgroundImage: FADE }
+) as ViewStyle;
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: BRAND.iron,
   },
   // A width and height, not just the four edges: on the web the video is a <video> tag,
   // which otherwise keeps its own size and shows only its top-left corner.
@@ -378,8 +403,7 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
   },
   message: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: BRAND.white,
     textAlign: 'center',
   },
   top: {
@@ -389,8 +413,7 @@ const styles = StyleSheet.create({
     top: 0,
     gap: Spacing.two,
     paddingHorizontal: Spacing.two,
-    paddingBottom: Spacing.three,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    paddingBottom: Spacing.five,
   },
   bars: {
     flexDirection: 'row',
@@ -401,39 +424,50 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: withAlpha(BRAND.white, 0.35),
   },
   barFill: {
     height: 3,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: BRAND.white,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.one,
+    paddingLeft: Spacing.two,
+  },
+  author: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
   },
   name: {
     flexShrink: 1,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    color: BRAND.white,
+    fontFamily: Fonts.textSemi,
   },
   time: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 14,
+    color: withAlpha(BRAND.white, 0.7),
+  },
+  topButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottom: {
     position: 'absolute',
-    left: Spacing.three,
-    right: Spacing.three,
+    left: Spacing.gutter,
+    right: Spacing.gutter,
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   heart: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -446,11 +480,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: Spacing.three,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   likesText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    color: BRAND.white,
+    fontFamily: Fonts.textMedium,
   },
 });

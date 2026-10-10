@@ -1,11 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
 
 import { DaySummary } from '@/components/day-summary';
-import { Body, Button, ErrorText, Text, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed, Type } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  Divider,
+  ErrorText,
+  Group,
+  IconButton,
+  Section,
+  Skeleton,
+  StatStrip,
+  Text,
+  TextField,
+} from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import type { Client } from '@/lib/clients';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
@@ -156,13 +167,24 @@ export function ClientNutrition({
   const emptyMeals = draft ? draft.meals.filter((m) => !m.food.trim()).length : 0;
 
   return (
-    <>
-      <Text style={styles.section}>Nutrition plan</Text>
-      {plan === undefined && !loadError ? <ActivityIndicator color={Colors.textSecondary} /> : null}
+    <Section
+      title="Nutrition plan"
+      action={{
+        label: 'Check a food',
+        onPress: () => router.push('/nutrition/check'),
+        accessibilityLabel: 'Check a food: look up calories and macros',
+      }}>
+      {plan === undefined && !loadError ? (
+        <Card style={{ gap: Spacing.tight }}>
+          <Skeleton width="40%" height={14} />
+          <Skeleton width="60%" height={28} />
+          <Skeleton width="100%" height={14} />
+        </Card>
+      ) : null}
       <ErrorText>{loadError}</ErrorText>
 
       {draft ? (
-        <View style={styles.card}>
+        <Card style={{ gap: Spacing.three }}>
           <TextField
             label="Daily calories (kcal)"
             value={draft.kcal}
@@ -191,24 +213,24 @@ export function ClientNutrition({
               </View>
             ))}
           </View>
-          {macroKcal > 0 ? (
-            <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
-              Protein, carbs and fat add up to {formatKcal(macroKcal)}.
-              {draftKcal && Math.abs(draftKcal - macroKcal) >= 1
-                ? ` That’s ${formatKcal(Math.abs(draftKcal - macroKcal))} ${
-                    macroKcal < draftKcal ? 'under' : 'over'
-                  } the daily calories.`
-                : ''}
-            </Body>
-          ) : (
-            <Body secondary style={{ fontSize: 14 }}>
-              Protein and carbs have 4 kcal a gram, fat has 9.
-            </Body>
-          )}
+          <Text variant="footnote" tone="secondary">
+            {macroKcal > 0
+              ? `Protein, carbs and fat add up to ${formatKcal(macroKcal)}.${
+                  draftKcal && Math.abs(draftKcal - macroKcal) >= 1
+                    ? ` That’s ${formatKcal(Math.abs(draftKcal - macroKcal))} ${
+                        macroKcal < draftKcal ? 'under' : 'over'
+                      } the daily calories.`
+                    : ''
+                }`
+              : 'Protein and carbs have 4 kcal a gram, fat has 9.'}
+          </Text>
 
-          <Text style={styles.label}>Meals</Text>
+          <Divider />
+          <Text variant="label" tone="secondary" accessibilityRole="header">
+            Meals
+          </Text>
           {draft.meals.map((meal, i) => (
-            <View key={i} style={styles.mealEditor}>
+            <View key={i} style={[styles.mealEditor, i > 0 && styles.mealEditorLine]}>
               <View style={styles.mealEditorTop}>
                 <View style={{ flex: 1 }}>
                   <TextField
@@ -219,14 +241,13 @@ export function ClientNutrition({
                     maxLength={100}
                   />
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${meal.name || `meal ${i + 1}`}`}
+                <IconButton
+                  icon="trash-outline"
+                  tone="secondary"
+                  label={`Remove ${meal.name || `meal ${i + 1}`}`}
                   onPress={() => edit({ meals: draft.meals.filter((_, j) => j !== i) })}
-                  hitSlop={8}
-                  style={styles.removeMeal}>
-                  <Ionicons name="trash-outline" size={20} color={Colors.danger} />
-                </Pressable>
+                  style={{ marginBottom: 4 }}
+                />
               </View>
               <TextField
                 label="What to eat"
@@ -235,20 +256,22 @@ export function ClientNutrition({
                 placeholder="For example: 3 eggs, 2 slices of brown toast, coffee"
                 multiline
                 maxLength={1000}
-                style={{ minHeight: 76, paddingTop: Spacing.three, textAlignVertical: 'top' }}
+                style={styles.multiline}
               />
             </View>
           ))}
           {draft.meals.length < MAX_MEALS ? (
-            <Pressable
-              accessibilityRole="button"
+            <Button
+              title="Add a meal"
+              icon="add"
+              variant="ghost"
+              size="medium"
               onPress={() => edit({ meals: [...draft.meals, { name: '', food: '' }] })}
-              style={({ pressed }) => [styles.addMeal, pressed && { opacity: 0.6 }]}>
-              <Ionicons name="add-circle-outline" size={22} color={Colors.text} />
-              <Text style={styles.addMealText}>Add a meal</Text>
-            </Pressable>
+              style={{ alignSelf: 'flex-start', marginLeft: -Spacing.three }}
+            />
           ) : null}
 
+          <Divider />
           <TextField
             label="Plan notes"
             value={draft.notes}
@@ -256,96 +279,97 @@ export function ClientNutrition({
             placeholder="For example: drink 2 litres of water a day"
             multiline
             maxLength={4000}
-            style={{ minHeight: 88, paddingTop: Spacing.three, textAlignVertical: 'top' }}
+            style={styles.multiline}
           />
           {emptyMeals ? (
-            <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
+            <Text variant="footnote" tone="secondary">
               {emptyMeals === 1
                 ? 'The meal with nothing in “What to eat” won’t be saved.'
                 : 'Meals with nothing in “What to eat” won’t be saved.'}
-            </Body>
+            </Text>
           ) : null}
           <ErrorText>{error}</ErrorText>
-          <Button title="Save plan" onPress={save} loading={saving} />
-          <Button
-            title="Cancel"
-            variant="ghost"
-            onPress={() => {
-              setDraft(null);
-              setError(null);
-            }}
-            disabled={saving}
-          />
-          {plan ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={remove}
+          <View style={{ gap: Spacing.tight }}>
+            <Button title="Save plan" onPress={save} loading={saving} />
+            <Button
+              title="Cancel"
+              variant="ghost"
+              onPress={() => {
+                setDraft(null);
+                setError(null);
+              }}
               disabled={saving}
-              style={({ pressed }) => [styles.removePlan, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.removePlanText}>Remove plan</Text>
-            </Pressable>
-          ) : null}
-        </View>
+            />
+            {plan ? <Button title="Remove plan" variant="destructive" onPress={remove} disabled={saving} /> : null}
+          </View>
+        </Card>
       ) : plan ? (
         <PlanView plan={plan} client={client} onEdit={() => setDraft(draftFrom(plan))} />
       ) : plan === null ? (
-        <View style={styles.card}>
-          <Body secondary style={{ fontSize: 15 }}>
+        <Card style={{ gap: Spacing.three }}>
+          <Text variant="callout" tone="secondary">
             {client.user_id
               ? `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They see it in the Voltrix app.`
               : `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They'll see it once they accept your invite in the Voltrix app.`}
-          </Body>
-          <Button title="Set a nutrition plan" onPress={() => setDraft(draftFrom(null))} />
-        </View>
+          </Text>
+          <Button
+            title="Set a nutrition plan"
+            icon="add"
+            variant="secondary"
+            size="medium"
+            onPress={() => setDraft(draftFrom(null))}
+          />
+        </Card>
       ) : null}
 
       {client.user_id ? <FoodDiary client={client} targets={targetsOf(plan)} /> : null}
-    </>
+    </Section>
   );
 }
 
 function PlanView({ plan, client, onEdit }: { plan: NutritionPlan; client: Client; onEdit: () => void }) {
-  const macros = [
-    ['Protein', plan.protein_g],
-    ['Carbs', plan.carbs_g],
-    ['Fat', plan.fat_g],
-  ] as const;
   return (
-    <View style={styles.card}>
-      <View>
-        <Text style={styles.label}>Daily calories</Text>
-        <Text style={styles.bigNumber}>{plan.kcal ? formatKcal(plan.kcal) : 'Not set'}</Text>
+    <Card style={{ gap: Spacing.three }}>
+      <View style={{ gap: 2 }}>
+        <Text variant="label" tone="secondary">
+          Daily calories
+        </Text>
+        <Text variant="stat" style={Tabular}>
+          {plan.kcal ? formatKcal(plan.kcal) : 'Not set'}
+        </Text>
       </View>
-      <View style={styles.row}>
-        {macros.map(([label, grams]) => (
-          <View key={label} style={styles.tile}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.tileValue}>{grams === null ? '–' : `${grams} g`}</Text>
-          </View>
-        ))}
-      </View>
-      {plan.meals.map((m, i) => (
-        <View key={i} style={styles.planMeal}>
-          <Text style={styles.planMealName}>{m.name}</Text>
-          {m.food ? <Text style={styles.planMealFood}>{m.food}</Text> : null}
-        </View>
-      ))}
-      {plan.notes ? (
-        <View style={styles.planMeal}>
-          <Text style={styles.planMealName}>Notes</Text>
-          <Text style={styles.planMealFood}>{plan.notes}</Text>
+      <StatStrip
+        items={[
+          { value: plan.protein_g === null ? '–' : `${plan.protein_g} g`, label: 'Protein' },
+          { value: plan.carbs_g === null ? '–' : `${plan.carbs_g} g`, label: 'Carbs' },
+          { value: plan.fat_g === null ? '–' : `${plan.fat_g} g`, label: 'Fat' },
+        ]}
+      />
+      {plan.meals.length || plan.notes ? (
+        <View>
+          {plan.meals.map((m, i) => (
+            <View key={i} style={styles.planMeal}>
+              <Text variant="rowTitle">{m.name}</Text>
+              {m.food ? <Text variant="callout">{m.food}</Text> : null}
+            </View>
+          ))}
+          {plan.notes ? (
+            <View style={styles.planMeal}>
+              <Text variant="rowTitle">Notes</Text>
+              <Text variant="callout">{plan.notes}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
-      <Body secondary style={{ fontSize: 13 }}>
+      <Text variant="footnote" tone="secondary">
         {client.user_id
           ? `${client.first_name} sees this plan in the Voltrix app.`
           : `${client.first_name} will see this plan once they accept your invite in the Voltrix app.`}
-      </Body>
-      <Button title="Edit plan" variant="secondary" onPress={onEdit} />
-    </View>
+      </Text>
+      <Button title="Edit plan" variant="secondary" size="medium" icon="create-outline" onPress={onEdit} />
+    </Card>
   );
 }
-
 function FoodDiary({ client, targets }: { client: Client; targets: Targets | null }) {
   // The date on the phone, checked again when the page shows or the app comes back.
   const [today, setToday] = useState(() => dayKey(new Date()));
@@ -395,38 +419,26 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
   const onDay = (shown ?? []).filter((e) => e.day === day);
 
   return (
-    <>
-      <Text style={[styles.section, { marginTop: Spacing.two }]}>Food diary</Text>
+    <View style={{ gap: Spacing.tight, marginTop: Spacing.three }}>
+      <Text variant="label" tone="secondary" accessibilityRole="header">
+        Food diary
+      </Text>
       <View style={styles.dayNav}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Day before"
-          onPress={() => go(shiftDay(day, -1))}
-          hitSlop={8}
-          style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="chevron-back" size={22} color={Colors.text} />
-        </Pressable>
+        <IconButton icon="chevron-back" variant="tonal" label="Day before" onPress={() => go(shiftDay(day, -1))} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={day === today ? 'Today' : `${dayTitle(day, fromDayKey(today))}. Go to today`}
           onPress={() => setPicked(null)}
-          style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.dayTitle}>{dayTitle(day, fromDayKey(today))}</Text>
+          style={styles.dayTitle}>
+          <Text variant="headline">{dayTitle(day, fromDayKey(today))}</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Day after"
-          onPress={() => go(shiftDay(day, 1))}
-          hitSlop={8}
-          style={({ pressed }) => [styles.dayButton, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-          <Ionicons name="chevron-forward" size={22} color={Colors.text} />
-        </Pressable>
+        <IconButton icon="chevron-forward" variant="tonal" label="Day after" onPress={() => go(shiftDay(day, 1))} />
       </View>
 
       {failedDay === day && !shown ? (
         <ErrorText>Could not load the food diary. Check your internet connection and try again.</ErrorText>
       ) : null}
-      {!shown && failedDay !== day ? <ActivityIndicator color={Colors.textSecondary} /> : null}
+      {!shown && failedDay !== day ? <Skeleton height={56} radius={Radius.large} /> : null}
 
       {shown ? (
         <>
@@ -443,9 +455,18 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${dayTitle(key, fromDayKey(today))}: ${logged ? formatKcal(kcal) : 'nothing logged'}`}
                   onPress={() => go(key)}
-                  style={[styles.weekDay, selected && { backgroundColor: Colors.text }]}>
-                  <Text style={[styles.weekName, selected && { color: Colors.background }]}>{weekday}</Text>
-                  <Text style={[styles.weekKcal, selected && { color: Colors.background }]} numberOfLines={1}>
+                  style={({ pressed }) => [
+                    styles.weekDay,
+                    pressed && { backgroundColor: Colors.tint },
+                    selected && { backgroundColor: Colors.text },
+                  ]}>
+                  <Text variant="label" tone="secondary" style={selected && { color: Colors.background }}>
+                    {weekday}
+                  </Text>
+                  <Text
+                    variant="footnote"
+                    style={[styles.weekKcal, selected && { color: Colors.background }]}
+                    numberOfLines={1}>
                     {logged ? formatNumber(kcal) : '–'}
                   </Text>
                 </Pressable>
@@ -454,16 +475,22 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
           </View>
           <DaySummary totals={totalsOf(onDay)} targets={targets} />
           {onDay.length === 0 ? (
-            <Body secondary>{client.first_name} hasn’t logged any food on this day.</Body>
+            <Text variant="callout" tone="secondary">
+              {client.first_name} hasn’t logged any food on this day.
+            </Text>
           ) : (
             MEALS.map((meal) => {
               const items = onDay.filter((e) => e.meal === meal.key);
               if (!items.length) return null;
               return (
-                <View key={meal.key} style={styles.meal}>
+                <Group key={meal.key}>
                   <View style={styles.mealHeader}>
-                    <Text style={styles.mealTitle}>{meal.label}</Text>
-                    <Text style={styles.mealKcal}>{formatKcal(totalsOf(items).kcal)}</Text>
+                    <Text variant="headline" style={{ flex: 1 }}>
+                      {meal.label}
+                    </Text>
+                    <Text variant="footnote" tone="secondary" style={Tabular}>
+                      {formatKcal(totalsOf(items).kcal)}
+                    </Text>
                   </View>
                   {items.map((e) => (
                     <View
@@ -472,134 +499,67 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
                       accessible
                       accessibilityLabel={`${e.name}, ${formatAmount(e.amount, e.unit)}, ${formatKcal(e.kcal)}`}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.foodName} numberOfLines={2}>
+                        <Text variant="rowTitle" numberOfLines={2}>
                           {e.name}
                         </Text>
-                        <Text style={styles.foodMeta} numberOfLines={1}>
+                        <Text variant="footnote" tone="secondary" numberOfLines={1}>
                           {[e.brand, formatAmount(e.amount, e.unit)].filter(Boolean).join(' · ')}
                         </Text>
                       </View>
-                      <Text style={styles.foodKcal}>{formatNumber(e.kcal)}</Text>
+                      <Text variant="callout" style={Tabular}>
+                        {formatNumber(e.kcal)}
+                      </Text>
                     </View>
                   ))}
-                </View>
+                </Group>
               );
             })
           )}
         </>
       ) : null}
-    </>
+    </View>
   );
 }
 
 const styles = themed(() => ({
-  section: {
-    ...Type.label,
-    color: Colors.textSecondary,
-  },
-  card: {
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
   row: {
     flexDirection: 'row',
     gap: Spacing.two,
   },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  bigNumber: {
-    color: Colors.text,
-    fontSize: 26,
-    fontWeight: '900',
-  },
-  tile: {
-    flex: 1,
-    gap: 2,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-  },
-  tileValue: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  planMeal: {
-    gap: 2,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-  },
-  planMealName: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  planMealFood: {
-    color: Colors.text,
-    fontSize: 15,
-    lineHeight: 22,
+  multiline: {
+    minHeight: 88,
+    paddingTop: Spacing.three,
+    textAlignVertical: 'top',
   },
   mealEditor: {
-    gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
+    gap: Spacing.tight,
+  },
+  mealEditorLine: {
+    paddingTop: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   mealEditorTop: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: Spacing.two,
+    gap: Spacing.one,
   },
-  removeMeal: {
-    width: 48,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addMeal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    minHeight: 48,
-  },
-  addMealText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  removePlan: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  removePlanText: {
-    color: Colors.danger,
-    fontSize: 16,
-    fontWeight: '700',
+  planMeal: {
+    gap: 2,
+    paddingVertical: Spacing.tight,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
   },
   dayNav: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  dayButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  dayTitle: {
+    flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
-  dayTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
   },
   week: {
     flexDirection: 'row',
@@ -611,58 +571,25 @@ const styles = themed(() => ({
     gap: 2,
     paddingVertical: Spacing.two,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
-  weekName: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
   },
   weekKcal: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  meal: {
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
+    ...Tabular,
+    fontFamily: Fonts.textMedium,
   },
   mealHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.one,
-  },
-  mealTitle: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  mealKcal: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '700',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.one,
   },
   food: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
+    minHeight: 56,
+    paddingHorizontal: Spacing.gutter,
     paddingVertical: Spacing.two,
-  },
-  foodName: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  foodMeta: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  foodKcal: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
   },
 }));

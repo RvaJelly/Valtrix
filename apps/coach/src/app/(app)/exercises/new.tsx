@@ -1,11 +1,11 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
-import { Button, ErrorText, Text, TextField } from '@/components/ui';
+import { Button, Card, EmptyState, ErrorText, Skeleton, Text, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
@@ -107,9 +107,18 @@ export default function ExerciseForm() {
 
   if (!loaded) {
     return error ? (
-      <ErrorText>{error}</ErrorText>
+      <EmptyState
+        icon="barbell-outline"
+        title="Exercise not found"
+        message={error}
+        action={<Button title="Back to the library" variant="secondary" onPress={() => goBack('/exercises')} />}
+      />
     ) : (
-      <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
+      <View style={styles.content}>
+        <Skeleton height={52} radius={Radius.medium} />
+        <Skeleton width="70%" height={36} radius={Radius.pill} />
+        <Skeleton width="80%" height={36} radius={Radius.pill} />
+      </View>
     );
   }
 
@@ -123,30 +132,43 @@ export default function ExerciseForm() {
           onChangeText={setName}
           placeholder="For example: Sled Push"
           autoCapitalize="words"
+          maxLength={120}
         />
-        <View style={{ gap: Spacing.two }}>
-          <Text style={styles.label}>Muscle group</Text>
+        <View style={styles.field}>
+          <Text variant="footnote" tone="secondary" style={styles.label}>
+            Muscle group
+          </Text>
           <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} />
         </View>
-        <View style={{ gap: Spacing.two }}>
-          <Text style={styles.label}>Equipment</Text>
+        <View style={styles.field}>
+          <Text variant="footnote" tone="secondary" style={styles.label}>
+            Equipment
+          </Text>
           <Chips options={EQUIPMENT} value={equipment} onChange={setEquipment} />
         </View>
         <TextField
           label="How to do it"
+          optional
           value={instructions}
           onChangeText={setInstructions}
+          autoCapitalize="sentences"
           multiline
-          placeholder="Optional cues for your clients"
-          style={{ minHeight: 100, paddingTop: Spacing.three, textAlignVertical: 'top' }}
+          placeholder="Cues for your clients"
+          style={styles.multiline}
         />
-        <View style={{ gap: Spacing.two }}>
-          <Text style={styles.label}>Demo video</Text>
-          <WorkoutVideo label="Demo video" path={video} onChange={changeVideo} title={name.trim() || 'Demo video'} />
+        <View style={styles.field}>
+          <Text variant="footnote" tone="secondary" style={styles.label}>
+            Demo video <Text tone="tertiary">(optional)</Text>
+          </Text>
+          <Card style={styles.video}>
+            <WorkoutVideo label="Demo video" path={video} onChange={changeVideo} title={name.trim() || 'Demo video'} />
+          </Card>
         </View>
         <ErrorText>{error}</ErrorText>
-        <Button title={id ? 'Save changes' : 'Add exercise'} onPress={save} loading={busy} />
-        {id ? <Button title="Delete exercise" variant="destructive" onPress={remove} /> : null}
+        <View style={{ gap: Spacing.tight }}>
+          <Button title={id ? 'Save changes' : 'Add exercise'} onPress={save} loading={busy} />
+          {id ? <Button title="Delete exercise" variant="destructive" onPress={remove} /> : null}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -154,13 +176,26 @@ export default function ExerciseForm() {
 
 const styles = themed(() => ({
   content: {
+    width: '100%',
+    maxWidth: Layout.maxForm,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.four,
-    gap: Spacing.three,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.four,
+  },
+  field: {
+    gap: Spacing.two,
   },
   label: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.textMedium,
+  },
+  multiline: {
+    minHeight: 100,
+    paddingTop: Spacing.three,
+    textAlignVertical: 'top',
+  },
+  video: {
+    paddingVertical: Spacing.two,
   },
 }));

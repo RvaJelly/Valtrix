@@ -9,6 +9,7 @@ export default function NewClient() {
   const goBack = useGoBack();
   return (
     <ClientForm
+      adding
       submitLabel="Add client"
       onSubmit={async (input) => {
         const same = await clientWithEmail(input.email);

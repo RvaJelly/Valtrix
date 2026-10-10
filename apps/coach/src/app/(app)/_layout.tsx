@@ -43,7 +43,14 @@ export default function AppLayout() {
         <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />
         <Stack.Screen name="sessions/[id]" options={{ title: 'Session' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="settings/notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="settings/units" options={{ title: 'Workouts and units' }} />
+        <Stack.Screen name="settings/appearance" options={{ title: 'Appearance' }} />
+        <Stack.Screen name="settings/privacy" options={{ title: 'Privacy and blocked people' }} />
+        <Stack.Screen name="settings/account" options={{ title: 'Account and password' }} />
+        <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
         <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
         <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
         <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />

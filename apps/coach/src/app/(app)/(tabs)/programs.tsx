@@ -13,7 +13,6 @@ import {
   ListRow,
   Notice,
   PageHeader,
-  Section,
   SkeletonRows,
   Text,
   useDelayed,
@@ -21,9 +20,9 @@ import {
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import type { Workout } from '@/lib/workouts';
+import { workoutSummary, type Workout, type WorkoutExercise } from '@/lib/workouts';
 
-type WorkoutRow = Workout & { workout_exercises: { count: number }[] };
+type WorkoutRow = Workout & { workout_exercises: Pick<WorkoutExercise, 'sets' | 'rest_seconds'>[] | null };
 
 const newWorkout = () => router.push('/workouts/new');
 
@@ -36,7 +35,7 @@ export default function Programs() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('workouts')
-      .select('id, name, notes, updated_at, workout_exercises(count)')
+      .select('id, name, notes, updated_at, workout_exercises(sets, rest_seconds)')
       .order('updated_at', { ascending: false });
     if (error) {
       setError(plainError(error));
@@ -72,30 +71,26 @@ export default function Programs() {
               title="Programs"
               actions={<IconButton variant="tonal" icon="add" label="New workout" onPress={newWorkout} />}
             />
-            <Section title="Library">
-              <Group>
-                <ListRow
-                  title="Exercise library"
-                  subtitle="Browse exercises and add your own"
-                  leading={<IconTile icon="list-outline" />}
-                  onPress={() => router.push('/exercises')}
-                />
-                <ListRow
-                  title="Check a food"
-                  subtitle="Calories, protein, carbs and fat"
-                  leading={<IconTile icon="restaurant-outline" />}
-                  onPress={() => router.push('/nutrition/check')}
-                  last
-                />
-              </Group>
-            </Section>
+            <Group>
+              <ListRow
+                title="Exercise library"
+                subtitle="Browse exercises and add your own"
+                leading={<IconTile icon="library-outline" />}
+                onPress={() => router.push('/exercises')}
+                last
+              />
+            </Group>
             {error ? <Notice tone="danger">{error}</Notice> : null}
             {rows.length > 0 ? (
               <Text variant="label" tone="secondary" accessibilityRole="header">
-                Your workouts
+                Workouts
               </Text>
             ) : null}
-            {!workouts && !error && showSkeleton ? <SkeletonRows count={4} /> : null}
+            {!workouts && !error && showSkeleton ? (
+              <Group>
+                <SkeletonRows count={4} />
+              </Group>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -109,12 +104,11 @@ export default function Programs() {
           ) : null
         }
         renderItem={({ item, index }) => {
-          const count = item.workout_exercises[0]?.count ?? 0;
           return (
             <View style={groupedItem(index, rows.length)}>
               <ListRow
                 title={item.name}
-                subtitle={count === 1 ? '1 exercise' : `${count} exercises`}
+                subtitle={workoutSummary(item.workout_exercises ?? [])}
                 leading={<IconTile icon="barbell-outline" />}
                 onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.id } })}
                 last={index === rows.length - 1}

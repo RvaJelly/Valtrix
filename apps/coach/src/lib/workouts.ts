@@ -69,3 +69,17 @@ export type WorkoutExercise = {
 
 export const WORKOUT_EXERCISE_COLUMNS =
   'id, workout_id, exercise_id, position, sets, reps, weight, weight_unit, rest_seconds, notes, video_path, exercises(name, muscle_group, equipment, video_path)';
+
+// About how long a workout takes: each set about 40 seconds of work plus its rest (90 seconds when
+// none is set), to the nearest 5 minutes and at least 5.
+export function workoutMinutes(exercises: Pick<WorkoutExercise, 'sets' | 'rest_seconds'>[]) {
+  const seconds = exercises.reduce((sum, e) => sum + (e.sets || 0) * (40 + (e.rest_seconds ?? 90)), 0);
+  return Math.max(5, Math.round(seconds / 300) * 5);
+}
+
+// "4 exercises · 35 min", or "No exercises yet".
+export function workoutSummary(exercises: Pick<WorkoutExercise, 'sets' | 'rest_seconds'>[]) {
+  if (!exercises.length) return 'No exercises yet';
+  const count = exercises.length === 1 ? '1 exercise' : `${exercises.length} exercises`;
+  return `${count} · ${workoutMinutes(exercises)} min`;
+}

@@ -3,11 +3,12 @@ import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CommunityRules } from '@/components/community-rules';
-import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, ErrorText, Text, TextField } from '@/components/ui';
+import { BRAND, Colors, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
 import { MediaError, pickMedia, REEL_LENGTH_HINT, type PickedMedia } from '@/lib/media';
@@ -27,6 +28,7 @@ export default function NewPost() {
   const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState<'picking' | 'sharing' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     hasAcceptedRules().then((ok) => setRules(ok ? 'agreed' : 'ask'));
@@ -64,45 +66,68 @@ export default function NewPost() {
 
   const title = kind === 'reel' ? 'New reel' : 'New story';
 
+  // The one main button, held at the bottom of the screen.
+  const footer =
+    rules === 'ask' ? (
+      <Button title="I agree" onPress={agree} />
+    ) : rules === 'agreed' && media ? (
+      <>
+        <ErrorText>{error}</ErrorText>
+        <Button
+          title={kind === 'reel' ? 'Share reel' : 'Share to your story'}
+          onPress={share}
+          loading={busy === 'sharing'}
+        />
+        <Button title="Choose another" variant="ghost" onPress={() => setMedia(null)} disabled={!!busy} />
+      </>
+    ) : null;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {rules === 'checking' ? <ActivityIndicator color={Colors.textSecondary} /> : null}
-
         {rules === 'ask' ? (
-          <Card style={{ gap: Spacing.four }}>
-            <Text style={styles.heading}>Voltrix community rules</Text>
-            <Body secondary>
+          <View style={{ gap: Spacing.tight }}>
+            <Text variant="title" accessibilityRole="header">
+              Community rules
+            </Text>
+            <Text variant="callout" tone="secondary">
               Everyone on Voltrix, clients and trainers, can see what you share. Before your first post, please agree to
               keep it:
-            </Body>
-            <CommunityRules />
-            <Button title="I agree" onPress={agree} />
-          </Card>
+            </Text>
+            <View style={{ marginTop: Spacing.two }}>
+              <CommunityRules />
+            </View>
+          </View>
         ) : null}
 
         {rules === 'agreed' && !media ? (
           <View style={{ gap: Spacing.three }}>
             <View style={styles.intro}>
               <View style={styles.introIcon}>
-                <Ionicons name={kind === 'reel' ? 'film' : 'add-circle'} size={30} color={Colors.accentText} />
+                <Ionicons
+                  name={kind === 'reel' ? 'film-outline' : 'add-circle-outline'}
+                  size={28}
+                  color={Colors.text}
+                />
               </View>
-              <Body secondary style={{ textAlign: 'center' }}>
+              <Text variant="callout" tone="secondary" style={{ textAlign: 'center', maxWidth: 320 }}>
                 {kind === 'reel'
                   ? `${REEL_LENGTH_HINT} Everyone on Voltrix, clients and trainers, can watch them.`
-                  : 'Your story shows on Home for everyone on Voltrix, clients and trainers, for 24 hours, then disappears.'}
-              </Body>
+                  : 'Your story shows on Home for everyone on Voltrix for 24 hours, then disappears.'}
+              </Text>
             </View>
             {Platform.OS !== 'web' ? (
               <Button
                 title={kind === 'reel' ? 'Record a video' : 'Take a photo or video'}
+                icon="camera-outline"
                 onPress={() => pick('camera')}
                 disabled={!!busy}
               />
             ) : null}
             <Button
               title={Platform.OS === 'web' ? 'Choose a file' : 'Choose from your phone'}
+              icon="images-outline"
               variant={Platform.OS === 'web' ? 'primary' : 'secondary'}
               onPress={() => pick('library')}
               loading={busy === 'picking'}
@@ -112,7 +137,7 @@ export default function NewPost() {
         ) : null}
 
         {rules === 'agreed' && media ? (
-          <View style={{ gap: Spacing.three }}>
+          <View style={{ gap: Spacing.four }}>
             <View style={styles.preview}>
               {media.type === 'image' ? (
                 <Image
@@ -128,6 +153,7 @@ export default function NewPost() {
             {kind === 'reel' ? (
               <TextField
                 label="Caption"
+                optional
                 placeholder="Say something about your video"
                 value={caption}
                 onChangeText={setCaption}
@@ -136,21 +162,19 @@ export default function NewPost() {
                 style={{ minHeight: 88, paddingTop: Spacing.three, textAlignVertical: 'top' }}
               />
             ) : null}
-            <ErrorText>{error}</ErrorText>
-            <Button
-              title={kind === 'reel' ? 'Share reel' : 'Share to your story'}
-              onPress={share}
-              loading={busy === 'sharing'}
-            />
-            <Button title="Choose another" variant="ghost" onPress={() => setMedia(null)} disabled={!!busy} />
             {busy === 'sharing' && media.type === 'video' ? (
-              <Body secondary style={{ textAlign: 'center', fontSize: 14 }}>
+              <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
                 Uploading your video. Keep Voltrix Coach open until it&apos;s done.
-              </Body>
+              </Text>
             ) : null}
           </View>
         ) : null}
       </ScrollView>
+      {footer ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
+          <View style={styles.footerInner}>{footer}</View>
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -167,15 +191,18 @@ function PreviewVideo({ uri }: { uri: string }) {
 }
 
 const styles = themed(() => ({
-  content: {
-    paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.four,
-    gap: Spacing.four,
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  heading: {
-    color: Colors.text,
-    fontSize: 22,
-    fontWeight: '800',
+  content: {
+    width: '100%',
+    maxWidth: Layout.maxClient,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.section,
+    gap: Spacing.four,
   },
   intro: {
     alignItems: 'center',
@@ -183,12 +210,12 @@ const styles = themed(() => ({
     paddingVertical: Spacing.four,
   },
   introIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
   },
   preview: {
     alignSelf: 'center',
@@ -197,10 +224,23 @@ const styles = themed(() => ({
     aspectRatio: 9 / 16,
     borderRadius: Radius.large,
     overflow: 'hidden',
-    backgroundColor: '#000000',
+    backgroundColor: BRAND.iron,
   },
   fill: {
     width: '100%',
     height: '100%',
+  },
+  footer: {
+    paddingTop: Spacing.tight,
+    paddingHorizontal: Spacing.gutter,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  footerInner: {
+    width: '100%',
+    maxWidth: Layout.maxClient - Spacing.gutter * 2,
+    alignSelf: 'center',
+    gap: Spacing.two,
   },
 }));

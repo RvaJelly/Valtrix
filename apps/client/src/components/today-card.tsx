@@ -73,7 +73,10 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
   const water = habits ? formatNumber(waterValue(habits.water_ml, unit)) : '–';
   const waterGoal = `${formatNumber(waterValue(targets.water_ml, unit))} ${waterUnit(unit)}`;
   const steps = habits ? formatNumber(habits.steps) : '–';
-  const sleep = habits ? formatSleep(habits.sleep_minutes) : '–';
+  // A dash rather than "Not logged", which doesn't fit a narrow tile on a phone's browser.
+  const sleepMinutes = habits?.sleep_minutes ?? null;
+  const sleep = sleepMinutes !== null ? formatSleep(sleepMinutes) : '–';
+  const sleepGoal = formatSleep(targets.sleep_minutes);
   const step = waterStep(unit);
   const stepLabel = unit === 'lb' ? '8 oz' : '250 ml';
 
@@ -138,8 +141,9 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
               icon="moon"
               title="Sleep"
               value={sleep}
-              share={habits?.sleep_minutes ? habits.sleep_minutes / targets.sleep_minutes : 0}
-              label={`Sleep, ${sleep}`}
+              goal={sleepGoal}
+              share={sleepMinutes ? sleepMinutes / targets.sleep_minutes : 0}
+              label={`Sleep, ${sleepMinutes !== null ? sleep : 'not logged'} of ${sleepGoal}`}
             />
           </View>
           <ErrorText>{waterError}</ErrorText>

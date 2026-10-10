@@ -6,10 +6,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InviteSheet, type InviteClient } from '@/components/invite-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
+import { MarkPaidSheet } from '@/components/mark-paid-sheet';
 import { NeedsYouRow } from '@/components/needs-you-row';
+import { PersonSheet } from '@/components/person-sheet';
+import { PersonRequestRow, TimeRequestRow } from '@/components/request-rows';
+import { RequestSheet, type RequestOpening } from '@/components/request-sheet';
+import { SellPackSheet } from '@/components/sell-pack-sheet';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
+import { useToast } from '@/components/toast';
 import { ToMarkSheet } from '@/components/to-mark-sheet';
+import { doctorUpdates, newsFirst, newsTarget, newsWhen, UpdateRow } from '@/components/update-row';
 import {
   Button,
   Card,
@@ -33,12 +40,16 @@ import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/const
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
-import { earnedFrom, loadTotals, type Totals } from '@/lib/earnings';
+import { earnedFrom, loadMoneyTotals, loadTotals, totalsIn, type MoneyTotals, type Totals } from '@/lib/earnings';
 import { dayMonth, longDate, relative, timeRange } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
 import { formatMoney, spokenMoney } from '@/lib/money';
-import { needsYou, type Need } from '@/lib/needs-you';
+import { NEEDS_EMPTY, needsYou, type Need } from '@/lib/needs-you';
+import { loadNews, markAllSeen, markSeen, pruneOldNews, type News, type NewsKind } from '@/lib/news';
 import { loadOverview, type ClientOverview } from '@/lib/overview';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
+import { topUpRepeats } from '@/lib/repeats';
+import { loadRequests, type PersonRequest, type TimeRequest } from '@/lib/requests';
 import {
   addDays,
   dayKey,
@@ -55,6 +66,12 @@ import { supabase } from '@/lib/supabase';
 import { libraryOnly } from '@/lib/workouts';
 
 const NONE_SEEN = new Set<string>();
+
+// The updates Home shows; asking for a time and asking to train wait in Requests instead.
+const UPDATE_KINDS: NewsKind[] = ['booked', 'cancelled', 'health'];
+// News that also shows a toast while Home is open.
+const TOAST_KINDS: string[] = ['booked', 'requested', 'cancelled', 'training_request'];
+const NEWS_COLUMNS = 'id, kind, client_id, payload, created_at, seen_at';
 
 function greeting() {
   const hour = new Date().getHours();
@@ -76,7 +93,11 @@ type Stats = {
   overview: ClientOverview[] | null;
   // This week's sessions by status, or null on an older database.
   totals: Totals[] | null;
+  // This week's money (round 3), or null on an older database.
+  money: MoneyTotals[] | null;
 };
+
+type Requests = { times: TimeRequest[]; people: PersonRequest[] };
 
 // One word each, so the five labels never run into each other; screen readers hear the full name.
 const SHORTCUTS: { icon: IconName; label: string; name: string; href: Href }[] = [
@@ -90,7 +111,22 @@ const SHORTCUTS: { icon: IconName; label: string; name: string; href: Href }[] =
 export default function Home() {
   const { profile } = useAuth();
   const { chats } = useChat();
+  const toast = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
+  // Requests waiting for an answer; null until loaded, or when they couldn't be (the section hides).
+  const [requests, setRequests] = useState<Requests | null>(null);
+  // Unseen updates (booked, cancelled, health form); null until loaded.
+  const [updates, setUpdates] = useState<News[] | null>(null);
+  const [openTime, setOpenTime] = useState<{ request: TimeRequest; opening?: RequestOpening } | null>(null);
+  const [openPerson, setOpenPerson] = useState<PersonRequest | null>(null);
+  // A request settled elsewhere while its sheet was open.
+  const [goneId, setGoneId] = useState<string | null>(null);
+  const [paying, setPaying] = useState<Need | null>(null);
+  const [selling, setSelling] = useState<Need | null>(null);
+  // Toasts for news only while Home is the screen showing.
+  const focused = useRef(false);
+  // Counts news (and repeats topped up) so Home reloads a second after the last of a burst.
+  const [news, setNews] = useState(0);
   // The day's numbers could not be loaded; what was on screen stays.
   const [failed, setFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -113,9 +149,16 @@ export default function Home() {
     const at = new Date();
     const today = startOfDay(at);
     const week = startOfWeek(today);
+    // Repeats are topped up to 12 weeks ahead now and then; new sessions today reload the day.
+    topUpRepeats().then((made) => {
+      if (made > 0) setNews((n) => n + 1);
+    });
     const answers = await Promise.all([
       loadOverview(dayKey(at)),
-      loadTotals(week, addDays(week, 7)),
+      // Round 3's money_totals, else round 2's session totals on an older database.
+      loadMoneyTotals(week, addDays(week, 7))
+        .catch(() => null)
+        .then(async (money) => ({ money, totals: money ? null : await loadTotals(week, addDays(week, 7)) })),
       libraryOnly(supabase.from('workouts').select('id', { count: 'exact', head: true })),
       supabase
         .from('sessions')
@@ -138,10 +181,15 @@ export default function Home() {
         .lt('starts_at', at.toISOString())
         .order('starts_at')
         .limit(50),
+      // Each of these hides only its own section when it fails.
+      loadRequests().catch(() => null),
+      loadNews({ kinds: UPDATE_KINDS, unseen: true, limit: 100 }).catch(() => undefined),
     ]).catch(() => null);
     if (id !== loads.current) return;
     if (!answers) return setFailed(true);
-    const [overview, totals, workouts, todays, thisWeek, started] = answers;
+    const [overview, sums, workouts, todays, thisWeek, started, waiting, unseen] = answers;
+    setRequests(waiting);
+    if (unseen) setUpdates(unseen);
     if (workouts.error || todays.error || thisWeek.error || started.error) return setFailed(true);
     // An older database: the active clients are counted the old way.
     let activeClients = overview?.filter((c) => c.status === 'active').length ?? 0;
@@ -159,24 +207,44 @@ export default function Home() {
       today: (todays.data as unknown as Session[]) ?? [],
       started: (started.data as unknown as Session[]) ?? [],
       overview,
-      totals,
+      totals: sums.totals,
+      money: sums.money,
     });
   }, []);
 
-  // News from clients (a check-in, a workout, an invite answered) reloads Home a second after the
-  // last of a burst.
-  const [news, setNews] = useState(0);
+  // News from clients (a check-in, a workout, a booking, an invite answered) reloads Home a second
+  // after the last of a burst.
   useEffect(() => {
     if (!news) return;
     const timer = setTimeout(loadStats, 1000);
     return () => clearTimeout(timer);
   }, [news, loadStats]);
+  // A toast for news from a client while Home is open: "Cara booked Mon 12 Oct at 07:00".
+  async function toastNews(id: string) {
+    const { data } = await supabase.from('news').select(NEWS_COLUMNS).eq('id', id).maybeSingle();
+    if (!data) return;
+    const n = { ...(data as News), payload: (data as News).payload ?? {} };
+    const first = newsFirst(n, new Map((stats?.overview ?? []).map((c) => [c.client_id, c.first_name])));
+    const when = newsWhen(n, ' at ');
+    if (n.kind === 'booked') toast(`${first} booked ${when}`);
+    else if (n.kind === 'requested') toast(`${first} asks for ${when}`);
+    else if (n.kind === 'cancelled') toast(`${first} cancelled ${when}`);
+    else if (n.kind === 'training_request') toast(`${first} asks to train with you`);
+  }
+
   useChatEvents((event) => {
     if (event.type === 'progress' || event.type === 'link' || event.type === 'reconnected') setNews((n) => n + 1);
+    if (event.type === 'news') {
+      setNews((n) => n + 1);
+      if (event.kind === 'withdrawn' && event.request_id) setGoneId(event.request_id);
+      if (focused.current && event.id && TOAST_KINDS.includes(event.kind)) toastNews(event.id);
+    }
   });
 
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
+      pruneOldNews();
       setNow(new Date());
       const timer = setInterval(() => setNow(new Date()), 60_000);
       loadStats();
@@ -196,6 +264,7 @@ export default function Home() {
         }
       });
       return () => {
+        focused.current = false;
         sub.remove();
         clearInterval(timer);
       };
@@ -225,9 +294,67 @@ export default function Home() {
   const profileMissing = !!profile && (!profile.avatar_url || !profile.specialties?.length);
   const newTrainer = !!stats && stats.activeClients === 0;
   const marking = (stats?.started ?? []).filter((s) => toMark(s, now.getTime()));
-  const needs = stats?.overview ? needsYou(stats.overview, dayKey(now), now.getTime()) : null;
   const currency = profile?.currency ?? 'ZAR';
-  const earned = stats?.totals ? earnedFrom(stats.totals, currency) : null;
+  const needs = stats?.overview
+    ? needsYou(stats.overview, dayKey(now), now.getTime(), 5, (cents) => formatMoney(cents, currency))
+    : null;
+  const money = stats?.money ? totalsIn(stats.money, currency) : null;
+  const earned = money
+    ? { cents: money.earned_cents, priced: money.earned_cents > 0 || money.ahead_cents > 0 }
+    : stats?.totals
+      ? earnedFrom(stats.totals, currency)
+      : null;
+  const names = new Map((stats?.overview ?? []).map((c) => [c.client_id, c.first_name]));
+
+  // Requests: times asked for first (soonest first, only those still ahead), then people asking to
+  // train (oldest first); four at most here.
+  const waitingTimes = (requests?.times ?? [])
+    .filter((t) => t.status === 'pending' && Date.parse(t.starts_at) > now.getTime())
+    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+  const waitingPeople = (requests?.people ?? [])
+    .filter((p) => p.status === 'pending')
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const shownTimes = waitingTimes.slice(0, 4);
+  const shownPeople = waitingPeople.slice(0, 4 - shownTimes.length);
+  const moreRequests = waitingTimes.length + waitingPeople.length > 4;
+  const shownUpdates = (updates ?? []).slice(0, 3);
+  const moreUpdates = (updates?.length ?? 0) - shownUpdates.length;
+  const doctor = doctorUpdates(updates ?? [], new Map((stats?.overview ?? []).map((c) => [c.client_id, c.health])));
+
+  function approved(id: string) {
+    setRequests((r) => (r ? { ...r, times: r.times.filter((t) => t.id !== id) } : r));
+    loadStats();
+  }
+
+  function openUpdate(n: News) {
+    setUpdates((list) => (list ? list.filter((u) => u.id !== n.id) : list));
+    markSeen([n.id]).catch(() => {});
+    const target = newsTarget(n);
+    if (target) router.push(target);
+  }
+
+  async function clearUpdates() {
+    const before = updates;
+    setUpdates([]);
+    haptic.select();
+    try {
+      await markAllSeen(UPDATE_KINDS);
+    } catch {
+      setUpdates(before);
+      toast('Couldn’t clear the updates. Try again.');
+    }
+  }
+
+  // What else is on at a requested time, when it's today.
+  const clashName = (r: TimeRequest | undefined) => {
+    if (!r?.clashes || !stats) return null;
+    const start = Date.parse(r.starts_at);
+    const end = start + r.duration_minutes * 60_000;
+    const other = stats.today.find(
+      (s) => s.status !== 'cancelled' && Date.parse(s.starts_at) < end && endOf(s).getTime() > start,
+    );
+    return other ? sessionName(other) : null;
+  };
   // Earned shows once the trainer has a usual price or a session this week has one.
   const showEarned = !!earned && (profile?.session_price_cents != null || earned.priced);
 
@@ -310,6 +437,45 @@ export default function Home() {
           />
         </View>
 
+        {shownTimes.length || shownPeople.length ? (
+          <EnterUp>
+            <View testID="home-requests">
+              <Section
+                title="Requests"
+                action={
+                  moreRequests
+                    ? {
+                        label: 'See all',
+                        onPress: () => router.push('/requests'),
+                        accessibilityLabel: `See all ${waitingTimes.length + waitingPeople.length} requests`,
+                      }
+                    : undefined
+                }>
+                <Group>
+                  {shownTimes.map((r, i) => (
+                    <TimeRequestRow
+                      key={r.id}
+                      request={r}
+                      last={!shownPeople.length && i === shownTimes.length - 1}
+                      onOpen={(request, opening) => setOpenTime({ request, opening })}
+                      onApproved={approved}
+                    />
+                  ))}
+                  {shownPeople.map((p, i) => (
+                    <PersonRequestRow
+                      key={p.id}
+                      request={p}
+                      now={now.getTime()}
+                      last={i === shownPeople.length - 1}
+                      onOpen={setOpenPerson}
+                    />
+                  ))}
+                </Group>
+              </Section>
+            </View>
+          </EnterUp>
+        ) : null}
+
         <Section title="Today" action={{ label: 'Calendar', onPress: () => router.navigate('/calendar') }}>
           {failed ? (
             <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
@@ -372,6 +538,46 @@ export default function Home() {
           )}
         </Section>
 
+        {shownUpdates.length ? (
+          <EnterUp>
+            <View testID="home-updates">
+              <Section
+                title="Updates"
+                action={{
+                  label: 'Clear',
+                  onPress: clearUpdates,
+                  accessibilityLabel: 'Clear the updates',
+                  testID: 'home-updates-clear',
+                  chevron: false,
+                }}>
+                <Group>
+                  {shownUpdates.map((n, i) => (
+                    <UpdateRow
+                      key={n.id}
+                      news={n}
+                      first={newsFirst(n, names)}
+                      doctor={doctor.has(n.id)}
+                      onPress={newsTarget(n) ? () => openUpdate(n) : undefined}
+                      last={moreUpdates <= 0 && i === shownUpdates.length - 1}
+                      testID={`home-update-${n.id}`}
+                    />
+                  ))}
+                  {moreUpdates > 0 ? (
+                    <ListRow
+                      title={moreUpdates === 1 ? '1 more update' : `${moreUpdates} more updates`}
+                      leading={<IconTile icon="notifications-outline" />}
+                      onPress={() => router.push('/news')}
+                      testID="home-more-updates"
+                      compact
+                      last
+                    />
+                  ) : null}
+                </Group>
+              </Section>
+            </View>
+          </EnterUp>
+        ) : null}
+
         {!stats && showSkeleton && !failed ? (
           <View style={{ gap: Spacing.tight }} accessible accessibilityLabel="Loading">
             <Skeleton width={96} height={12} radius={6} />
@@ -399,16 +605,13 @@ export default function Home() {
                       need={need}
                       last={i === needs.rows.length - 1}
                       onInvite={invite}
+                      onSell={setSelling}
+                      onPaid={setPaying}
                     />
                   ))}
                 </Group>
               ) : (
-                <EmptyState
-                  compact
-                  icon="checkmark-done-outline"
-                  title="Everyone’s on track"
-                  message="Check-ins to answer, clients who go quiet and open invites show here."
-                />
+                <EmptyState compact icon="checkmark-done-outline" title="Everyone’s on track" message={NEEDS_EMPTY} />
               )}
             </Section>
           </View>
@@ -493,6 +696,33 @@ export default function Home() {
 
       <ToMarkSheet visible={markOpen} sessions={marking} onClose={() => setMarkOpen(false)} onChanged={loadStats} />
       <InviteSheet client={inviting} onClose={() => setInviting(null)} onShared={loadStats} onConnected={loadStats} />
+      <RequestSheet
+        request={openTime?.request ?? null}
+        opening={openTime?.opening}
+        gone={!!openTime && goneId === openTime.request.id}
+        clashName={clashName(openTime?.request)}
+        onClose={() => setOpenTime(null)}
+        onAnswered={loadStats}
+      />
+      <PersonSheet
+        request={openPerson}
+        gone={!!openPerson && goneId === openPerson.id}
+        onClose={() => setOpenPerson(null)}
+        onAnswered={loadStats}
+      />
+      <MarkPaidSheet
+        clientId={paying?.client.client_id ?? null}
+        first={paying?.client.first_name ?? ''}
+        onClose={() => setPaying(null)}
+        onDone={loadStats}
+      />
+      <SellPackSheet
+        clientId={selling?.client.client_id ?? null}
+        first={selling?.client.first_name ?? ''}
+        clientPriceCents={selling?.client.session_price_cents ?? null}
+        onClose={() => setSelling(null)}
+        onSold={loadStats}
+      />
     </SafeAreaView>
   );
 }

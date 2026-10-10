@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
-import { router, type Href } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
@@ -8,8 +9,10 @@ import { Group, IconTile, ListRow, Text, type IconName } from '@/components/ui';
 import { ACCENTS, Fonts, Spacing } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
+import { loadRules, modeLabel } from '@/lib/booking-rules';
 import { priceLabel } from '@/lib/money';
 import { leadLabel } from '@/lib/reminders';
+import { callRpc } from '@/lib/rpc';
 import { useSettings } from '@/lib/settings';
 
 type Row = { icon: IconName; title: string; subtitle: string; href: Href; testID?: string };
@@ -26,6 +29,25 @@ export default function Settings() {
   // Only a trainer on the free trial (or with no plan) has something to sign up for. A paying trainer
   // sees their plan; billing gets its own page once card payments are connected.
   const canSubscribe = access.kind === 'trial' || access.kind === 'none';
+  // Online booking's mode and whether the calendar link is on, read each time Settings shows. A
+  // failed read leaves the plain subtitle.
+  const [bookingMode, setBookingMode] = useState<string | null>(null);
+  const [linkOn, setLinkOn] = useState<boolean | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      loadRules()
+        .then((rules) => live && setBookingMode(modeLabel(rules)))
+        .catch(() => {});
+      callRpc<{ token: string | null } | null>('calendar_link', { p_make: false })
+        .then((answer) => live && setLinkOn(!answer.missing && !!answer.data?.token))
+        .catch(() => {});
+      return () => {
+        live = false;
+      };
+    }, []),
+  );
 
   const preferences: Row[] = [
     {
@@ -53,6 +75,20 @@ export default function Settings() {
       testID: 'settings-prices',
     },
     {
+      icon: 'calendar-number-outline',
+      title: 'Online booking',
+      subtitle: bookingMode ?? 'Clients book your open times',
+      href: '/settings/booking',
+      testID: 'settings-booking',
+    },
+    {
+      icon: 'link-outline',
+      title: 'Calendar link',
+      subtitle: linkOn == null ? 'Your sessions in your calendar app' : linkOn ? 'On' : 'Off',
+      href: '/settings/calendar',
+      testID: 'settings-calendar',
+    },
+    {
       icon: 'contrast-outline',
       title: 'Appearance',
       subtitle: `${APPEARANCE[settings.appearance]} · ${ACCENTS[settings.accent].label}`,
@@ -72,7 +108,12 @@ export default function Settings() {
       subtitle: email || 'Email and password',
       href: '/settings/account',
     },
-    { icon: 'help-circle-outline', title: 'Help', subtitle: 'Community rules and app version', href: '/settings/help' },
+    {
+      icon: 'help-circle-outline',
+      title: 'Help',
+      subtitle: 'Privacy, rules and app version',
+      href: '/settings/help',
+    },
   ];
 
   return (

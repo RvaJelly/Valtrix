@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -51,21 +52,32 @@ export function SessionRow({
   const lastLine = variant === 'card' || last;
   // 'Today', 'Tomorrow' or 'Mon 5 Oct': short, so a pill and a price still fit beside it.
   const title = showDay ? shortDay(start) : sessionName(session);
-  const cost = price ? priceLabel(session.price_cents, session.currency ?? 'ZAR') : null;
+  // A pack session's price is its share of the pack: "From pack" says where it comes from instead.
+  const cost = price
+    ? session.pack_id
+      ? 'From pack'
+      : priceLabel(session.price_cents, session.currency ?? 'ZAR')
+    : null;
+  const repeats = !!session.series_id;
   const row = (
     <>
       <ListRow
         title={title}
         titleStyle={cancelled ? { color: Colors.textTertiary, textDecorationLine: 'line-through' } : undefined}
         subtitle={where}
+        // With a pill and "From pack" beside it, the place may take a second line rather than be cut.
+        subtitleLines={2}
         leading={
           <View style={styles.time}>
             <Text variant="rowTitle" style={Tabular}>
               {formatTime(start)}
             </Text>
-            <Text variant="footnote" tone="secondary" style={Tabular}>
-              {formatTime(endOf(session))}
-            </Text>
+            <View style={styles.endLine}>
+              <Text variant="footnote" tone="secondary" style={Tabular}>
+                {formatTime(endOf(session))}
+              </Text>
+              {repeats ? <Ionicons name="repeat-outline" size={14} color={Colors.textSecondary} /> : null}
+            </View>
           </View>
         }
         status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
@@ -77,7 +89,7 @@ export function SessionRow({
           ) : null
         }
         onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
-        accessibilityLabel={`${showDay ? `${formatDay(start)}, ` : ''}${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
+        accessibilityLabel={`${showDay ? `${formatDay(start)}, ` : ''}${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}${repeats ? ', repeats every week' : ''}, ${where}${
           pill ? `, ${SESSION_STATUS[session.status]}` : ''
         }${cost ? `, ${cost}` : ''}`}
         last={lastLine || joinable}
@@ -100,11 +112,16 @@ function shortDay(date: Date) {
 const styles = themed(() => ({
   // Grows with large text instead of cutting the times.
   time: {
-    minWidth: 48,
+    minWidth: 54,
+  },
+  endLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   // Lines up with the row's title.
   join: {
-    paddingLeft: Spacing.gutter + 48 + Spacing.tight,
+    paddingLeft: Spacing.gutter + 54 + Spacing.tight,
     paddingRight: Spacing.gutter,
     paddingBottom: Spacing.tight,
   },

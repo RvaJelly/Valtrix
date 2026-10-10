@@ -86,3 +86,70 @@ export async function fillPrices(from: Date, to: Date): Promise<number> {
   const count = await rpcOrThrow<number>('fill_session_prices', { p_from: from.toISOString(), p_to: to.toISOString() });
   return Number(count ?? 0);
 }
+
+// Round 3's money for a range, per currency: what was earned (sessions done at their price and pack
+// sessions at their exact share of the pack), received, owed now, packs sold and places that went
+// unused on packs that ended.
+export type MoneyTotals = {
+  currency: string;
+  earned_cents: number;
+  session_cents: number;
+  pack_cents: number;
+  pack_sessions: number;
+  unpriced: number;
+  ahead_cents: number;
+  received_cents: number;
+  owed_cents: number;
+  packs_sold: number;
+  packs_sold_cents: number;
+  expired_sessions: number;
+  expired_cents: number;
+};
+
+const MONEY_NUMBERS = [
+  'earned_cents',
+  'session_cents',
+  'pack_cents',
+  'pack_sessions',
+  'unpriced',
+  'ahead_cents',
+  'received_cents',
+  'owed_cents',
+  'packs_sold',
+  'packs_sold_cents',
+  'expired_sessions',
+  'expired_cents',
+] as const;
+
+// money_totals from `from` up to (not including) `to`, or null on a database without it (the caller
+// falls back to session_totals). Errors are thrown.
+export async function loadMoneyTotals(from: Date, to: Date): Promise<MoneyTotals[] | null> {
+  const answer = await callRpc<MoneyTotals[]>('money_totals', { p_from: from.toISOString(), p_to: to.toISOString() });
+  if (answer.missing) return null;
+  return (answer.data ?? []).map((row) => {
+    const out = { ...row };
+    for (const key of MONEY_NUMBERS) out[key] = Number(row[key] ?? 0);
+    return out;
+  });
+}
+
+// The row for one currency, or zeros.
+export function totalsIn(rows: MoneyTotals[], currency: string): MoneyTotals {
+  return (
+    rows.find((r) => r.currency === currency) ?? {
+      currency,
+      earned_cents: 0,
+      session_cents: 0,
+      pack_cents: 0,
+      pack_sessions: 0,
+      unpriced: 0,
+      ahead_cents: 0,
+      received_cents: 0,
+      owed_cents: 0,
+      packs_sold: 0,
+      packs_sold_cents: 0,
+      expired_sessions: 0,
+      expired_cents: 0,
+    }
+  );
+}

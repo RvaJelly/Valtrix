@@ -9,7 +9,18 @@ import { SettingsPage } from '@/components/settings-parts';
 import { Sheet } from '@/components/sheet';
 import { StickyFooter } from '@/components/sticky-footer';
 import { useToast } from '@/components/toast';
-import { Button, ErrorText, Group, ListRow, Notice, Section, SkeletonRows, Text, useDelayed } from '@/components/ui';
+import {
+  Button,
+  ErrorText,
+  Group,
+  ListRow,
+  Notice,
+  Section,
+  SkeletonRows,
+  Text,
+  Toggle,
+  useDelayed,
+} from '@/components/ui';
 import { Colors, Tabular } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { fullName } from '@/lib/clients';
@@ -44,6 +55,9 @@ export default function PriceSettings() {
   const [anyPriced, setAnyPriced] = useState(false);
   const [failed, setFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Saved as soon as it's switched, apart from the price above.
+  const [noShows, setNoShows] = useState<boolean | null>(null);
+  const chargeNoShows = noShows ?? profile?.charge_no_shows ?? true;
   const showSkeleton = useDelayed(300);
 
   const parsed = parseMoney(price, currency);
@@ -121,6 +135,20 @@ export default function PriceSettings() {
     if (first) await offerToFill();
   }
 
+  async function switchNoShows(next: boolean) {
+    if (!profile) return;
+    setNoShows(next);
+    const { error: failure } = await supabase.from('profiles').update({ charge_no_shows: next }).eq('id', profile.id);
+    if (failure) {
+      setNoShows(!next);
+      haptic.warning();
+      return toast(plainError(failure, 'Couldn’t save. Try again.'));
+    }
+    await refreshProfile();
+    setNoShows(null);
+    toast('Saved');
+  }
+
   // The first usual price: sessions from the last 90 days and the ones already booked can take it.
   async function offerToFill() {
     const now = new Date();
@@ -196,6 +224,26 @@ export default function PriceSettings() {
         <Text variant="footnote" tone="secondary">
           New bookings use this price. Sessions already booked keep theirs. The country sets the code for WhatsApp
           numbers.
+        </Text>
+      </Section>
+
+      <Section title="No-shows">
+        <Group>
+          <ListRow
+            title="Charge for no-shows"
+            trailing={
+              <Toggle
+                accessibilityLabel="Charge for no-shows"
+                value={chargeNoShows}
+                onValueChange={switchNoShows}
+                testID="prices-no-shows"
+              />
+            }
+            last
+          />
+        </Group>
+        <Text variant="footnote" tone="secondary">
+          On: a no-show uses a session from a pack, or is owed like a session done. Off: no-shows cost nothing.
         </Text>
       </Section>
 

@@ -17,6 +17,7 @@ import { useAppLocked } from '@/components/app-lock';
 import { useAuth } from '@/lib/auth';
 import { CHAT_ROLE } from '@/lib/chat-role';
 import { loadChats, type ChatSummary, type Message } from '@/lib/chat';
+import type { NewsKind } from '@/lib/news';
 import { currentCall, fetchCall, isOver, rememberCall, RING_SECONDS, ringingCalls, type Call } from '@/lib/calls';
 import { playTone, stopTone } from '@/lib/ring';
 import { supabase } from '@/lib/supabase';
@@ -27,7 +28,9 @@ import { supabase } from '@/lib/supabase';
 // news says a trainer invite was sent, answered or withdrawn, or a link started
 // or ended, so screens showing invites and clients can load again. 'progress' news
 // says a client logged or removed a workout, weight, measurements, photo or check-in,
-// so their open page can show it.
+// so their open page can show it. 'news' says a client booked, asked for a time, cancelled, asked
+// to train or changed their health form (kept in the news table until seen), or that a request was
+// settled elsewhere ('withdrawn'), so Home, Requests and the client's pages can load again.
 
 export type ChatEvent =
   | { type: 'message'; message: Message }
@@ -36,6 +39,13 @@ export type ChatEvent =
   | { type: 'call'; call: Call }
   | { type: 'link'; client_id: string; invite_status: string }
   | { type: 'progress'; client_id: string | null; kind: ProgressKind; check_in_id: string | null }
+  | {
+      type: 'news';
+      id: string | null;
+      kind: NewsKind | 'withdrawn';
+      client_id: string | null;
+      request_id: string | null;
+    }
   | { type: 'reconnected' };
 
 export type ProgressKind = 'workout' | 'weight' | 'measurements' | 'photo' | 'check_in' | 'reply';
@@ -192,6 +202,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
         .on('broadcast', { event: 'link' }, ({ payload }) => {
           emit({ type: 'link', client_id: payload.client_id, invite_status: payload.invite_status });
           refreshSoon();
+        })
+        .on('broadcast', { event: 'news' }, ({ payload }) => {
+          emit({
+            type: 'news',
+            id: payload?.id ?? null,
+            kind: payload?.kind,
+            client_id: payload?.client_id ?? null,
+            request_id: payload?.request_id ?? null,
+          });
         })
         .on('broadcast', { event: 'progress' }, ({ payload }) => {
           emit({

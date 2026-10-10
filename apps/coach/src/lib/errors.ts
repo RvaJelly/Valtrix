@@ -74,8 +74,9 @@ export function plainError(error: unknown, fallback = TRY_AGAIN): string {
   const fromSupabase = !!code || 'details' in e || 'hint' in e || !!e.__isAuthError || !!e.__isStorageError;
   if (fromSupabase) {
     // A refused change the database explains itself (raise exception), but not its row-level
-    // security wording.
-    if (['P0001', '22023', '42501'].includes(code) && message && !TECHNICAL.test(message)) return message;
+    // security wording. Its straight apostrophes become curly ones, like the app's own words.
+    if (['P0001', '22023', '42501'].includes(code) && message && !TECHNICAL.test(message))
+      return message.replace(/'/g, '’');
     return CODES[code] ?? fallback;
   }
   // A message the app wrote itself.

@@ -14,6 +14,7 @@ import { ClientTrainingLog } from '@/components/client-training-log';
 import { HeaderTextButton } from '@/components/header-button';
 import { InviteSheet, openOutside } from '@/components/invite-sheet';
 import { PriceSheet } from '@/components/price-sheet';
+import { SellPackSheet } from '@/components/sell-pack-sheet';
 import { Sheet } from '@/components/sheet';
 import { useToast } from '@/components/toast';
 import {
@@ -90,6 +91,7 @@ export default function ClientDetail() {
   const [editing, setEditing] = useState(false);
   const [more, setMore] = useState(false);
   const [pricing, setPricing] = useState(params.sheet === 'price');
+  const [selling, setSelling] = useState(false);
   const [inviting, setInviting] = useState<'added' | 'invite' | null>(params.invite === '1' ? 'added' : null);
   // What the More menu does once it has slid away: an iPhone shows one sheet or alert at a time.
   const afterMore = useRef<(() => void) | null>(null);
@@ -100,7 +102,10 @@ export default function ClientDetail() {
   const [nutritionUnsaved, setNutritionUnsaved] = useState(false);
   const [replyUnsaved, setReplyUnsaved] = useState(false);
   // Two columns on a wide window: the person on the left, the chosen tab on the right.
-  const wide = useWindowDimensions().width >= Layout.wide;
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const wide = windowWidth >= Layout.wide;
+  // Large text: the shortcuts take the whole width, so "WhatsApp" never breaks inside the word.
+  const large = fontScale > 1.15;
 
   const first = client?.first_name ?? 'this client';
   useLeaveGuard(
@@ -336,7 +341,7 @@ export default function ClientDetail() {
               ) : null}
             </View>
             {actions.length ? (
-              <View style={{ width: actions.length * 88, maxWidth: '100%' }}>
+              <View style={{ width: large ? '100%' : actions.length * 88, maxWidth: '100%' }}>
                 <Shortcuts items={actions} />
               </View>
             ) : null}
@@ -475,6 +480,32 @@ export default function ClientDetail() {
               router.push({ pathname: '/clients/[id]/sessions', params: { id: client.id } });
             }}
           />
+          {archived ? null : (
+            <ListRow
+              title="Sell a pack"
+              leading={<IconTile icon="albums-outline" />}
+              onPress={() => fromMore(() => setSelling(true))}
+              testID="more-sell-pack"
+            />
+          )}
+          <ListRow
+            title="Money"
+            leading={<IconTile icon="wallet-outline" />}
+            onPress={() => {
+              setMore(false);
+              router.push({ pathname: '/clients/[id]/money', params: { id: client.id } });
+            }}
+            testID="more-money"
+          />
+          <ListRow
+            title="Health form"
+            leading={<IconTile icon="medkit-outline" />}
+            onPress={() => {
+              setMore(false);
+              router.push({ pathname: '/clients/[id]/health', params: { id: client.id } });
+            }}
+            testID="more-health"
+          />
           {client.status === 'active' ? (
             <ListRow
               title="Pause client"
@@ -528,6 +559,14 @@ export default function ClientDetail() {
           setClient((c) => (c ? { ...c, session_price_cents: cents } : c));
           load();
         }}
+      />
+
+      <SellPackSheet
+        clientId={selling ? client.id : null}
+        first={client.first_name}
+        clientPriceCents={client.session_price_cents}
+        onClose={() => setSelling(false)}
+        onSold={load}
       />
 
       <InviteSheet

@@ -1,4 +1,5 @@
 import type { Client } from '@/lib/clients';
+import type { PayMethod } from '@/lib/paid';
 import { longDate, time24 } from '@/lib/format';
 
 export type SessionStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
@@ -19,11 +20,25 @@ export type Session = {
   currency: string | null;
   // When it was last marked done, no-show or cancelled (null while booked).
   marked_at: string | null;
+  // The repeat booking that made it (null: a one-off).
+  series_id: string | null;
+  // The pack it uses (its price is then the pack's share).
+  pack_id: string | null;
+  // The day it was marked paid and how (never for a pack session: its pack is paid instead).
+  paid_on: string | null;
+  paid_method: PayMethod | null;
+  // The person who booked it in Voltrix (null when the trainer booked it), the person who cancelled
+  // it in Voltrix, and what the client wrote when booking.
+  booked_by: string | null;
+  cancelled_by: string | null;
+  client_note: string | null;
+  // When the row was made (when the client booked it, for "Booked by").
+  created_at?: string;
   clients: Pick<Client, 'first_name' | 'last_name' | 'user_id'> | null;
 };
 
 export const SESSION_COLUMNS =
-  'id, client_id, title, starts_at, duration_minutes, location, notes, status, online, price_cents, currency, marked_at, clients(first_name, last_name, user_id)';
+  'id, client_id, title, starts_at, duration_minutes, location, notes, status, online, price_cents, currency, marked_at, series_id, pack_id, paid_on, paid_method, booked_by, cancelled_by, client_note, created_at, clients(first_name, last_name, user_id)';
 
 // A session can be marked done or as a no-show from 15 minutes before it starts (the database's
 // rule too).

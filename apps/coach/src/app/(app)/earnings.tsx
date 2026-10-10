@@ -10,6 +10,7 @@ import {
   EmptyState,
   Group,
   IconButton,
+  IconTile,
   ListRow,
   Notice,
   Section,
@@ -22,7 +23,15 @@ import {
 import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
-import { fillPrices, loadTotals, summarize, type Summary } from '@/lib/earnings';
+import {
+  fillPrices,
+  loadMoneyTotals,
+  loadTotals,
+  summarize,
+  totalsIn,
+  type MoneyTotals,
+  type Summary,
+} from '@/lib/earnings';
 import { plainError } from '@/lib/errors';
 import { dayMonthShort, monthYear, shortDate, time24 } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
@@ -71,6 +80,8 @@ export default function Earnings() {
   const [period, setPeriod] = useState<Period>('week');
   const [offset, setOffset] = useState(0);
   const [summary, setSummary] = useState<Summary | null>(null);
+  // money_totals: earned with pack shares, received, owed and packs (null on an older database).
+  const [money, setMoney] = useState<MoneyTotals[] | null>(null);
   const [done, setDone] = useState<Done[] | null>(null);
   const [more, setMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -92,7 +103,7 @@ export default function Earnings() {
     const id = ++loads.current;
     const [from, to] = rangeOf(period, offset, new Date());
     try {
-      const [totals, list, own] = await Promise.all([
+      const [totals, list, own, moneyRows] = await Promise.all([
         loadTotals(from, to),
         supabase
           .from('sessions')
@@ -103,11 +114,13 @@ export default function Earnings() {
           .order('starts_at', { ascending: false })
           .range(0, PAGE - 1),
         supabase.from('clients').select('id', { count: 'exact', head: true }).not('session_price_cents', 'is', null),
+        loadMoneyTotals(from, to).catch(() => null),
       ]);
       if (id !== loads.current) return;
       if (list.error) throw list.error;
       const rows = (list.data ?? []) as unknown as Done[];
       setSummary(totals ? summarize(totals, currency) : null);
+      setMoney(moneyRows);
       setDone(rows);
       setMore(rows.length === PAGE);
       setClientPrices(!own.error && (own.count ?? 0) > 0);
@@ -126,12 +139,14 @@ export default function Earnings() {
   function move(by: number) {
     haptic.select();
     setSummary(null);
+    setMoney(null);
     setDone(null);
     setOffset((o) => o + by);
   }
 
   function choose(next: Period) {
     setSummary(null);
+    setMoney(null);
     setDone(null);
     setOffset(0);
     setPeriod(next);
@@ -189,7 +204,19 @@ export default function Earnings() {
   }
 
   const ready = !!done && !failed;
+  // Earned and booked ahead from money_totals when it's there (pack sessions at their share).
+  const mt = money ? totalsIn(money, currency) : null;
+  const earned = mt ? mt.earned_cents : (summary?.earned ?? 0);
+  const ahead = mt ? mt.ahead_cents : (summary?.ahead ?? 0);
+  const others = money
+    ? money
+        .filter((r) => r.currency !== currency && r.earned_cents)
+        .map((r) => ({ currency: r.currency, cents: r.earned_cents }))
+    : (summary?.others ?? []);
   const askForPrice = !!summary && usual == null && !summary.priced;
+  // Sessions earning nothing for want of a price: from money_totals, done ones and charged no-shows;
+  // on an older database, done ones only.
+  const unpriced = mt ? mt.unpriced : (summary?.unpriced ?? 0);
   const canFill = usual != null || clientPrices;
   const word = period === 'week' ? 'week' : 'month';
   const empty =
@@ -268,8 +295,8 @@ export default function Earnings() {
                     variant="stat"
                     style={[Tabular, styles.total]}
                     testID="earnings-total"
-                    accessibilityLabel={`${spokenMoney(summary.earned, currency)} earned`}>
-                    {formatMoney(summary.earned, currency)}
+                    accessibilityLabel={`${spokenMoney(earned, currency)} earned`}>
+                    {formatMoney(earned, currency)}
                   </Text>
                   <Text variant="footnote" tone="secondary">
                     {[
@@ -280,12 +307,12 @@ export default function Earnings() {
                       .join(' · ')}
                   </Text>
                 </Card>
-                {summary.ahead > 0 ? (
+                {ahead > 0 ? (
                   <Text variant="callout" tone="secondary" style={Tabular}>
-                    {formatMoney(summary.ahead, currency)} booked ahead
+                    {formatMoney(ahead, currency)} booked ahead
                   </Text>
                 ) : null}
-                {summary.others.map((o) => (
+                {others.map((o) => (
                   <Text key={o.currency} variant="footnote" tone="secondary" style={Tabular}>
                     Plus {formatMoney(o.cents, o.currency)} in {o.currency}.
                   </Text>
@@ -293,7 +320,82 @@ export default function Earnings() {
               </View>
             )}
 
-            {summary && summary.unpriced > 0 && !askForPrice ? (
+            {mt && !askForPrice ? (
+              <Group>
+                <ListRow
+                  title="Received"
+                  leading={<IconTile icon="checkmark-circle-outline" />}
+                  trailing={
+                    <Text variant="callout" style={Tabular}>
+                      {formatMoney(mt.received_cents, currency)}
+                    </Text>
+                  }
+                  testID="earnings-received"
+                  compact
+                />
+                <ListRow
+                  title="Owed to you now"
+                  leading={<IconTile icon="wallet-outline" />}
+                  trailing={
+                    <Text variant="callout" style={Tabular}>
+                      {formatMoney(mt.owed_cents, currency)}
+                    </Text>
+                  }
+                  onPress={() => router.push('/owed')}
+                  testID="earnings-owed"
+                  compact
+                  last={!mt.pack_cents && !mt.packs_sold && !mt.expired_sessions}
+                />
+                {mt.pack_cents || mt.pack_sessions ? (
+                  <ListRow
+                    title="From packs"
+                    subtitle={mt.pack_sessions === 1 ? '1 session' : `${mt.pack_sessions} sessions`}
+                    leading={<IconTile icon="albums-outline" />}
+                    trailing={
+                      <Text variant="callout" style={Tabular}>
+                        {formatMoney(mt.pack_cents, currency)}
+                      </Text>
+                    }
+                    testID="earnings-packs"
+                    compact
+                    last={!mt.packs_sold && !mt.expired_sessions}
+                  />
+                ) : null}
+                {mt.packs_sold ? (
+                  <ListRow
+                    title="Packs sold"
+                    subtitle={mt.packs_sold === 1 ? '1 pack' : `${mt.packs_sold} packs`}
+                    leading={<IconTile icon="pricetag-outline" />}
+                    trailing={
+                      <Text variant="callout" style={Tabular}>
+                        {formatMoney(mt.packs_sold_cents, currency)}
+                      </Text>
+                    }
+                    testID="earnings-packs-sold"
+                    compact
+                    last={!mt.expired_sessions}
+                  />
+                ) : null}
+                {mt.expired_sessions ? (
+                  <ListRow
+                    title="Not used before packs ended"
+                    titleTone="secondary"
+                    titleLines={2}
+                    subtitle={mt.expired_sessions === 1 ? '1 session' : `${mt.expired_sessions} sessions`}
+                    leading={<IconTile icon="hourglass-outline" />}
+                    trailing={
+                      <Text variant="callout" tone="secondary" style={Tabular}>
+                        {formatMoney(mt.expired_cents, currency)}
+                      </Text>
+                    }
+                    compact
+                    last
+                  />
+                ) : null}
+              </Group>
+            ) : null}
+
+            {summary && unpriced > 0 && !askForPrice ? (
               <View testID="earnings-unpriced">
                 <Notice
                   action={
@@ -305,9 +407,7 @@ export default function Earnings() {
                           testID: 'earnings-fill',
                         }
                   }>
-                  {summary.unpriced === 1
-                    ? '1 done session has no price.'
-                    : `${summary.unpriced} done sessions have no price.`}
+                  {unpriced === 1 ? '1 done session has no price.' : `${unpriced} done sessions have no price.`}
                 </Notice>
               </View>
             ) : null}
@@ -335,7 +435,9 @@ export default function Earnings() {
             )}
 
             <Text variant="footnote" tone="secondary">
-              Earned counts sessions marked done, at the price they were booked for. No-shows aren’t counted.
+              {mt
+                ? 'Earned counts sessions done at their price and pack sessions at their share of the pack, paid or not. Received counts what you marked paid on those days.'
+                : 'Earned counts sessions marked done, at the price they were booked for. No-shows aren’t counted.'}
             </Text>
           </>
         )}

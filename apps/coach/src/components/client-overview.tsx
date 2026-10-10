@@ -6,6 +6,8 @@ import { View } from 'react-native';
 
 import { canJoin, JoinCall } from '@/components/join-call';
 import { openOutside } from '@/components/invite-sheet';
+import { MarkPaidSheet } from '@/components/mark-paid-sheet';
+import { SellPackSheet } from '@/components/sell-pack-sheet';
 import { SessionRow } from '@/components/session-row';
 import { Sheet } from '@/components/sheet';
 import { ToMarkSheet } from '@/components/to-mark-sheet';
@@ -17,14 +19,19 @@ import {
   Group,
   IconTile,
   ListRow,
+  ProgressBar,
   Section,
   SkeletonRows,
   StatStrip,
+  StatusDot,
+  StatusPill,
   Text,
+  Toggle,
 } from '@/components/ui';
 import { Colors, Spacing, Tabular } from '@/constants/theme';
 import { APP_STATUS_LABELS, fullName, type AppStatus, type Client } from '@/lib/clients';
-import { dayMonth, longDate, monthYear, timeRange } from '@/lib/format';
+import { loadRules } from '@/lib/booking-rules';
+import { dayMonth, longDate, monthYear, time24, timeRange, weekdayLong } from '@/lib/format';
 import { formatMoney, priceFor, spokenMoney } from '@/lib/money';
 import { waitedFor } from '@/lib/needs-you';
 import type { ClientOverview as OverviewRow } from '@/lib/overview';
@@ -32,6 +39,8 @@ import { daysBetween, mondayOf, programWeek } from '@/lib/plan-dates';
 import { addDays, dayKey, endOf, fromDayKey, SESSION_COLUMNS, toMark, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 import { waChat, waNumber } from '@/lib/whatsapp';
+import { itemCount, owedWords } from '@/lib/paid';
+import { dayFromKey } from '@/lib/zones';
 
 type Sessions = { next: Session[]; past: Session[]; open: Session[] };
 
@@ -78,6 +87,11 @@ export function ClientOverview({
   const [sessions, setSessions] = useState<Sessions | null>(null);
   const [marking, setMarking] = useState(false);
   const [phoneSheet, setPhoneSheet] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [selling, setSelling] = useState(false);
+  // Online booking is on for the trainer: the Books in Voltrix row shows. Its value saves at once.
+  const [bookingOn, setBookingOn] = useState(false);
+  const [selfBooking, setSelfBooking] = useState<boolean | null>(null);
   const loads = useRef(0);
   const first = client.first_name;
   const now = new Date();
@@ -130,6 +144,29 @@ export function ClientOverview({
   useEffect(() => {
     loadSessions();
   }, [loadSessions, reloads]);
+
+  useEffect(() => {
+    let live = true;
+    loadRules().then(
+      (rules) => live && setBookingOn(rules.enabled),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const booksInApp = selfBooking ?? row?.self_booking ?? true;
+  async function switchSelfBooking(next: boolean) {
+    setSelfBooking(next);
+    const { error } = await supabase.from('clients').update({ self_booking: next }).eq('id', client.id);
+    if (error) {
+      setSelfBooking(!next);
+      return toast('Couldn’t save. Try again.');
+    }
+    toast('Saved');
+    onChanged();
+  }
 
   const price = priceFor(client.session_price_cents, usual);
   const priceText = price.cents == null ? 'Not set' : price.cents === 0 ? 'Free' : formatMoney(price.cents, currency);
@@ -190,6 +227,107 @@ export function ClientOverview({
       ];
 
   const book = () => router.push({ pathname: '/sessions/new', params: { clientId: client.id } });
+  const bookWeekly = () => router.push({ pathname: '/sessions/new', params: { client: client.id, repeat: '1' } });
+  const toMoney = () => router.push({ pathname: '/clients/[id]/money', params: { id: client.id } });
+
+  // ---------- Money: what's owed and the pack ----------
+  const owed = row?.owed_cents ?? 0;
+  const owedLine = row ? owedWords(itemCount(row.owed_count), row.owed_since, row.owed_other) : '';
+  const packEnds = row?.pack_expires_on ? `Ends ${dayMonth(dayFromKey(row.pack_expires_on))}` : 'No end';
+  const sellButton = !archived ? (
+    <Button
+      title="Sell a pack"
+      variant="secondary"
+      size="small"
+      onPress={() => setSelling(true)}
+      testID="overview-sell"
+    />
+  ) : null;
+  const moneySection = (
+    <Section title="Money" action={{ label: 'Money', onPress: toMoney, accessibilityLabel: `${first}’s money` }}>
+      <View testID="overview-money">
+        <Group>
+          {owed > 0 || row?.owed_other ? (
+            <ListRow
+              title={owed > 0 ? `Owes ${formatMoney(owed, currency)}` : 'Owes money'}
+              subtitle={owedLine}
+              subtitleLines={2}
+              leading={<IconTile icon="wallet-outline" />}
+              trailing={
+                <Button
+                  title="Mark paid"
+                  variant="secondary"
+                  size="small"
+                  onPress={() => setPaying(true)}
+                  testID="overview-mark-paid"
+                />
+              }
+              compact
+            />
+          ) : (
+            <ListRow
+              title="Paid up"
+              leading={<IconTile icon="checkmark-circle-outline" />}
+              status={<StatusDot tone="success" label="Nothing owed" />}
+              onPress={toMoney}
+              compact
+            />
+          )}
+          {row?.pack_id && row.pack_left > 0 ? (
+            <ListRow
+              title={`Pack · ${row.pack_left} of ${row.pack_total} left${row.pack_booked ? ` · ${row.pack_booked} booked` : ''}`}
+              titleLines={2}
+              subtitle={
+                <View style={{ gap: Spacing.two, marginTop: 2 }}>
+                  <Text variant="footnote" tone="secondary">
+                    {`${packEnds} · ${row.pack_paid ? 'paid' : 'not paid yet'}`}
+                  </Text>
+                  <ProgressBar progress={(row.pack_used + row.pack_booked) / Math.max(1, row.pack_total)} />
+                </View>
+              }
+              leading={<IconTile icon="albums-outline" />}
+              onPress={toMoney}
+              compact
+              last
+            />
+          ) : (
+            <ListRow
+              title={row?.pack_id ? 'Pack used up' : 'No pack'}
+              leading={<IconTile icon="albums-outline" />}
+              trailing={sellButton}
+              compact
+              last
+            />
+          )}
+        </Group>
+      </View>
+    </Section>
+  );
+
+  // ---------- The health form row ----------
+  const health = row?.health ?? null;
+  const healthRow =
+    archived || (!health && linked) ? null : (
+      <ListRow
+        title="Health form"
+        subtitle={
+          health === 'doctor'
+            ? undefined
+            : health === 'doctor_ok' || (!health && row?.doctor_ok_on)
+              ? `Doctor’s OK · ${dayMonth(dayFromKey(row!.doctor_ok_on!))}`
+              : health === 'clear'
+                ? `Filled in ${row?.health_signed_at ? dayMonth(new Date(row.health_signed_at)) : ''} · no flags`
+                : health === 'missing'
+                  ? 'Not filled in yet'
+                  : 'Not on Voltrix'
+        }
+        status={health === 'doctor' ? <StatusPill tone="warning" label="Check with a doctor" /> : null}
+        leading={<IconTile icon="medkit-outline" />}
+        onPress={() => router.push({ pathname: '/clients/[id]/health', params: { id: client.id } })}
+        testID="overview-health"
+        compact
+      />
+    );
 
   return (
     <View style={{ gap: Spacing.section }}>
@@ -232,6 +370,8 @@ export function ClientOverview({
         </Group>
       ) : null}
 
+      {moneySection}
+
       <Section title="Next session">
         {!sessions ? (
           <Group>
@@ -239,23 +379,35 @@ export function ClientOverview({
           </Group>
         ) : nextSession ? (
           <NextSession session={nextSession} name={fullName(client)} onApp={linked} now={now} />
+        ) : client.status === 'active' ? (
+          // Two ways to book, side by side under the words, so neither squeezes the line.
+          <Group>
+            <ListRow
+              title="Nothing booked"
+              subtitle={`Book ${first}’s next session.`}
+              leading={<IconTile icon="calendar-clear-outline" />}
+              compact
+              last
+            />
+            <View style={{ flexDirection: 'row', gap: Spacing.two, padding: Spacing.gutter, paddingTop: 0 }}>
+              <Button title="Book" variant="secondary" size="small" onPress={book} style={{ flex: 1 }} />
+              <Button
+                title="Book weekly"
+                variant="secondary"
+                size="small"
+                icon="repeat-outline"
+                onPress={bookWeekly}
+                style={{ flex: 1 }}
+                testID="overview-book-weekly"
+              />
+            </View>
+          </Group>
         ) : (
           <EmptyState
             compact
             icon="calendar-clear-outline"
             title="Nothing booked"
-            message={
-              client.status === 'active'
-                ? `Book ${first}’s next session.`
-                : archived
-                  ? 'Archived clients can’t be booked.'
-                  : 'Paused clients can’t be booked.'
-            }
-            action={
-              client.status === 'active' ? (
-                <Button title="Book" variant="secondary" size="small" onPress={book} />
-              ) : undefined
-            }
+            message={archived ? 'Archived clients can’t be booked.' : 'Paused clients can’t be booked.'}
           />
         )}
       </Section>
@@ -366,6 +518,28 @@ export function ClientOverview({
             leading={<IconTile icon="phone-portrait-outline" />}
             compact
           />
+          {healthRow}
+          {linked && bookingOn && !archived ? (
+            <ListRow
+              title="Books in Voltrix"
+              subtitle={
+                booksInApp
+                  ? `${first} can book your open times in Voltrix.`
+                  : `${first} can’t book in Voltrix. You book for them.`
+              }
+              subtitleLines={2}
+              leading={<IconTile icon="calendar-number-outline" />}
+              trailing={
+                <Toggle
+                  accessibilityLabel="Books in Voltrix"
+                  value={booksInApp}
+                  onValueChange={switchSelfBooking}
+                  testID="overview-self-booking"
+                />
+              }
+              compact
+            />
+          ) : null}
           {linked && row?.account_name ? (
             <View testID="overview-account">
               <ListRow
@@ -415,6 +589,22 @@ export function ClientOverview({
         sessions={sessions?.open ?? []}
         onClose={() => setMarking(false)}
         onChanged={() => {
+          loadSessions();
+          onChanged();
+        }}
+      />
+      <MarkPaidSheet
+        clientId={paying ? client.id : null}
+        first={first}
+        onClose={() => setPaying(false)}
+        onDone={onChanged}
+      />
+      <SellPackSheet
+        clientId={selling ? client.id : null}
+        first={first}
+        clientPriceCents={client.session_price_cents}
+        onClose={() => setSelling(false)}
+        onSold={() => {
           loadSessions();
           onChanged();
         }}
@@ -520,6 +710,14 @@ function NextSession({ session, name, onApp, now }: { session: Session; name: st
         <Text variant="callout" tone="secondary" numberOfLines={2} style={{ marginTop: 2 }}>
           {place}
         </Text>
+      ) : null}
+      {session.series_id ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.two }}>
+          <Ionicons name="repeat-outline" size={14} color={Colors.textSecondary} />
+          <Text variant="footnote" tone="secondary" style={Tabular}>
+            {`Every ${weekdayLong(start)} at ${time24(start)}`}
+          </Text>
+        </View>
       ) : null}
     </Card>
   );

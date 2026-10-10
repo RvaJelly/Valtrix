@@ -1,8 +1,9 @@
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RequestSheet } from '@/components/request-sheet';
 import { SessionRow } from '@/components/session-row';
 import { ToMarkSheet } from '@/components/to-mark-sheet';
 import {
@@ -16,20 +17,28 @@ import {
   PageHeader,
   Section,
   SkeletonRows,
+  StatusPill,
   Text,
   useDelayed,
 } from '@/components/ui';
 import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
+import { useChatEvents } from '@/lib/chat-live';
 import { plainError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
-import { longDate, monthYear, weekdayShort } from '@/lib/format';
+import { longDate, monthYear, time24, timeRange, weekdayShort } from '@/lib/format';
+import { refreshReminders } from '@/lib/reminders';
+import { topUpRepeats } from '@/lib/repeats';
+import { loadRequests, type TimeRequest } from '@/lib/requests';
 import {
   addDays,
   dayKey,
   formatDay,
   fromDayKey,
+  endOf,
   namesOf,
+  overlaps,
   SESSION_COLUMNS,
+  sessionName,
   sameDay,
   startOfDay,
   startOfWeek,
@@ -39,7 +48,18 @@ import {
 import { supabase } from '@/lib/supabase';
 
 export default function CalendarScreen() {
-  const [selected, setSelected] = useState(() => startOfDay(new Date()));
+  // `date` opens a day ('YYYY-MM-DD'), as after booking every week.
+  const { date } = useLocalSearchParams<{ date?: string }>();
+  const [selected, setSelected] = useState(() => (date ? fromDayKey(date) : startOfDay(new Date())));
+  const [openedDate, setOpenedDate] = useState(date);
+  if (date !== openedDate) {
+    setOpenedDate(date);
+    if (date) setSelected(fromDayKey(date));
+  }
+  // Times clients asked for that are still waiting, and the one open in the request sheet.
+  const [asked, setAsked] = useState<TimeRequest[]>([]);
+  const [request, setRequest] = useState<TimeRequest | null>(null);
+  const [goneId, setGoneId] = useState<string | null>(null);
   // The sessions of one week, kept with the week they belong to.
   const [loaded, setLoaded] = useState<{ week: string; list: Session[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,12 +101,37 @@ export default function CalendarScreen() {
         setError(null);
         setLoaded({ week: weekKey, list: data as unknown as Session[] });
       });
+    // A failed read of the requests only leaves them out.
+    loadRequests()
+      .then((found) => {
+        if (id === loads.current) setAsked((found?.times ?? []).filter((t) => t.status === 'pending'));
+      })
+      .catch(() => {});
   }, [weekKey]);
+
+  // New bookings, cancellations and requests from clients show without leaving the screen.
+  const [news, setNews] = useState(0);
+  useEffect(() => {
+    if (!news) return;
+    const timer = setTimeout(loadWeek, 1000);
+    return () => clearTimeout(timer);
+  }, [news, loadWeek]);
+  useChatEvents((event) => {
+    if (event.type === 'news') {
+      if (event.kind === 'withdrawn' && event.request_id) setGoneId(event.request_id);
+      if (event.kind === 'booked' || event.kind === 'cancelled') refreshReminders();
+      setNews((n) => n + 1);
+    } else if (event.type === 'reconnected') setNews((n) => n + 1);
+  });
 
   // Load the visible week whenever the screen is shown or the week changes.
   useFocusEffect(
     useCallback(() => {
       loadWeek();
+      // Repeats are made 12 weeks ahead; topping them up may add to the shown week.
+      topUpRepeats().then((made) => {
+        if (made > 0) loadWeek();
+      });
       return () => {
         loads.current++;
       };
@@ -94,6 +139,27 @@ export default function CalendarScreen() {
   );
 
   const dayList = (sessions ?? []).filter((s) => sameDay(new Date(s.starts_at), selected));
+  // The day's sessions and the times asked for, in time order. Asked times never count in the stats.
+  const dayAsked = sessions
+    ? asked.filter((t) => sameDay(new Date(t.starts_at), selected) && new Date(t.starts_at).getTime() > now)
+    : [];
+  const dayItems: ({ kind: 'session'; session: Session } | { kind: 'asked'; request: TimeRequest })[] = [
+    ...dayList.map((session) => ({ kind: 'session' as const, session })),
+    ...dayAsked.map((request) => ({ kind: 'asked' as const, request })),
+  ].sort((a, b) =>
+    (a.kind === 'session' ? a.session.starts_at : a.request.starts_at) <
+    (b.kind === 'session' ? b.session.starts_at : b.request.starts_at)
+      ? -1
+      : 1,
+  );
+  // What else is on at the open request's time, for the sheet's words.
+  const clashWith = request
+    ? (sessions ?? []).find(
+        (s) =>
+          s.status !== 'cancelled' &&
+          overlaps(s, { starts_at: request.starts_at, duration_minutes: request.duration_minutes }),
+      )
+    : null;
   // Every session that still happens or happened counts, the same for the summary and the day dots.
   const counted = (sessions ?? []).filter((s) => s.status !== 'cancelled');
   const done = (sessions ?? []).filter((s) => s.status === 'completed').length;
@@ -206,7 +272,7 @@ export default function CalendarScreen() {
               <SkeletonRows count={3} />
             </Group>
           ) : null}
-          {sessions && dayList.length === 0 ? (
+          {sessions && dayItems.length === 0 ? (
             <EmptyState
               compact
               icon="calendar-clear-outline"
@@ -215,17 +281,68 @@ export default function CalendarScreen() {
               action={<Button title="Book" variant="ghost" size="small" onPress={book} />}
             />
           ) : null}
-          {dayList.length > 0 ? (
+          {dayItems.length > 0 ? (
             <Group>
-              {dayList.map((s, i) => (
-                <SessionRow key={s.id} session={s} variant="grouped" last={i === dayList.length - 1} now={now} />
-              ))}
+              {dayItems.map((item, i) =>
+                item.kind === 'session' ? (
+                  <SessionRow
+                    key={item.session.id}
+                    session={item.session}
+                    variant="grouped"
+                    last={i === dayItems.length - 1}
+                    now={now}
+                  />
+                ) : (
+                  <AskedRow
+                    key={item.request.id}
+                    request={item.request}
+                    onPress={() => setRequest(item.request)}
+                    last={i === dayItems.length - 1}
+                  />
+                ),
+              )}
             </Group>
           ) : null}
         </Section>
       </ScrollView>
       <ToMarkSheet visible={marking} sessions={unmarked} onClose={() => setMarking(false)} onChanged={loadWeek} />
+      <RequestSheet
+        request={request}
+        onClose={() => setRequest(null)}
+        onAnswered={loadWeek}
+        gone={!!request && goneId === request.id}
+        clashName={clashWith ? sessionName(clashWith) : null}
+      />
     </SafeAreaView>
+  );
+}
+
+// A time a client asked for, in its place in the day until the trainer answers.
+function AskedRow({ request, onPress, last }: { request: TimeRequest; onPress: () => void; last: boolean }) {
+  const start = new Date(request.starts_at);
+  const end = endOf(request);
+  const name = [request.first_name, request.last_name].filter(Boolean).join(' ');
+  return (
+    <ListRow
+      title={name}
+      // The time is on the left already; the line says what it is.
+      subtitle={request.clashes ? 'Asked in Voltrix · clashes' : 'Asked in Voltrix'}
+      leading={
+        <View style={styles.time}>
+          <Text variant="rowTitle" tone="secondary" style={Tabular}>
+            {time24(start)}
+          </Text>
+          <Text variant="footnote" tone="tertiary" style={Tabular}>
+            {time24(end)}
+          </Text>
+        </View>
+      }
+      status={<StatusPill tone="neutral" label="Asked" />}
+      onPress={onPress}
+      accessibilityLabel={`${name} asks for ${timeRange(start, end)}${request.clashes ? ', clashes with something else' : ''}. Answer`}
+      testID={`calendar-asked-${request.id}`}
+      last={last}
+    />
   );
 }
 
@@ -271,5 +388,8 @@ const styles = themed(() => ({
     width: 5,
     height: 5,
     borderRadius: 2.5,
+  },
+  time: {
+    minWidth: 54,
   },
 }));

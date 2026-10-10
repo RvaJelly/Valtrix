@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
+import { DayPickSheet } from '@/components/day-pick-sheet';
 import { PriceField } from '@/components/price-field';
 import { Sheet } from '@/components/sheet';
 import { StickyFooter } from '@/components/sticky-footer';
@@ -35,11 +36,17 @@ import {
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, withAlpha } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { fullName, type Client } from '@/lib/clients';
+import { dayMonth, dayMonthShort, shortDate, time24 } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
-import { moneyInput, parseMoney } from '@/lib/money';
+import { formatMoney, moneyInput, parseMoney, priceFor } from '@/lib/money';
+import { packFor } from '@/lib/pack-rules';
+import { loadPacks, type Pack } from '@/lib/packs';
+import { repeatLabel, seriesCount, untilDay } from '@/lib/repeat-rules';
+import { repeatClashes, type Clash } from '@/lib/repeats';
 import {
   addDays,
   combine,
+  dayKey,
   DURATIONS,
   formatDay,
   formatTime,
@@ -52,6 +59,7 @@ import {
   type Session,
 } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
+import { addDaysKey, deviceZone, HOME_ZONE, sameZone, zonedParts, zoneCity } from '@/lib/zones';
 
 export type SessionInput = {
   client_id: string | null;
@@ -68,12 +76,31 @@ export type SessionInput = {
 
 const NO_CLIENT = 'none';
 
+// Booking every week: the repeat's last day (null: no end), the days left out because something else
+// is booked then, and how many sessions that makes now.
+export type RepeatChoice = { until: string | null; skip: string[]; count: number };
+
+// No end first. The week keys start with a letter: number-like keys would come first in the chips.
+const UNTIL: Record<string, string> = {
+  none: 'No end',
+  w4: '4 weeks',
+  w8: '8 weeks',
+  w12: '12 weeks',
+  pick: 'Pick a day',
+};
+
 type Props = {
   // The session being edited (with its id), or the day and client to start a new one with.
   initial?: Partial<SessionInput> & { id?: string };
   day: Date;
   submitLabel: string;
-  onSubmit: (input: SessionInput) => Promise<string | null>;
+  // `repeat` only when booking with Repeat every week on.
+  onSubmit: (input: SessionInput, repeat: RepeatChoice | null) => Promise<string | null>;
+  // Booking: offer Repeat every week (on from the start with `startRepeat`).
+  repeatable?: boolean;
+  startRepeat?: boolean;
+  // Editing a session of a repeat: client, price and notes change this one only.
+  inRepeat?: boolean;
   // Inside a sheet: the sheet scrolls, and the button sits at the end of the form. Otherwise the
   // form scrolls by itself and the button stays in a bar at the bottom.
   inSheet?: boolean;
@@ -99,7 +126,17 @@ function sensibleTime(day: Date, duration: number, bookings: Session[], now = ne
   return free ?? START_TIMES.find((t) => t >= from) ?? START_TIMES[START_TIMES.length - 1];
 }
 
-export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, inSheet, children }: Props) {
+export function SessionForm({
+  initial,
+  day: initialDay,
+  submitLabel,
+  onSubmit,
+  repeatable,
+  startRepeat,
+  inRepeat,
+  inSheet,
+  children,
+}: Props) {
   const initialStart = initial?.starts_at ? new Date(initial.starts_at) : null;
   const [clients, setClients] = useState<ClientChoice[] | null>(null);
   const [who, setWho] = useState<string | null>(initial?.client_id ?? (initial?.title ? NO_CLIENT : null));
@@ -121,6 +158,19 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
   const [dayBookings, setDayBookings] = useState<Session[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Repeat every week (booking only).
+  const zone = profile?.time_zone || HOME_ZONE;
+  const [repeat, setRepeat] = useState(!!(repeatable && startRepeat));
+  const [untilChoice, setUntilChoice] = useState('none');
+  const [untilPicked, setUntilPicked] = useState<string | null>(null);
+  const [untilOpen, setUntilOpen] = useState(false);
+  const [pickingUntil, setPickingUntil] = useState(false);
+  const [clashes, setClashes] = useState<Clash[] | null>(null);
+  const [showClashes, setShowClashes] = useState(false);
+  const [bookAnyway, setBookAnyway] = useState(false);
+  const clashLoads = useRef(0);
+  // The picked client's packs, read once per client (booking only).
+  const [packs, setPacks] = useState<{ client: string; list: Pack[] } | null>(null);
 
   useEffect(() => {
     supabase
@@ -142,6 +192,57 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
       .then(({ data }) => setDayBookings(((data as unknown as Session[]) ?? []).filter((s) => s.id !== initial?.id)));
   }, [day, initial?.id]);
 
+  // ---------- Repeat every week ----------
+
+  const startsAt = time ? combine(day, time) : null;
+  const minutes = Number(duration ?? 60);
+  // The repeat's days are on the trainer's clock (the database's too).
+  const onClock = startsAt ? zonedParts(startsAt, zone) : null;
+  const firstDay = onClock?.day ?? dayKey(day);
+  const today = zonedParts(new Date(), zone).day;
+  const until =
+    untilChoice === 'none'
+      ? null
+      : untilChoice === 'pick'
+        ? untilPicked
+        : untilDay(firstDay, Number(untilChoice.slice(1)));
+  const clashDays = [...new Set((clashes ?? []).map((c) => c.day))];
+  const skip = bookAnyway ? [] : clashDays;
+  const count = seriesCount(firstDay, until, today, skip);
+  const phoneZone = deviceZone();
+  const otherZone = !!phoneZone && !sameZone(phoneZone, zone);
+  const repeatOn = !!repeatable && !editing && repeat;
+  const startIso = startsAt?.toISOString() ?? null;
+
+  // The clashes of the next 12 weeks, 400 ms after the day, time, length or Until last changed.
+  useEffect(() => {
+    if (!repeatOn || !startIso) return;
+    const id = ++clashLoads.current;
+    const timer = setTimeout(() => {
+      repeatClashes(new Date(startIso), minutes, until)
+        .then((found) => {
+          if (id === clashLoads.current) setClashes(found);
+        })
+        .catch(() => {
+          if (id === clashLoads.current) setClashes([]);
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [minutes, repeatOn, startIso, until]);
+
+  // The client's packs, for the price line.
+  const packClient = !editing && who && who !== NO_CLIENT ? who : null;
+  useEffect(() => {
+    if (!packClient) return;
+    let live = true;
+    loadPacks(packClient)
+      .then((list) => live && setPacks({ client: packClient, list }))
+      .catch(() => live && setPacks({ client: packClient, list: [] }));
+    return () => {
+      live = false;
+    };
+  }, [packClient]);
+
   const clientName =
     who === NO_CLIENT
       ? null
@@ -162,8 +263,10 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
   const picked = clients?.find((x) => x.id === who) ?? null;
   // What the database will use when no price is typed. The field shows the currency, so only the amount.
   const amount = (cents: number) => (cents === 0 ? 'Free' : moneyInput(cents));
-  const pricePlaceholder =
-    editing && (priceTouched || who === initial?.client_id)
+  const pack = packClient && packs?.client === packClient ? packFor(packs.list, firstDay) : null;
+  const pricePlaceholder = pack
+    ? `From ${picked?.first_name ?? 'their'}’s pack`
+    : editing && (priceTouched || who === initial?.client_id)
       ? 'No price'
       : picked?.session_price_cents != null
         ? `${amount(picked.session_price_cents)} · ${picked.first_name}’s price`
@@ -187,23 +290,172 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
     if (who === NO_CLIENT && !title.trim()) return setError('Give this time a name, like “Group class”.');
     if (!time) return setError('Pick a start time.');
     if (who !== NO_CLIENT && parsedPrice.error) return setError(parsedPrice.error);
+    if (repeatOn && untilChoice === 'pick' && !untilPicked) return setError('Pick the last day of the repeat.');
+    if (repeatOn && count === 0)
+      return setError('Every week clashes with something else. Pick another time, or book them anyway.');
     setBusy(true);
-    const problem = await onSubmit({
-      client_id: who === NO_CLIENT ? null : who,
-      title: who === NO_CLIENT ? title.trim() : null,
-      starts_at: combine(day, time).toISOString(),
-      duration_minutes: Number(duration ?? 60),
-      location: orNull(location),
-      notes: orNull(notes),
-      // A video call needs a client to call.
-      online: who !== NO_CLIENT && online,
-      ...priceToSend(),
-    });
+    const problem = await onSubmit(
+      {
+        client_id: who === NO_CLIENT ? null : who,
+        title: who === NO_CLIENT ? title.trim() : null,
+        starts_at: combine(day, time).toISOString(),
+        duration_minutes: Number(duration ?? 60),
+        location: orNull(location),
+        notes: orNull(notes),
+        // A video call needs a client to call.
+        online: who !== NO_CLIENT && online,
+        ...priceToSend(),
+      },
+      repeatOn ? { until, skip, count } : null,
+    );
     setBusy(false);
-    if (problem) setError(problem);
+    if (problem) {
+      haptic.warning();
+      setError(problem);
+    }
   }
 
-  const button = <Button title={submitLabel} onPress={submit} loading={busy} />;
+  const button = (
+    <Button
+      title={repeatOn ? (count === 1 ? 'Book 1 session' : `Book ${count} sessions`) : submitLabel}
+      onPress={submit}
+      loading={busy}
+      testID="session-form-submit"
+    />
+  );
+
+  // The price line under the field: the pack the session will use, if any.
+  const first = picked?.first_name ?? '';
+  const rate = priceFor(picked?.session_price_cents ?? null, usual).cents;
+  const lastSessionDay = (() => {
+    let last: string | null = null;
+    const end = until && until < addDaysKey(today, 83) ? until : addDaysKey(today, 83);
+    for (let d = firstDay; d <= end; d = addDaysKey(d, 7)) if (!skip.includes(d)) last = d;
+    return last;
+  })();
+  const packLine = !pack
+    ? null
+    : repeatOn && count > pack.sessions_left
+      ? `The first ${pack.sessions_left} use ${first}’s pack, then ${rate == null ? 'no price' : rate === 0 ? 'free' : `${formatMoney(rate, currency)} each`}.`
+      : `Uses ${first}’s pack: ${pack.sessions_left} of ${pack.sessions_total} left. Type a price to charge ${repeatOn ? 'these sessions on their own' : 'this session on its own'}.`;
+  const packEnds =
+    pack && repeatOn && pack.expires_on && lastSessionDay && lastSessionDay > pack.expires_on
+      ? ` ${first}’s pack ends ${dayMonth(dayFromKeyLocal(pack.expires_on))}.`
+      : '';
+
+  const untilValue =
+    until == null
+      ? untilChoice === 'pick'
+        ? 'Pick a day'
+        : 'No end'
+      : `Until ${dayMonth(dayFromKeyLocal(until))} · ${count === 1 ? '1 session' : `${count} sessions`}`;
+
+  const repeatBlock =
+    repeatable && !editing ? (
+      <View style={styles.field}>
+        <Group style={inSheet ? { backgroundColor: Colors.tint } : undefined}>
+          <ListRow
+            title="Repeat every week"
+            subtitle={onClock ? repeatLabel(onClock.weekday, onClock.time) : 'Pick a start time'}
+            leading={<IconTile icon="repeat-outline" />}
+            trailing={
+              <Toggle
+                accessibilityLabel="Repeat every week"
+                value={repeat}
+                onValueChange={(on) => {
+                  setRepeat(on);
+                  setError(null);
+                  if (!on) {
+                    setClashes(null);
+                    setShowClashes(false);
+                    setBookAnyway(false);
+                  }
+                }}
+                testID="session-form-repeat"
+              />
+            }
+            last={!repeat}
+          />
+          {repeat ? (
+            <ListRow
+              title="Until"
+              trailing={
+                <Text variant="callout" tone="secondary" numberOfLines={2} style={[Tabular, { textAlign: 'right' }]}>
+                  {untilValue}
+                </Text>
+              }
+              onPress={() => setUntilOpen(true)}
+              testID="session-form-until"
+              last
+            />
+          ) : null}
+        </Group>
+        {repeat ? (
+          <>
+            <Text variant="footnote" tone="secondary">
+              {onClock
+                ? `${repeatLabel(onClock.weekday, onClock.time)} from ${dayMonthShort(dayFromKeyLocal(firstDay))}.${until == null ? ' Voltrix books 12 weeks ahead and keeps adding weeks.' : ''}`
+                : 'Pick a start time to see the weeks.'}
+            </Text>
+            {clashDays.length ? (
+              <View style={{ gap: Spacing.two }}>
+                <Notice
+                  tone="warning"
+                  onCard={inSheet}
+                  action={{
+                    label: showClashes ? 'Hide' : 'Show',
+                    onPress: () => setShowClashes((v) => !v),
+                    testID: 'session-form-clash-show',
+                  }}>
+                  {bookAnyway
+                    ? `${clashDays.length === 1 ? '1 week' : `${clashDays.length} weeks`} will be double-booked.`
+                    : clashDays.length === 1
+                      ? '1 week clashes with something else. It’ll be skipped.'
+                      : `${clashDays.length} weeks clash with something else. They’ll be skipped.`}
+                </Notice>
+                {showClashes ? (
+                  <Group style={inSheet ? { backgroundColor: Colors.tint } : undefined}>
+                    {(clashes ?? []).map((c, i, all) => (
+                      <ListRow
+                        key={`${c.day}-${c.starts_at}-${i}`}
+                        title={`${shortDate(new Date(c.starts_at))} · ${time24(new Date(c.starts_at))} · ${c.name}`}
+                        titleStyle={Tabular}
+                        compact
+                        last={i === all.length - 1}
+                      />
+                    ))}
+                  </Group>
+                ) : null}
+                <View style={{ alignItems: 'flex-start' }}>
+                  {bookAnyway ? (
+                    <TextLink
+                      label="Skip them instead"
+                      onPress={() => setBookAnyway(false)}
+                      testID="session-form-clash-skip"
+                    />
+                  ) : (
+                    <TextLink
+                      label="Book them anyway"
+                      onPress={() => setBookAnyway(true)}
+                      testID="session-form-clash-anyway"
+                    />
+                  )}
+                </View>
+              </View>
+            ) : clashes && onClock ? (
+              <Text variant="footnote" tone="secondary" testID="session-form-no-clashes">
+                No clashes in the next 12 weeks.
+              </Text>
+            ) : null}
+            {otherZone && onClock ? (
+              <Text variant="footnote" tone="secondary">
+                {`Repeats stay at ${onClock.time} ${zoneCity(zone)} time.`}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </View>
+    ) : null;
 
   const fields = (
     <>
@@ -318,6 +570,8 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
         />
       </View>
 
+      {repeatBlock}
+
       {who && who !== NO_CLIENT ? (
         <View style={styles.field}>
           <PriceField
@@ -332,7 +586,12 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
             error={parsedPrice.error}
             testID="session-form-price"
           />
-          {usual == null && !inSheet ? (
+          {packLine && !price.trim() ? (
+            <Text variant="footnote" tone="secondary" testID="session-form-pack">
+              {packLine + packEnds}
+            </Text>
+          ) : null}
+          {usual == null && !inSheet && !pack ? (
             <View style={{ alignItems: 'flex-start' }}>
               <TextLink label="Set your usual price" onPress={() => router.push('/settings/prices')} />
             </View>
@@ -372,9 +631,51 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
         multiline
         style={styles.notes}
       />
+      {inRepeat ? (
+        <Text variant="footnote" tone="secondary">
+          Client, price and notes change this session only.
+        </Text>
+      ) : null}
       <ErrorText>{error}</ErrorText>
     </>
   );
+
+  const untilSheets = repeatable ? (
+    <>
+      <Sheet visible={untilOpen} onClose={() => setUntilOpen(false)} title="Until">
+        <Chips
+          options={UNTIL}
+          value={untilChoice}
+          onChange={(v) => {
+            if (!v) return;
+            setUntilChoice(v);
+            setUntilOpen(false);
+            if (v === 'pick') setPickingUntil(true);
+          }}
+          wrap
+          testIDPrefix="until-"
+        />
+        <Text variant="footnote" tone="secondary">
+          With no end, Voltrix keeps booking 12 weeks ahead until you stop it.
+        </Text>
+      </Sheet>
+      <DayPickSheet
+        visible={pickingUntil}
+        title="Last day"
+        from={firstDay}
+        to={addDaysKey(firstDay, 365)}
+        value={untilPicked}
+        onPick={(d) => {
+          setUntilPicked(d);
+          setPickingUntil(false);
+        }}
+        onClose={() => {
+          setPickingUntil(false);
+          if (!untilPicked) setUntilChoice('none');
+        }}
+      />
+    </>
+  ) : null;
 
   const picker = (
     <ClientPicker
@@ -400,6 +701,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
         {button}
         {children}
         {picker}
+        {untilSheets}
       </View>
     );
   }
@@ -411,8 +713,15 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
       </ScrollView>
       <StickyFooter>{button}</StickyFooter>
       {picker}
+      {untilSheets}
     </KeyboardAvoidingView>
   );
+}
+
+// 'YYYY-MM-DD' → that day at noon on the phone's clock, for the words.
+function dayFromKeyLocal(key: string) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 12);
 }
 
 function dayKeyOf(day: Date) {

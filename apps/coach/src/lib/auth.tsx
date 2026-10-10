@@ -32,6 +32,11 @@ export type Profile = {
   country: string;
   currency: string;
   session_price_cents: number | null;
+  // The trainer's clock for booking hours, repeat bookings and "today" in money (an IANA name), whether
+  // people can ask to train with them, and whether a no-show uses a pack session and is owed.
+  time_zone: string;
+  accepting_clients: boolean;
+  charge_no_shows: boolean;
   // True when the database doesn't have this version's changes yet (the app waits on a calm screen).
   older_database?: boolean;
 };
@@ -62,7 +67,7 @@ const PROFILE_COLUMNS =
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select(`${PROFILE_COLUMNS}, country, currency, session_price_cents`)
+    .select(`${PROFILE_COLUMNS}, country, currency, session_price_cents, time_zone, accepting_clients, charge_no_shows`)
     .eq('id', userId)
     .maybeSingle();
   // An older database without this version's columns yet (42703: no such column). The profile still
@@ -72,7 +77,16 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     const older = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle();
     if (older.error) throw older.error;
     return older.data
-      ? ({ ...older.data, country: 'ZA', currency: 'ZAR', session_price_cents: null, older_database: true } as Profile)
+      ? ({
+          ...older.data,
+          country: 'ZA',
+          currency: 'ZAR',
+          session_price_cents: null,
+          time_zone: 'Africa/Johannesburg',
+          accepting_clients: true,
+          charge_no_shows: true,
+          older_database: true,
+        } as Profile)
       : null;
   }
   if (error) throw error;

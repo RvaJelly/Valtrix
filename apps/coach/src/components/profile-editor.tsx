@@ -5,7 +5,7 @@ import { Avatar } from '@/components/avatar';
 import { SettingsPage } from '@/components/settings-parts';
 import { StickyFooter } from '@/components/sticky-footer';
 import { useToast } from '@/components/toast';
-import { Button, ErrorText, Group, IconTile, ListRow, Section, Text, TextField } from '@/components/ui';
+import { Button, ErrorText, Group, IconTile, ListRow, Section, Text, TextField, Toggle } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
@@ -31,6 +31,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   const [city, setCity] = useState(profile.city ?? '');
   const [years, setYears] = useState(profile.years_experience == null ? '' : String(profile.years_experience));
   const [bio, setBio] = useState(profile.bio ?? '');
+  const [accepting, setAccepting] = useState(profile.accepting_clients ?? true);
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState<'change' | 'remove' | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -147,6 +148,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         city: city.trim() || null,
         years_experience: yearsNumber,
         bio: bio.trim() || null,
+        accepting_clients: accepting,
       })
       .eq('id', profile.id);
     setBusy(false);
@@ -287,6 +289,26 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           })}
         </View>
         <ErrorText>{errors.specialties ?? null}</ErrorText>
+      </Section>
+
+      <Section title="New clients">
+        <Group>
+          <ListRow
+            title="Taking new clients"
+            trailing={
+              <Toggle
+                accessibilityLabel="Taking new clients"
+                value={accepting}
+                onValueChange={setAccepting}
+                testID="profile-accepting"
+              />
+            }
+            last
+          />
+        </Group>
+        <Text variant="footnote" tone="secondary">
+          Off: you stay in the Trainers list, but people can’t ask to train with you.
+        </Text>
       </Section>
 
       <Section title="Location">

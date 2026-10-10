@@ -6,7 +6,7 @@ import type { Href } from 'expo-router';
 
 import type { ClientOverview } from '@/lib/overview';
 
-export type NeedKind = 'check_in' | 'quiet' | 'missed_check_in' | 'no_shows' | 'invite';
+export type NeedKind = 'check_in' | 'health' | 'quiet' | 'missed_check_in' | 'no_shows' | 'pack' | 'owes' | 'invite';
 
 export type Need = {
   kind: NeedKind;
@@ -15,17 +15,31 @@ export type Need = {
   // When it started (ms): the longest waiting comes first within a reason.
   since: number;
   href: Href;
-  // A button at the end of the row: a chat with the client, or the WhatsApp invite.
-  trailing: 'message' | 'whatsapp' | null;
+  // A button at the end of the row: a chat with the client, the WhatsApp invite, Sell a pack or Mark
+  // paid.
+  trailing: 'message' | 'whatsapp' | 'sell' | 'paid' | null;
 };
 
-export const NEED_KINDS: NeedKind[] = ['check_in', 'quiet', 'missed_check_in', 'no_shows', 'invite'];
+// People's safety and answers before money, money before invites.
+export const NEED_KINDS: NeedKind[] = [
+  'check_in',
+  'health',
+  'quiet',
+  'missed_check_in',
+  'no_shows',
+  'pack',
+  'owes',
+  'invite',
+];
 
 export const NEED_TITLES: Record<NeedKind, string> = {
   check_in: 'Check-ins to answer',
+  health: 'Health forms',
   quiet: 'Gone quiet',
   missed_check_in: 'Missed check-ins',
   no_shows: 'No-shows',
+  pack: 'Packs',
+  owes: 'Owes',
   invite: 'Invites',
 };
 
@@ -50,6 +64,21 @@ function localDay(iso: string) {
 
 function daysFrom(from: string, to: string) {
   return Math.round((utc(to) - utc(from)) / DAY_MS);
+}
+
+// "3 Oct" for a day ('YYYY-MM-DD').
+function shortDay(day: string) {
+  const d = new Date(utc(day));
+  // A non-breaking space, so "3 Oct" never breaks across two lines.
+  return `${d.getUTCDate()}\u00a0${MONTHS[d.getUTCMonth()]}`;
+}
+
+// Rand the way formatMoney writes it ("R1 200", "R1 250.50"), for callers that don't pass their own.
+function rand(cents: number) {
+  const value = Math.round(Math.abs(cents));
+  const whole = String(Math.floor(value / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+  const rest = value % 100;
+  return `R${whole}${rest ? `.${String(rest).padStart(2, '0')}` : ''}`;
 }
 
 function plural(n: number, one: string, many = `${one}s`) {
@@ -77,14 +106,22 @@ function clientHref(id: string, params?: Record<string, string>): Href {
   return { pathname: '/clients/[id]', params: { id, ...params } };
 }
 
-// Every reason a client needs the trainer, in the order of NEED_KINDS.
-export function needsOf(row: ClientOverview, today: string, now: number): Need[] {
+// Every reason a client needs the trainer, in the order of NEED_KINDS. `money` writes an amount in
+// the trainer's currency.
+export function needsOf(
+  row: ClientOverview,
+  today: string,
+  now: number,
+  money: (cents: number) => string = rand,
+): Need[] {
   if (row.status !== 'active') return [];
-  if (row.app_status === 'declined' || row.app_status === 'left' || row.app_status === 'gone') return [];
+  // Someone who said no to Voltrix, left it or deleted their account only needs the trainer for money:
+  // a pack running out or money owed still count.
+  const offApp = row.app_status === 'declined' || row.app_status === 'left' || row.app_status === 'gone';
   const needs: Need[] = [];
   const id = row.client_id;
 
-  if (row.unanswered_check_ins > 0) {
+  if (!offApp && row.unanswered_check_ins > 0) {
     const since = row.unanswered_since ? Date.parse(row.unanswered_since) : now;
     needs.push({
       kind: 'check_in',
@@ -102,7 +139,19 @@ export function needsOf(row: ClientOverview, today: string, now: number): Need[]
     });
   }
 
-  if (row.linked && row.plan_planned_week > 0) {
+  if (!offApp && row.health === 'doctor') {
+    const signed = row.health_signed_at ? localDay(row.health_signed_at) : null;
+    needs.push({
+      kind: 'health',
+      client: row,
+      subtitle: `Answered yes on the health form${signed ? ` · ${shortDay(signed)}` : ''}`,
+      since: row.health_signed_at ? Date.parse(row.health_signed_at) : now,
+      href: { pathname: '/clients/[id]/health', params: { id } },
+      trailing: null,
+    });
+  }
+
+  if (!offApp && row.linked && row.plan_planned_week > 0) {
     const last =
       [row.last_workout_on, row.last_tick_on]
         .filter((d): d is string => !!d)
@@ -132,7 +181,7 @@ export function needsOf(row: ClientOverview, today: string, now: number): Need[]
     }
   }
 
-  if (row.linked && row.last_check_in_week) {
+  if (!offApp && row.linked && row.last_check_in_week) {
     const closed = closedCheckInWeek(today);
     const opened = keyOf(utc(closed) + 4 * DAY_MS);
     if (row.last_check_in_week < closed && row.joined_at && localDay(row.joined_at) < opened) {
@@ -148,7 +197,7 @@ export function needsOf(row: ClientOverview, today: string, now: number): Need[]
     }
   }
 
-  if (row.no_shows_30d >= 2) {
+  if (!offApp && row.no_shows_30d >= 2) {
     needs.push({
       kind: 'no_shows',
       client: row,
@@ -160,7 +209,36 @@ export function needsOf(row: ClientOverview, today: string, now: number): Need[]
     });
   }
 
-  if (!row.linked && (row.app_status === 'not_on_app' || row.app_status === 'invited')) {
+  if (row.pack_id && (row.pack_expires_on == null || row.pack_expires_on >= today)) {
+    const endsSoon = row.pack_left > 0 && row.pack_expires_on != null && daysFrom(today, row.pack_expires_on) <= 7;
+    if (row.pack_left === 0 || endsSoon) {
+      needs.push({
+        kind: 'pack',
+        client: row,
+        subtitle:
+          row.pack_left === 0 ? 'Pack used up' : `Pack ends ${shortDay(row.pack_expires_on!)}, ${row.pack_left} left`,
+        // Used up first, then the soonest end.
+        since: row.pack_left === 0 ? 0 : utc(row.pack_expires_on!),
+        href: { pathname: '/clients/[id]/money', params: { id } },
+        trailing: 'sell',
+      });
+    }
+  }
+
+  if (row.owed_cents > 0 && row.owed_since && daysFrom(row.owed_since, today) >= 14) {
+    needs.push({
+      kind: 'owes',
+      client: row,
+      subtitle: `Owes ${money(row.owed_cents)} since ${shortDay(row.owed_since)}${
+        row.owed_other ? ' and more in another currency' : ''
+      }`,
+      since: utc(row.owed_since),
+      href: { pathname: '/clients/[id]/money', params: { id } },
+      trailing: 'paid',
+    });
+  }
+
+  if (!offApp && !row.linked && (row.app_status === 'not_on_app' || row.app_status === 'invited')) {
     const ask = row.invite_shared_at ?? (row.email ? row.invited_at : null);
     if (!ask) {
       if (!row.email && daysFrom(localDay(row.created_at), today) <= 30) {
@@ -201,18 +279,28 @@ export function needsYou(
   today: string,
   now: number,
   limit = 5,
+  money?: (cents: number) => string,
 ): { rows: Need[]; more: boolean; total: number } {
   const first = rows
-    .map((row) => needsOf(row, today, now)[0])
+    .map((row) => needsOf(row, today, now, money)[0])
     .filter((n): n is Need => !!n)
     .sort(byReason);
   return { rows: first.slice(0, limit), more: first.length > limit, total: first.length };
 }
 
 // The Needs you page: every reason of every client, grouped by reason.
-export function needsYouAll(rows: ClientOverview[], today: string, now: number): Record<NeedKind, Need[]> {
+export function needsYouAll(
+  rows: ClientOverview[],
+  today: string,
+  now: number,
+  money?: (cents: number) => string,
+): Record<NeedKind, Need[]> {
   const all = Object.fromEntries(NEED_KINDS.map((k) => [k, [] as Need[]])) as Record<NeedKind, Need[]>;
-  for (const row of rows) for (const need of needsOf(row, today, now)) all[need.kind].push(need);
+  for (const row of rows) for (const need of needsOf(row, today, now, money)) all[need.kind].push(need);
   for (const kind of NEED_KINDS) all[kind].sort(byReason);
   return all;
 }
+
+// What the empty Needs you says.
+export const NEEDS_EMPTY =
+  'Check-ins to answer, health forms, packs running out, money owed and open invites show here.';

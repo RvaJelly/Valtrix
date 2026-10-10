@@ -124,9 +124,10 @@ export function parseMoney(text: string, currency = 'ZAR'): { cents: number | nu
 // What goes back into a price field: "400", "1250.50". Never with a space.
 export function moneyInput(cents: number | null): string {
   if (cents == null) return '';
-  const whole = Math.floor(cents / 100);
+  // Thousands grouped with a space, as amounts read everywhere else ("2 000"); parseMoney ignores it.
+  const whole = String(Math.floor(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const rest = cents % 100;
-  return rest ? `${whole}.${String(rest).padStart(2, '0')}` : String(whole);
+  return rest ? `${whole}.${String(rest).padStart(2, '0')}` : whole;
 }
 
 // The price a new booking gets: the client's own, else the usual one.

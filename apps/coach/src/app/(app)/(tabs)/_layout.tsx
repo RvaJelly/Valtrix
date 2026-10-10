@@ -1,14 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View, type ColorValue, type ViewStyle } from 'react-native';
+import { useEffect, useState, type ComponentProps } from 'react';
+import {
+  AppState,
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ColorValue,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Logo } from '@/components/logo';
 import { Text } from '@/components/ui';
 import { Colors, Fonts, Layout, themed } from '@/constants/theme';
-import { useChat } from '@/lib/chat-live';
+import { useChat, useChatEvents } from '@/lib/chat-live';
 import { useTabsShown } from '@/lib/nav';
+import { refreshWaitingCount, useWaitingCount } from '@/lib/requests';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -59,6 +68,25 @@ const BAR_CONTENT = 57;
 export default function TabLayout() {
   const { unread } = useChat();
   useTabsShown();
+  // Requests waiting for an answer, on the Home tab: counted on start, on coming back to the app and
+  // a second after news, so it's right while another tab is open.
+  const waiting = useWaitingCount();
+  const [news, setNews] = useState(0);
+  useEffect(() => {
+    refreshWaitingCount();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshWaitingCount();
+    });
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (!news) return;
+    const timer = setTimeout(refreshWaitingCount, 1000);
+    return () => clearTimeout(timer);
+  }, [news]);
+  useChatEvents((event) => {
+    if (event.type === 'news' || event.type === 'reconnected') setNews((n) => n + 1);
+  });
   const insets = useSafeAreaInsets();
   const { width, fontScale } = useWindowDimensions();
   // On a wide window (a PC browser) the tabs move to a sidebar on the left.
@@ -124,7 +152,17 @@ export default function TabLayout() {
             }
           : null),
       }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('home') }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: icon('home'),
+          tabBarBadge: waiting ? (waiting > 99 ? '99+' : waiting) : undefined,
+          tabBarAccessibilityLabel: waiting
+            ? `Home, ${waiting} ${waiting === 1 ? 'request' : 'requests'} waiting`
+            : undefined,
+        }}
+      />
       <Tabs.Screen name="clients" options={{ title: 'Clients', tabBarIcon: icon('people') }} />
       <Tabs.Screen name="programs" options={{ title: 'Programs', tabBarIcon: icon('barbell') }} />
       <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: icon('calendar-clear') }} />

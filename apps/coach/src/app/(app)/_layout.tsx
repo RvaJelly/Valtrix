@@ -70,6 +70,8 @@ export default function AppLayout() {
           }}
         />
         <Stack.Screen name="clients/[id]/sessions" options={{ title: 'Sessions' }} />
+        <Stack.Screen name="clients/[id]/money" options={{ title: 'Money', headerTitle: '' }} />
+        <Stack.Screen name="clients/[id]/health" options={{ title: 'Health form', headerTitle: '' }} />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />
         <Stack.Screen name="sessions/[id]" options={{ title: 'Session' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
@@ -81,9 +83,15 @@ export default function AppLayout() {
         <Stack.Screen name="settings/privacy" options={{ title: 'Privacy and blocked people' }} />
         <Stack.Screen name="settings/account" options={{ title: 'Account and password' }} />
         <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
+        <Stack.Screen name="settings/booking" options={{ title: 'Online booking' }} />
+        <Stack.Screen name="settings/calendar" options={{ title: 'Calendar link' }} />
+        <Stack.Screen name="settings/privacy-policy" options={{ title: 'Privacy' }} />
         <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
         <Stack.Screen name="needs-you" options={{ title: 'Needs you' }} />
         <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
+        <Stack.Screen name="owed" options={{ title: 'Who owes you', headerTitle: '' }} />
+        <Stack.Screen name="requests" options={{ title: 'Requests', headerTitle: '' }} />
+        <Stack.Screen name="news" options={{ title: 'Updates', headerTitle: '' }} />
         <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
         <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout', headerTitle: '' }} />

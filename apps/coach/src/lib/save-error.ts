@@ -8,8 +8,10 @@ export const PLAN_NOT_ACTIVE =
 
 // A plain message for a refused save. A broken check (23514) means something is too long
 // or not allowed, which the form should normally stop before it gets that far.
-export function saveError(error: DbError) {
+// With `inUse`, a 23503 (still used elsewhere) means an exercise that a workout still has.
+export function saveError(error: DbError, options?: { inUse?: boolean }) {
   if (error.code === '23514') return 'Some of that is too long. Shorten it and try again.';
+  if (error.code === '23503' && options?.inUse) return 'Remove it from your workouts and clients’ plans first.';
   return plainError(error);
 }
 
@@ -41,4 +43,15 @@ export async function accessRefused() {
   if (!error && data === true) return 'That couldn’t be saved. Go back and try again.';
   for (const listener of listeners) listener();
   return PLAN_NOT_ACTIVE;
+}
+
+// addError for a thrown failure (an RPC through rpcOrThrow): a refusal the database explains itself
+// keeps its sentence while the trainer still has access.
+export async function addFailure(e: unknown): Promise<string> {
+  const error = (e && typeof e === 'object' ? e : { message: String(e) }) as DbError;
+  if (error.code === '42501') {
+    const words = await accessRefused();
+    return words === PLAN_NOT_ACTIVE ? words : plainError(error, words);
+  }
+  return saveError(error);
 }

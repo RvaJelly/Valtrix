@@ -46,6 +46,8 @@ function RootNavigator() {
   const signedIn = !!session && !recovering && !isClient;
   const setUp = !!profile?.business_name;
   const hasAccess = coachAccess(profile).kind !== 'none';
+  // This version needs a newer database than the one it found: wait on the update screen.
+  const waiting = signedIn && !!profile?.older_database;
   return (
     <Stack
       screenOptions={{
@@ -58,14 +60,17 @@ function RootNavigator() {
       <Stack.Protected guard={!!session && recovering}>
         <Stack.Screen name="new-password" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && !setUp}>
+      <Stack.Protected guard={signedIn && !waiting && !setUp}>
         <Stack.Screen name="(setup)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && setUp && hasAccess}>
+      <Stack.Protected guard={signedIn && !waiting && setUp && hasAccess}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn && setUp && !hasAccess}>
+      <Stack.Protected guard={signedIn && !waiting && setUp && !hasAccess}>
         <Stack.Screen name="(paywall)" />
+      </Stack.Protected>
+      <Stack.Protected guard={waiting}>
+        <Stack.Screen name="update-pending" />
       </Stack.Protected>
       <Stack.Protected guard={!!session && !recovering && isClient}>
         <Stack.Screen name="wrong-app" />

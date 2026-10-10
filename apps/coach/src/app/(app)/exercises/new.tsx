@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
+import { ExerciseUsageSheet } from '@/components/exercise-usage-sheet';
 import { Button, Card, EmptyState, ErrorText, Skeleton, Text, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
 import { Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
@@ -11,7 +12,7 @@ import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
 import { addError, saveError } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
-import { removeWorkoutVideos } from '@/lib/workout-videos';
+import { removeUnusedVideos, removeWorkoutVideos } from '@/lib/workout-videos';
 import {
   EQUIPMENT,
   EXERCISE_COLUMNS,
@@ -35,6 +36,8 @@ export default function ExerciseForm() {
   const unsaved = useRef<{ path: string | null }>({ path: null });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Deleting was refused because workouts still use it: where.
+  const [usage, setUsage] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -100,8 +103,12 @@ export default function ExerciseForm() {
     if (!id || !(await confirm('Delete exercise?', 'It will be removed from your library.', 'Delete'))) return;
     const { error } = await supabase.from('exercises').delete().eq('id', id);
     // 23503: still used in a workout (foreign key).
-    if (error) return setError(error.code === '23503' ? 'Remove it from your workouts first.' : plainError(error));
-    await removeWorkoutVideos([video]);
+    if (error) {
+      setError(saveError(error, { inUse: true }));
+      if (error.code === '23503') setUsage(true);
+      return;
+    }
+    await removeUnusedVideos([video]);
     goBack('/exercises');
   }
 
@@ -170,6 +177,7 @@ export default function ExerciseForm() {
           {id ? <Button title="Delete exercise" variant="destructive" onPress={remove} /> : null}
         </View>
       </ScrollView>
+      <ExerciseUsageSheet exerciseId={id ?? null} visible={usage} onClose={() => setUsage(false)} />
     </KeyboardAvoidingView>
   );
 }

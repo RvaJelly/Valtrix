@@ -27,6 +27,13 @@ export type Profile = {
   longitude?: number | null;
   // Theme, units and reminder time saved with the account.
   preferences?: Record<string, unknown> | null;
+  // Where the trainer works (for phone numbers in WhatsApp links), the currency they charge in and
+  // their usual price for one session in cents (null: none set yet).
+  country: string;
+  currency: string;
+  session_price_cents: number | null;
+  // True when the database doesn't have this version's changes yet (the app waits on a calm screen).
+  older_database?: boolean;
 };
 
 type AuthState = {
@@ -38,6 +45,9 @@ type AuthState = {
   recovering: boolean;
   finishRecovery: () => void;
   refreshProfile: () => Promise<void>;
+  // Loads the profile again but keeps the one already loaded when the phone is offline. Answers the
+  // fresh profile, or null when it couldn't load.
+  recheckProfile: () => Promise<Profile | null>;
   signOut: () => Promise<void>;
   // True until the trainer passes the Face ID or fingerprint lock (when it is turned on).
   locked: boolean;
@@ -46,14 +56,25 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const PROFILE_COLUMNS =
+  'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience, latitude, longitude';
+
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select(
-      'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience, latitude, longitude',
-    )
+    .select(`${PROFILE_COLUMNS}, country, currency, session_price_cents`)
     .eq('id', userId)
     .maybeSingle();
+  // An older database without this version's columns yet (42703: no such column). The profile still
+  // loads, so sign-in and set-up work, but the app waits on the update screen until the database
+  // catches up, because most screens read the new columns.
+  if (error?.code === '42703') {
+    const older = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle();
+    if (older.error) throw older.error;
+    return older.data
+      ? ({ ...older.data, country: 'ZA', currency: 'ZAR', session_price_cents: null, older_database: true } as Profile)
+      : null;
+  }
   if (error) throw error;
   return data as Profile | null;
 }
@@ -75,16 +96,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   // Loads the signed-in trainer's profile again, so a trial or plan that ended, or free
   // access switched on or off, takes them to the Subscribe screen or back into the app.
   // Offline, the profile already loaded stays.
-  const recheckProfile = useCallback(() => {
+  const recheckProfile = useCallback(async () => {
     const userId = loadedUserId.current;
-    if (!userId) return;
-    fetchProfile(userId).then(
-      (fresh) => {
-        // Not if they signed out meanwhile.
-        if (fresh && loadedUserId.current === fresh.id) setProfile(fresh);
-      },
-      () => {},
-    );
+    if (!userId) return null;
+    const fresh = await fetchProfile(userId).catch(() => null);
+    // Not if they signed out meanwhile.
+    if (!fresh || loadedUserId.current !== fresh.id) return null;
+    setProfile(fresh);
+    return fresh;
   }, []);
 
   useEffect(() => {
@@ -149,7 +168,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   return (
     <AuthContext
-      value={{ loading, session, profile, recovering, finishRecovery, refreshProfile, signOut, locked, setLocked }}>
+      value={{
+        loading,
+        session,
+        profile,
+        recovering,
+        finishRecovery,
+        refreshProfile,
+        recheckProfile,
+        signOut,
+        locked,
+        setLocked,
+      }}>
       {children}
     </AuthContext>
   );

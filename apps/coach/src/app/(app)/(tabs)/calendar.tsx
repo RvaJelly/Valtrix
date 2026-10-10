@@ -1,14 +1,17 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SessionRow } from '@/components/session-row';
+import { ToMarkSheet } from '@/components/to-mark-sheet';
 import {
   Button,
   EmptyState,
   Group,
   IconButton,
+  IconTile,
+  ListRow,
   Notice,
   PageHeader,
   Section,
@@ -25,10 +28,12 @@ import {
   dayKey,
   formatDay,
   fromDayKey,
+  namesOf,
   SESSION_COLUMNS,
   sameDay,
   startOfDay,
   startOfWeek,
+  toMark,
   type Session,
 } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
@@ -39,6 +44,7 @@ export default function CalendarScreen() {
   const [loaded, setLoaded] = useState<{ week: string; list: Session[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [marking, setMarking] = useState(false);
   const showSkeleton = useDelayed(300);
   const weekStart = startOfWeek(selected);
   const weekKey = dayKey(weekStart);
@@ -57,34 +63,43 @@ export default function CalendarScreen() {
     }, []),
   );
 
+  // Only the newest load may show its answer: a late answer for a week no longer shown must not
+  // replace the shown week's sessions.
+  const loads = useRef(0);
+  const loadWeek = useCallback(() => {
+    const id = ++loads.current;
+    const start = fromDayKey(weekKey);
+    supabase
+      .from('sessions')
+      .select(SESSION_COLUMNS)
+      .gte('starts_at', start.toISOString())
+      .lt('starts_at', addDays(start, 7).toISOString())
+      .order('starts_at')
+      .then(({ data, error }) => {
+        if (id !== loads.current) return;
+        if (error) return setError(plainError(error));
+        setError(null);
+        setLoaded({ week: weekKey, list: data as unknown as Session[] });
+      });
+  }, [weekKey]);
+
   // Load the visible week whenever the screen is shown or the week changes.
   useFocusEffect(
     useCallback(() => {
-      // A late answer for a week no longer shown must not replace the shown week's sessions.
-      let current = true;
-      const start = fromDayKey(weekKey);
-      supabase
-        .from('sessions')
-        .select(SESSION_COLUMNS)
-        .gte('starts_at', start.toISOString())
-        .lt('starts_at', addDays(start, 7).toISOString())
-        .order('starts_at')
-        .then(({ data, error }) => {
-          if (!current) return;
-          if (error) return setError(plainError(error));
-          setError(null);
-          setLoaded({ week: weekKey, list: data as unknown as Session[] });
-        });
+      loadWeek();
       return () => {
-        current = false;
+        loads.current++;
       };
-    }, [weekKey]),
+    }, [loadWeek]),
   );
 
   const dayList = (sessions ?? []).filter((s) => sameDay(new Date(s.starts_at), selected));
   // Every session that still happens or happened counts, the same for the summary and the day dots.
   const counted = (sessions ?? []).filter((s) => s.status !== 'cancelled');
   const done = (sessions ?? []).filter((s) => s.status === 'completed').length;
+  const noShows = (sessions ?? []).filter((s) => s.status === 'no_show').length;
+  // This week's sessions that have ended and are still Booked.
+  const unmarked = (sessions ?? []).filter((s) => toMark(s, now));
   const monthLabel = monthYear(selected);
   const isToday = sameDay(selected, today);
 
@@ -103,11 +118,15 @@ export default function CalendarScreen() {
               <Text variant="headline" numberOfLines={1}>
                 {monthLabel}
               </Text>
-              <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
+              <Text variant="footnote" tone="secondary" numberOfLines={1}>
                 {sessions
-                  ? `${counted.length === 1 ? '1 session' : `${counted.length} sessions`} this week${
-                      done ? ` · ${done} done` : ''
-                    }`
+                  ? [
+                      counted.length === 1 ? '1 session' : `${counted.length} sessions`,
+                      `${done} done`,
+                      noShows ? `${noShows} ${noShows === 1 ? 'no-show' : 'no-shows'}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
                   : ' '}
               </Text>
             </View>
@@ -165,6 +184,19 @@ export default function CalendarScreen() {
           </View>
         </View>
 
+        {unmarked.length ? (
+          <Group>
+            <ListRow
+              title={unmarked.length === 1 ? '1 session to mark' : `${unmarked.length} sessions to mark`}
+              subtitle={namesOf(unmarked)}
+              leading={<IconTile icon="checkmark-done-outline" />}
+              onPress={() => setMarking(true)}
+              testID="calendar-to-mark"
+              last
+            />
+          </Group>
+        ) : null}
+
         <Section
           title={formatDay(selected, today)}
           action={isToday ? undefined : { label: 'Today', onPress: () => setSelected(today) }}>
@@ -192,6 +224,7 @@ export default function CalendarScreen() {
           ) : null}
         </Section>
       </ScrollView>
+      <ToMarkSheet visible={marking} sessions={unmarked} onClose={() => setMarking(false)} onChanged={loadWeek} />
     </SafeAreaView>
   );
 }

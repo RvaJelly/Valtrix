@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, View, type TextInput } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { LineChart } from '@/components/line-chart';
@@ -83,12 +83,15 @@ function daysBetween(a: string, b: string) {
 // A client's body weight, measurements, progress photos and weekly check-ins, with the
 // trainer's reply to each check-in. Read-only apart from the replies. Shown only for a client
 // who accepted the trainer. onUnsavedChange says whether a reply is typed but not sent.
+// `focusCheckIn` (from Needs you) brings that check-in into view and puts the cursor in its reply.
 export function ClientProgress({
   client,
   onUnsavedChange,
+  focusCheckIn,
 }: {
   client: Pick<Client, 'id' | 'first_name' | 'user_id'>;
   onUnsavedChange?: (unsaved: boolean) => void;
+  focusCheckIn?: string;
 }) {
   const { settings } = useSettings();
   const { data, failed, again } = useClientData(client.id, load, KINDS);
@@ -124,6 +127,7 @@ export function ClientProgress({
           name={client.first_name}
           unit={settings.units}
           onUnsavedChange={onUnsavedChange}
+          focus={focusCheckIn}
         />
       ) : null}
       <PhotoViewer photo={viewing} name={client.first_name} onClose={() => setViewing(null)} />
@@ -358,13 +362,27 @@ function CheckIns({
   name,
   unit,
   onUnsavedChange,
+  focus,
 }: {
   checkIns: ClientCheckIn[];
   name: string;
   unit: WeightUnit;
   onUnsavedChange?: (unsaved: boolean) => void;
+  focus?: string;
 }) {
-  const [all, setAll] = useState(false);
+  // A check-in further down than the first few opens the full list.
+  const [all, setAll] = useState(() => checkIns.findIndex((ci) => ci.id === focus) >= CHECK_INS_SHOWN);
+  const focusField = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!focus) return;
+    const timer = setTimeout(() => {
+      const input = focusField.current;
+      if (!input) return;
+      if (Platform.OS === 'web') (input as unknown as HTMLElement).scrollIntoView?.({ block: 'center' });
+      input.focus();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [focus]);
   // What the trainer typed, by check-in. Reloads never touch it.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
@@ -408,7 +426,7 @@ function CheckIns({
     } catch (e) {
       setErrors((errs) => ({
         ...errs,
-        [ci.id]: plainError(e, "That didn't save. Check your connection and try again."),
+        [ci.id]: plainError(e, 'That didn’t save. Check your connection and try again.'),
       }));
     }
     setSending((s) => ({ ...s, [ci.id]: false }));
@@ -466,6 +484,7 @@ function CheckIns({
                     multiline
                     maxLength={REPLY_MAX}
                     testID={`reply-${ci.id}`}
+                    ref={ci.id === focus ? focusField : undefined}
                     style={styles.replyInput}
                   />
                   <ErrorText>{errors[ci.id]}</ErrorText>

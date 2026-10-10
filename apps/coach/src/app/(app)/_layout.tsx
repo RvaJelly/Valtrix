@@ -56,7 +56,7 @@ export default function AppLayout() {
         <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
         {/* A client's page has two columns on a wide window, so its column is wider. */}
         <Stack.Screen
-          name="clients/[id]"
+          name="clients/[id]/index"
           options={{
             title: 'Client',
             headerTitle: '',
@@ -69,20 +69,27 @@ export default function AppLayout() {
             },
           }}
         />
+        <Stack.Screen name="clients/[id]/sessions" options={{ title: 'Sessions' }} />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />
         <Stack.Screen name="sessions/[id]" options={{ title: 'Session' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
         <Stack.Screen name="settings/profile" options={{ title: 'Profile' }} />
         <Stack.Screen name="settings/notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="settings/units" options={{ title: 'Workouts and units' }} />
+        <Stack.Screen name="settings/prices" options={{ title: 'Sessions and prices' }} />
         <Stack.Screen name="settings/appearance" options={{ title: 'Appearance' }} />
         <Stack.Screen name="settings/privacy" options={{ title: 'Privacy and blocked people' }} />
         <Stack.Screen name="settings/account" options={{ title: 'Account and password' }} />
         <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
         <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
+        <Stack.Screen name="needs-you" options={{ title: 'Needs you' }} />
+        <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
         <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
         <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />
         <Stack.Screen name="workouts/[id]" options={{ title: 'Workout', headerTitle: '' }} />
+        <Stack.Screen name="programs/new" options={{ title: 'New program', presentation: 'modal' }} />
+        <Stack.Screen name="programs/[id]" options={{ title: 'Program', headerTitle: '' }} />
+        <Stack.Screen name="templates/[slug]" options={{ title: 'Voltrix template', headerTitle: '' }} />
         <Stack.Screen name="exercises/index" options={{ title: 'Exercise library' }} />
         <Stack.Screen name="exercises/new" options={{ title: 'New exercise', presentation: 'modal' }} />
         <Stack.Screen

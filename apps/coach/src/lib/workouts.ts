@@ -45,9 +45,18 @@ export type Workout = {
   updated_at: string;
   // A video for the whole workout, like a follow-along.
   video_path: string | null;
+  // Where it lives: one client's plan (client_id), one of the trainer's programs (program_id), or
+  // the trainer's library (neither).
+  client_id: string | null;
+  program_id: string | null;
 };
 
-export const WORKOUT_COLUMNS = 'id, name, notes, updated_at, video_path';
+export const WORKOUT_COLUMNS = 'id, name, notes, updated_at, video_path, client_id, program_id';
+
+// Only the trainer's library ("Your workouts"): not clients' copies or programs' workouts.
+export function libraryOnly<Q extends { is: (column: string, value: null) => Q }>(query: Q): Q {
+  return query.is('client_id', null).is('program_id', null);
+}
 
 export type WorkoutExercise = {
   id: string;

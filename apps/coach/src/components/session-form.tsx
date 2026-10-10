@@ -10,8 +10,11 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { router } from 'expo-router';
+
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
+import { PriceField } from '@/components/price-field';
 import { Sheet } from '@/components/sheet';
 import { StickyFooter } from '@/components/sticky-footer';
 import {
@@ -26,11 +29,14 @@ import {
   SkeletonRows,
   Text,
   TextField,
+  TextLink,
   Toggle,
 } from '@/components/ui';
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, withAlpha } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { fullName, type Client } from '@/lib/clients';
 import { haptic } from '@/lib/haptics';
+import { moneyInput, parseMoney } from '@/lib/money';
 import {
   addDays,
   combine,
@@ -55,12 +61,15 @@ export type SessionInput = {
   location: string | null;
   notes: string | null;
   online: boolean;
+  // Only when it should change: left out, the database prices a booking from the client's own
+  // price or the usual one, and an edit keeps the session's price.
+  price_cents?: number | null;
 };
 
 const NO_CLIENT = 'none';
 
 type Props = {
-  // The session being edited, or the day and client to start a new one with.
+  // The session being edited (with its id), or the day and client to start a new one with.
   initial?: Partial<SessionInput> & { id?: string };
   day: Date;
   submitLabel: string;
@@ -71,7 +80,7 @@ type Props = {
   children?: ReactNode;
 };
 
-type ClientChoice = Pick<Client, 'id' | 'first_name' | 'last_name'>;
+type ClientChoice = Pick<Client, 'id' | 'first_name' | 'last_name' | 'session_price_cents'>;
 
 function orNull(value: string) {
   const trimmed = value.trim();
@@ -102,6 +111,13 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
   const [location, setLocation] = useState(initial?.location ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [online, setOnline] = useState(initial?.online ?? false);
+  const editing = !!initial?.id;
+  const { profile } = useAuth();
+  const currency = profile?.currency ?? 'ZAR';
+  const usual = profile?.session_price_cents ?? null;
+  // Booking: empty until typed. Editing: the price the session keeps.
+  const [price, setPrice] = useState(editing ? moneyInput(initial?.price_cents ?? null) : '');
+  const [priceTouched, setPriceTouched] = useState(false);
   const [dayBookings, setDayBookings] = useState<Session[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -109,7 +125,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
   useEffect(() => {
     supabase
       .from('clients')
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, session_price_cents')
       .eq('status', 'active')
       .order('first_name')
       .then(({ data }) => setClients((data as ClientChoice[]) ?? []));
@@ -142,11 +158,35 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
     time && duration ? { starts_at: combine(day, time).toISOString(), duration_minutes: Number(duration) } : null;
   const clash = mine ? ((dayBookings ?? []).find((s) => overlaps(mine, s)) ?? null) : null;
 
+  const parsedPrice = parseMoney(price, currency);
+  const picked = clients?.find((x) => x.id === who) ?? null;
+  // What the database will use when no price is typed. The field shows the currency, so only the amount.
+  const amount = (cents: number) => (cents === 0 ? 'Free' : moneyInput(cents));
+  const pricePlaceholder =
+    editing && (priceTouched || who === initial?.client_id)
+      ? 'No price'
+      : picked?.session_price_cents != null
+        ? `${amount(picked.session_price_cents)} · ${picked.first_name}’s price`
+        : usual != null
+          ? `${amount(usual)} · your usual price`
+          : 'No price set';
+
+  // The price to send, if any: a typed one; on an edit, a cleared one (null), or null for a new client
+  // so the database prices it for them.
+  function priceToSend(): { price_cents?: number | null } {
+    if (who === NO_CLIENT) return editing && initial?.price_cents != null && priceTouched ? { price_cents: null } : {};
+    if (!editing) return price.trim() ? { price_cents: parsedPrice.cents } : {};
+    if (priceTouched) return { price_cents: parsedPrice.cents };
+    if (who !== initial?.client_id) return { price_cents: null };
+    return {};
+  }
+
   async function submit() {
     setError(null);
     if (!who) return setError('Choose a client, or block time without one.');
     if (who === NO_CLIENT && !title.trim()) return setError('Give this time a name, like “Group class”.');
     if (!time) return setError('Pick a start time.');
+    if (who !== NO_CLIENT && parsedPrice.error) return setError(parsedPrice.error);
     setBusy(true);
     const problem = await onSubmit({
       client_id: who === NO_CLIENT ? null : who,
@@ -157,6 +197,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
       notes: orNull(notes),
       // A video call needs a client to call.
       online: who !== NO_CLIENT && online,
+      ...priceToSend(),
     });
     setBusy(false);
     if (problem) setError(problem);
@@ -278,6 +319,28 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
       </View>
 
       {who && who !== NO_CLIENT ? (
+        <View style={styles.field}>
+          <PriceField
+            label="Price"
+            value={price}
+            onChangeText={(text) => {
+              setPrice(text);
+              setPriceTouched(true);
+            }}
+            currency={currency}
+            placeholder={pricePlaceholder}
+            error={parsedPrice.error}
+            testID="session-form-price"
+          />
+          {usual == null && !inSheet ? (
+            <View style={{ alignItems: 'flex-start' }}>
+              <TextLink label="Set your usual price" onPress={() => router.push('/settings/prices')} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {who && who !== NO_CLIENT ? (
         <Group style={inSheet ? { backgroundColor: Colors.tint } : undefined}>
           <ListRow
             title="Online (video call)"
@@ -321,6 +384,9 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
       onClose={() => setPicking(false)}
       onPick={(id) => {
         haptic.select();
+        // Another client on an edit: their price applies unless one is typed.
+        if (editing && !priceTouched && id !== who)
+          setPrice(id === initial?.client_id ? moneyInput(initial?.price_cents ?? null) : '');
         setWho(id);
         setPicking(false);
       }}

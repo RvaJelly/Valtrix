@@ -19,11 +19,22 @@ type Props<T extends string> = {
   // The colour behind a sideways row, for the fade at its right edge: the page by default, or
   // Colors.surface for a row inside a card.
   background?: string;
+  // Each chip's test id is this followed by its key ("all" for the All chip).
+  testIDPrefix?: string;
 };
 
 const FADE = 24;
 
-export function Chips<T extends string>({ options, value, onChange, allowClear, all, wrap, background }: Props<T>) {
+export function Chips<T extends string>({
+  options,
+  value,
+  onChange,
+  allowClear,
+  all,
+  wrap,
+  background,
+  testIDPrefix,
+}: Props<T>) {
   const scroll = useRef<ScrollView>(null);
   // Where the selected chip sits and how wide the row is, for the one scroll on mount.
   const layout = useRef({ placed: false, visible: 0, selected: null as { x: number; width: number } | null });
@@ -65,6 +76,7 @@ export function Chips<T extends string>({ options, value, onChange, allowClear, 
       accessibilityState={{ selected: item.selected }}
       onPress={() => choose(item.next)}
       onLayout={item.selected && !wrap ? onSelectedLayout : undefined}
+      testID={testIDPrefix ? `${testIDPrefix}${item.key || 'all'}` : undefined}
       style={styles.target}>
       {({ pressed }) => (
         <View

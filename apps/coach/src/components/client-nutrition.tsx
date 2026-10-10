@@ -309,8 +309,8 @@ export function ClientNutrition({
         <Card style={{ gap: Spacing.three }}>
           <Text variant="callout" tone="secondary">
             {client.user_id
-              ? `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They see it in the Voltrix app.`
-              : `Set ${client.first_name}'s daily calories, protein, carbs and fat, and what to eat at each meal. They'll see it once they accept your invite in the Voltrix app.`}
+              ? `Set ${client.first_name}’s daily calories, protein, carbs and fat, and what to eat at each meal. They see it in the Voltrix app.`
+              : `Set ${client.first_name}’s daily calories, protein, carbs and fat, and what to eat at each meal. They’ll see it once they accept your invite in the Voltrix app.`}
           </Text>
           <Button
             title="Set a nutrition plan"

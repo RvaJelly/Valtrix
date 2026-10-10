@@ -2,8 +2,10 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router
 import { useCallback, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
+import { AddToPlanSheet } from '@/components/add-to-plan-sheet';
 import { HeaderTextButton } from '@/components/header-button';
 import { Sheet } from '@/components/sheet';
+import { useToast } from '@/components/toast';
 import {
   Button,
   Card,
@@ -13,6 +15,7 @@ import {
   IconButton,
   IconTile,
   ListRow,
+  Notice,
   Section,
   Skeleton,
   SkeletonRows,
@@ -25,9 +28,11 @@ import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
 import { useGoBack } from '@/lib/nav';
+import { duplicateWorkout } from '@/lib/programs';
+import { addFailure } from '@/lib/save-error';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
-import { removeWorkoutVideos, VIDEO_TIP } from '@/lib/workout-videos';
+import { removeUnusedVideos, VIDEO_TIP } from '@/lib/workout-videos';
 import {
   MUSCLE_GROUPS,
   WORKOUT_COLUMNS,
@@ -61,6 +66,12 @@ export default function WorkoutEditor() {
   const [menu, setMenu] = useState<string | null>(null);
   const [videos, setVideos] = useState(false);
   const [nameError, setNameError] = useState<string | undefined>();
+  // Whose copy it is, or which program it belongs to; and for a library workout, how many clients'
+  // plans point at it directly (plans made before copies).
+  const [owner, setOwner] = useState<{ client?: string; program?: string; direct: number } | null>(null);
+  const [more, setMore] = useState(false);
+  const [giving, setGiving] = useState(false);
+  const toast = useToast();
   // What the row menu does once it has slid away: an iPhone shows one sheet or alert at a time.
   const afterMenu = useRef<(() => void) | null>(null);
   const { settings } = useSettings();
@@ -83,7 +94,18 @@ export default function WorkoutEditor() {
     ]);
     if (w.error || rows.error) return setError(plainError(w.error ?? rows.error));
     if (!w.data) return setError('This workout could not be found.');
-    setWorkout(w.data as Workout);
+    const found = w.data as Workout;
+    setWorkout(found);
+    if (found.client_id) {
+      const { data } = await supabase.from('clients').select('first_name').eq('id', found.client_id).maybeSingle();
+      setOwner({ client: (data as { first_name: string } | null)?.first_name ?? 'this client', direct: 0 });
+    } else if (found.program_id) {
+      const { data } = await supabase.from('programs').select('name').eq('id', found.program_id).maybeSingle();
+      setOwner({ program: (data as { name: string } | null)?.name ?? 'a program', direct: 0 });
+    } else {
+      const { data } = await supabase.from('plan_items').select('client_id').eq('workout_id', id);
+      setOwner({ direct: new Set(((data ?? []) as { client_id: string }[]).map((r) => r.client_id)).size });
+    }
     setName((current) => current || w.data!.name);
     setItems(rows.data as unknown as WorkoutExercise[]);
   }, [id]);
@@ -154,16 +176,38 @@ export default function WorkoutEditor() {
     setItems((list) => list?.filter((it) => it.id !== itemId) ?? null);
     const { error } = await supabase.from('workout_exercises').delete().eq('id', itemId);
     if (error) setError(plainError(error));
-    else await removeWorkoutVideos([video]);
+    else await removeUnusedVideos([video]);
   }
 
   async function deleteWorkout() {
-    const message = 'It also comes off any client plans it is in. This cannot be undone.';
-    if (!(await confirm('Delete workout?', message, 'Delete'))) return;
+    const message = owner?.client
+      ? `It comes off ${owner.client}’s plan. This can’t be undone.`
+      : owner?.program
+        ? `It comes out of ${owner.program}. This can’t be undone.`
+        : `Clients who have it keep their own copy.${
+            owner?.direct ? ' It also comes off the plans that use it directly.' : ''
+          } This can’t be undone.`;
+    if (!(await confirm(`Delete ${workout?.name ?? 'workout'}?`, message, 'Delete'))) return;
     const { error } = await supabase.from('workouts').delete().eq('id', id);
     if (error) return setError(plainError(error));
-    await removeWorkoutVideos([workout?.video_path, ...(items ?? []).map((it) => it.video_path)]);
-    goBack('/programs');
+    await removeUnusedVideos([workout?.video_path, ...(items ?? []).map((it) => it.video_path)]);
+    if (workout?.client_id) goBack({ pathname: '/clients/[id]', params: { id: workout.client_id, tab: 'plan' } });
+    else if (workout?.program_id) goBack({ pathname: '/programs/[id]', params: { id: workout.program_id } });
+    else goBack('/programs');
+  }
+
+  async function saveToLibrary() {
+    setMore(false);
+    try {
+      const copy = await duplicateWorkout(id);
+      haptic.success();
+      toast(workout?.client_id || workout?.program_id ? 'Saved to your workouts' : 'Copy made', {
+        action: { label: 'View', onPress: () => router.push({ pathname: '/workouts/[id]', params: { id: copy } }) },
+      });
+    } catch (e) {
+      haptic.warning();
+      toast(await addFailure(e));
+    }
   }
 
   if (!workout || !items) {
@@ -208,15 +252,25 @@ export default function WorkoutEditor() {
           title: workout.name,
           headerTitle: '',
           headerRight: () => (
-            <HeaderTextButton
-              title={editing ? 'Done' : 'Edit'}
-              accessibilityLabel={editing ? 'Done editing' : 'Edit workout'}
-              onPress={() => {
-                if (editing && !name.trim()) return setNameError('Give the workout a name.');
-                if (editing) saveName();
-                setEditing(!editing);
-              }}
-            />
+            <View style={styles.headerActions}>
+              <HeaderTextButton
+                title={editing ? 'Done' : 'Edit'}
+                accessibilityLabel={editing ? 'Done editing' : 'Edit workout'}
+                onPress={() => {
+                  if (editing && !name.trim()) return setNameError('Give the workout a name.');
+                  if (editing) saveName();
+                  setEditing(!editing);
+                }}
+              />
+              {editing ? null : (
+                <IconButton
+                  icon="ellipsis-horizontal"
+                  label={`More for ${workout.name}`}
+                  onPress={() => setMore(true)}
+                  style={styles.headerMore}
+                />
+              )}
+            </View>
           ),
         }}
       />
@@ -237,6 +291,11 @@ export default function WorkoutEditor() {
           />
         ) : (
           <View style={{ gap: Spacing.one }}>
+            {owner?.client || owner?.program ? (
+              <Text variant="label" tone="secondary">
+                {owner.client ? `For ${owner.client} only` : `Part of ${owner.program}`}
+              </Text>
+            ) : null}
             <Text variant="title" numberOfLines={3} accessibilityRole="header">
               {workout.name}
             </Text>
@@ -247,6 +306,16 @@ export default function WorkoutEditor() {
             ) : null}
           </View>
         )}
+        {owner?.client ? (
+          <View testID="workout-home-note">
+            <Notice>Changes here are for {owner.client} only.</Notice>
+          </View>
+        ) : owner?.direct ? (
+          <Notice>
+            {owner.direct === 1 ? 'On 1 client’s plan.' : `On ${owner.direct} clients’ plans.`} Changes show for them
+            too.
+          </Notice>
+        ) : null}
         <ErrorText>{error}</ErrorText>
 
         {items.length === 0 ? (
@@ -404,6 +473,50 @@ export default function WorkoutEditor() {
         ) : null}
       </Sheet>
 
+      <Sheet visible={more} onClose={() => setMore(false)} title={workout.name}>
+        <Group style={{ backgroundColor: Colors.tint }}>
+          {workout.client_id || workout.program_id ? (
+            <ListRow
+              title="Save to your workouts"
+              subtitle="A copy in your workouts, to give to others"
+              leading={<IconTile icon="bookmark-outline" />}
+              chevron={false}
+              compact
+              last
+              onPress={saveToLibrary}
+              testID="workout-save-to-library"
+            />
+          ) : (
+            <>
+              <ListRow
+                title="Give to a client"
+                subtitle="They get their own copy to change"
+                leading={<IconTile icon="person-add-outline" />}
+                compact
+                onPress={() => {
+                  setMore(false);
+                  setGiving(true);
+                }}
+              />
+              <ListRow
+                title="Duplicate"
+                leading={<IconTile icon="copy-outline" />}
+                chevron={false}
+                compact
+                last
+                onPress={saveToLibrary}
+              />
+            </>
+          )}
+        </Group>
+      </Sheet>
+
+      <AddToPlanSheet
+        visible={giving}
+        onClose={() => setGiving(false)}
+        workout={{ id: workout.id, name: workout.name }}
+      />
+
       <Sheet visible={videos} onClose={() => setVideos(false)} title="Videos">
         <View style={{ gap: Spacing.one }}>
           <Text variant="callout" tone="secondary">
@@ -523,6 +636,14 @@ function ExerciseDetails({
 }
 
 const styles = themed(() => ({
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // The web header has no right inset of its own; the phones' headers do.
+  headerMore: {
+    marginRight: Platform.OS === 'web' ? Spacing.tight : 0,
+  },
   content: {
     paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.three,

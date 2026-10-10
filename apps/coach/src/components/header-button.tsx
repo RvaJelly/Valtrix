@@ -8,10 +8,12 @@ export function HeaderTextButton({
   title,
   onPress,
   accessibilityLabel,
+  testID,
 }: {
   title: string;
   onPress: () => void;
   accessibilityLabel?: string;
+  testID?: string;
 }) {
   return (
     <Pressable
@@ -19,6 +21,7 @@ export function HeaderTextButton({
       accessibilityLabel={accessibilityLabel ?? title}
       onPress={onPress}
       hitSlop={6}
+      testID={testID}
       style={({ pressed }) => [
         {
           minHeight: 44,

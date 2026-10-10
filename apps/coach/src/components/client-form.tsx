@@ -4,7 +4,9 @@ import { KeyboardAvoidingView, Platform, ScrollView, View, type TextInput } from
 import { StickyFooter } from '@/components/sticky-footer';
 import { Button, ErrorText, Section, Text, TextField } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import type { Client } from '@/lib/clients';
+import { waNumber } from '@/lib/whatsapp';
 
 export type ClientInput = Pick<Client, 'first_name' | 'last_name' | 'email' | 'phone' | 'goal' | 'notes'>;
 
@@ -22,6 +24,8 @@ type Props = {
   inSheet?: boolean;
   // Shown under the button.
   children?: ReactNode;
+  // Editing a client who is linked: a new email sends no invite.
+  linked?: boolean;
 };
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -40,11 +44,16 @@ export function ClientForm({
   adding,
   inSheet,
   children,
+  linked,
 }: Props) {
   const [firstName, setFirstName] = useState(initial?.first_name ?? '');
   const [lastName, setLastName] = useState(initial?.last_name ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
   const [phone, setPhone] = useState(initial?.phone ?? '');
+  // Once they leave the phone field: a number WhatsApp can't open says so (saving still works).
+  const [phoneLeft, setPhoneLeft] = useState(false);
+  const country = useAuth().profile?.country ?? 'ZA';
+  const phoneOff = phoneLeft && !!phone.trim() && !waNumber(phone, country);
   const [goal, setGoal] = useState(initial?.goal ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [nameError, setNameError] = useState<string | undefined>();
@@ -78,6 +87,7 @@ export function ClientForm({
   }
 
   const button = <Button title={submitLabel} onPress={submit} loading={busy} />;
+  const newEmail = !!email.trim() && email.trim().toLowerCase() !== (initial?.email ?? '').trim().toLowerCase();
 
   // maxLength matches the limits the database checks.
   const fields = (
@@ -139,25 +149,38 @@ export function ClientForm({
               onSubmitEditing={() => phoneRef.current?.focus()}
               maxLength={320}
             />
-            {adding && !emailError ? (
+            {emailError ? null : (
               <Text variant="footnote" tone="secondary">
-                We’ll send them an invite to the Voltrix app.
+                {!adding && !linked && newEmail
+                  ? 'Saving sends a new invite to this email.'
+                  : 'Optional. With an email they can also accept your invite by signing up with it.'}
               </Text>
-            ) : null}
+            )}
           </View>
-          <TextField
-            ref={phoneRef}
-            label="Phone"
-            value={phone}
-            onChangeText={setPhone}
-            autoComplete="tel"
-            textContentType="telephoneNumber"
-            keyboardType="phone-pad"
-            enterKeyHint="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => goalRef.current?.focus()}
-            maxLength={30}
-          />
+          <View style={{ gap: Spacing.two }}>
+            <TextField
+              ref={phoneRef}
+              label="Phone"
+              value={phone}
+              onChangeText={(text) => {
+                setPhone(text);
+                setPhoneLeft(false);
+              }}
+              onBlur={() => setPhoneLeft(true)}
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              keyboardType="phone-pad"
+              enterKeyHint="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => goalRef.current?.focus()}
+              maxLength={30}
+            />
+            <Text variant="footnote" tone={phoneOff ? 'warning' : 'secondary'} testID="client-phone-hint">
+              {phoneOff
+                ? 'This doesn’t look like a full number. Check it, or WhatsApp will ask who to send your invite to.'
+                : 'Their WhatsApp number, to invite them.'}
+            </Text>
+          </View>
           <TextField
             ref={goalRef}
             label="Goal"

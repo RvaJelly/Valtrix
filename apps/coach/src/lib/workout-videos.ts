@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 
+import { unusedVideos } from '@/lib/programs';
 import { accessRefused } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 
@@ -138,6 +139,12 @@ export async function removeWorkoutVideos(paths: (string | null | undefined)[]) 
     .from(BUCKET)
     .remove(real)
     .catch(() => {});
+}
+
+// After a workout, exercise or video is removed or replaced: removes only the files nothing else
+// uses any more. Copies of a workout share its files.
+export async function removeUnusedVideos(paths: (string | null | undefined)[]) {
+  await removeWorkoutVideos(await unusedVideos(paths));
 }
 
 // Links last an hour; reuse one for most of that.

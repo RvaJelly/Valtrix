@@ -8,10 +8,11 @@ import { Group, IconTile, ListRow, Text, type IconName } from '@/components/ui';
 import { ACCENTS, Fonts, Spacing } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
+import { priceLabel } from '@/lib/money';
 import { leadLabel } from '@/lib/reminders';
 import { useSettings } from '@/lib/settings';
 
-type Row = { icon: IconName; title: string; subtitle: string; href: Href };
+type Row = { icon: IconName; title: string; subtitle: string; href: Href; testID?: string };
 
 // Settings: a short list of rows that open their own pages, Sign out under them and Delete account at
 // the very bottom.
@@ -40,6 +41,16 @@ export default function Settings() {
       title: 'Workouts and units',
       subtitle: `${UNITS[settings.units]} · ${LENGTHS[settings.lengths]}`,
       href: '/settings/units',
+    },
+    {
+      icon: 'cash-outline',
+      title: 'Sessions and prices',
+      subtitle:
+        profile?.session_price_cents != null
+          ? `${priceLabel(profile.session_price_cents, profile.currency)} a session`
+          : 'No price set',
+      href: '/settings/prices',
+      testID: 'settings-prices',
     },
     {
       icon: 'contrast-outline',
@@ -143,6 +154,7 @@ function Rows({ rows }: { rows: Row[] }) {
           subtitle={row.subtitle}
           leading={<IconTile icon={row.icon} />}
           onPress={() => router.push(row.href)}
+          testID={row.testID}
           last={i === rows.length - 1}
         />
       ))}

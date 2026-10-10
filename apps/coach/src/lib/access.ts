@@ -16,7 +16,11 @@ export function trialEnded(profile: Profile | null, now = new Date()): boolean {
 }
 
 // Mirrors public.has_coach_access() in the database.
-export function coachAccess(profile: Profile | null, now = new Date()): Access {
+// Prices and the country don't matter here, so the admin list's rows (without them) fit too.
+export function coachAccess(
+  profile: Omit<Profile, 'country' | 'currency' | 'session_price_cents'> | null,
+  now = new Date(),
+): Access {
   if (!profile) return { kind: 'none' };
   if (profile.is_admin) return { kind: 'owner' };
   if (profile.free_access) return { kind: 'free' };

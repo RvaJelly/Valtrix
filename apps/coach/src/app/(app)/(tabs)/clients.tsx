@@ -21,7 +21,7 @@ import {
 } from '@/components/ui';
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
-import { APP_STATUS_LABELS, appStatusOf, CLIENT_COLUMNS, fullName, STATUS_LABELS, type Client } from '@/lib/clients';
+import { APP_STATUS_LABELS, CLIENT_COLUMNS, fullName, shownStatusOf, STATUS_LABELS, type Client } from '@/lib/clients';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
@@ -123,7 +123,7 @@ export default function Clients() {
           ) : null
         }
         renderItem={({ item, index }) => {
-          const app = appStatusOf(item);
+          const app = shownStatusOf(item);
           const paused = item.status !== 'active';
           const status = paused ? STATUS_LABELS[item.status] : app !== 'joined' ? APP_STATUS_LABELS[app] : null;
           // The email belongs on the client's page; here a missing goal says so, as on Home.

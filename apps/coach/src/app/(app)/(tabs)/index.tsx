@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppStatusLabel } from '@/components/app-status';
-import { Avatar } from '@/components/avatar';
+import { InviteSheet, type InviteClient } from '@/components/invite-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
+import { NeedsYouRow } from '@/components/needs-you-row';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
+import { ToMarkSheet } from '@/components/to-mark-sheet';
 import {
   Button,
   Card,
@@ -31,21 +32,27 @@ import {
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
-import { useChat } from '@/lib/chat-live';
-import { appStatusOf, fullName, type Client } from '@/lib/clients';
+import { useChat, useChatEvents } from '@/lib/chat-live';
+import { earnedFrom, loadTotals, type Totals } from '@/lib/earnings';
 import { dayMonth, longDate, relative, timeRange } from '@/lib/format';
+import { formatMoney, spokenMoney } from '@/lib/money';
+import { needsYou, type Need } from '@/lib/needs-you';
+import { loadOverview, type ClientOverview } from '@/lib/overview';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import {
   addDays,
   dayKey,
   endOf,
   SESSION_COLUMNS,
+  namesOf,
   sessionName,
   startOfDay,
   startOfWeek,
+  toMark,
   type Session,
 } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
+import { libraryOnly } from '@/lib/workouts';
 
 const NONE_SEEN = new Set<string>();
 
@@ -58,11 +65,17 @@ function greeting() {
 
 type Stats = {
   activeClients: number;
+  // Library workouts ("Your workouts").
   workouts: number;
   // Booked (not cancelled) sessions from Monday to Sunday.
   thisWeek: number;
-  recent: Pick<Client, 'id' | 'first_name' | 'last_name' | 'goal' | 'user_id' | 'app_status'>[];
   today: Session[];
+  // Booked sessions from the last 30 days that have started (the ones that ended are to mark).
+  started: Session[];
+  // Every client from clients_overview, or null on an older database.
+  overview: ClientOverview[] | null;
+  // This week's sessions by status, or null on an older database.
+  totals: Totals[] | null;
 };
 
 // One word each, so the five labels never run into each other; screen readers hear the full name.
@@ -88,6 +101,8 @@ export default function Home() {
   // ended leaves "Up next".
   const [now, setNow] = useState(() => new Date());
   const showSkeleton = useDelayed(300);
+  const [markOpen, setMarkOpen] = useState(false);
+  const [inviting, setInviting] = useState<InviteClient | null>(null);
   const firstName = profile?.full_name?.split(' ')[0];
   const access = coachAccess(profile);
 
@@ -95,17 +110,13 @@ export default function Home() {
   // load says so and keeps what was shown, and never passes for a new trainer with no clients.
   const loadStats = useCallback(async () => {
     const id = ++loads.current;
-    const today = startOfDay(new Date());
+    const at = new Date();
+    const today = startOfDay(at);
     const week = startOfWeek(today);
     const answers = await Promise.all([
-      supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('workouts').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('clients')
-        .select('id, first_name, last_name, goal, user_id, app_status')
-        .neq('status', 'archived')
-        .order('created_at', { ascending: false })
-        .limit(3),
+      loadOverview(dayKey(at)),
+      loadTotals(week, addDays(week, 7)),
+      libraryOnly(supabase.from('workouts').select('id', { count: 'exact', head: true })),
       supabase
         .from('sessions')
         .select(SESSION_COLUMNS)
@@ -119,22 +130,50 @@ export default function Home() {
         .neq('status', 'cancelled')
         .gte('starts_at', week.toISOString())
         .lt('starts_at', addDays(week, 7).toISOString()),
+      supabase
+        .from('sessions')
+        .select(SESSION_COLUMNS)
+        .eq('status', 'scheduled')
+        .gte('starts_at', addDays(at, -30).toISOString())
+        .lt('starts_at', at.toISOString())
+        .order('starts_at')
+        .limit(50),
     ]).catch(() => null);
     if (id !== loads.current) return;
-    const [active, workouts, recent, todays, thisWeek] = answers ?? [];
-    if (!active || !workouts || !recent || !todays || !thisWeek || answers!.some((a) => a.error)) {
-      setFailed(true);
-      return;
+    if (!answers) return setFailed(true);
+    const [overview, totals, workouts, todays, thisWeek, started] = answers;
+    if (workouts.error || todays.error || thisWeek.error || started.error) return setFailed(true);
+    // An older database: the active clients are counted the old way.
+    let activeClients = overview?.filter((c) => c.status === 'active').length ?? 0;
+    if (!overview) {
+      const active = await supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active');
+      if (id !== loads.current) return;
+      if (active.error) return setFailed(true);
+      activeClients = active.count ?? 0;
     }
     setFailed(false);
     setStats({
-      activeClients: active.count ?? 0,
+      activeClients,
       workouts: workouts.count ?? 0,
       thisWeek: thisWeek.count ?? 0,
-      recent: (recent.data as Stats['recent']) ?? [],
       today: (todays.data as unknown as Session[]) ?? [],
+      started: (started.data as unknown as Session[]) ?? [],
+      overview,
+      totals,
     });
   }, []);
+
+  // News from clients (a check-in, a workout, an invite answered) reloads Home a second after the
+  // last of a burst.
+  const [news, setNews] = useState(0);
+  useEffect(() => {
+    if (!news) return;
+    const timer = setTimeout(loadStats, 1000);
+    return () => clearTimeout(timer);
+  }, [news, loadStats]);
+  useChatEvents((event) => {
+    if (event.type === 'progress' || event.type === 'link' || event.type === 'reconnected') setNews((n) => n + 1);
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -153,6 +192,7 @@ export default function Home() {
         if (state === 'active') {
           refreshStories();
           setNow(new Date());
+          loadStats();
         }
       });
       return () => {
@@ -161,6 +201,17 @@ export default function Home() {
       };
     }, [loadStats]),
   );
+
+  function invite(need: Need) {
+    const c = need.client;
+    setInviting({
+      id: c.client_id,
+      first_name: c.first_name,
+      email: c.email,
+      phone: c.phone,
+      app_status: c.app_status,
+    });
+  }
 
   async function retry() {
     setRetrying(true);
@@ -173,8 +224,32 @@ export default function Home() {
   const rest = stats?.today.filter((s) => s !== next) ?? [];
   const profileMissing = !!profile && (!profile.avatar_url || !profile.specialties?.length);
   const newTrainer = !!stats && stats.activeClients === 0;
+  const marking = (stats?.started ?? []).filter((s) => toMark(s, now.getTime()));
+  const needs = stats?.overview ? needsYou(stats.overview, dayKey(now), now.getTime()) : null;
+  const currency = profile?.currency ?? 'ZAR';
+  const earned = stats?.totals ? earnedFrom(stats.totals, currency) : null;
+  // Earned shows once the trainer has a usual price or a session this week has one.
+  const showEarned = !!earned && (profile?.session_price_cents != null || earned.priced);
 
-  const account: { key: string; title: string; subtitle: string; icon: IconName; color?: string; href: Href }[] = [];
+  const account: {
+    key: string;
+    title: string;
+    subtitle: string;
+    icon: IconName;
+    color?: string;
+    href: Href;
+    testID?: string;
+  }[] = [];
+  if (profile && profile.session_price_cents == null && !newTrainer) {
+    account.push({
+      key: 'price',
+      title: 'Set your session price',
+      subtitle: 'See what you earn each week',
+      icon: 'cash-outline',
+      href: '/settings/prices',
+      testID: 'account-set-price',
+    });
+  }
   if (profileMissing && !newTrainer) {
     account.push({
       key: 'profile',
@@ -204,6 +279,19 @@ export default function Home() {
     });
   }
 
+  // The To mark row is the last of its group only when no session follows it.
+  const markRow = (last: boolean) =>
+    marking.length ? (
+      <ListRow
+        title={marking.length === 1 ? '1 session to mark' : `${marking.length} sessions to mark`}
+        subtitle={namesOf(marking)}
+        leading={<IconTile icon="checkmark-done-outline" />}
+        onPress={() => setMarkOpen(true)}
+        testID="home-to-mark"
+        last={last}
+      />
+    ) : null;
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -225,7 +313,7 @@ export default function Home() {
         <Section title="Today" action={{ label: 'Calendar', onPress: () => router.navigate('/calendar') }}>
           {failed ? (
             <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
-              {stats ? 'Could not refresh your day.' : 'Your day could not be loaded.'}
+              {stats ? 'Couldn’t refresh your day.' : 'Your day couldn’t be loaded.'}
             </Notice>
           ) : null}
           {!stats ? (
@@ -236,20 +324,23 @@ export default function Home() {
               </View>
             ) : null
           ) : stats.today.length === 0 ? (
-            <EmptyState
-              compact
-              icon="calendar-clear-outline"
-              title="Nothing booked today"
-              message="Today's sessions show here."
-              action={
-                <Button
-                  title="Book"
-                  variant="ghost"
-                  size="small"
-                  onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(new Date()) } })}
-                />
-              }
-            />
+            <View style={{ gap: Spacing.tight }}>
+              <EmptyState
+                compact
+                icon="calendar-clear-outline"
+                title="Nothing booked today"
+                message="Today’s sessions show here."
+                action={
+                  <Button
+                    title="Book"
+                    variant="ghost"
+                    size="small"
+                    onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(new Date()) } })}
+                  />
+                }
+              />
+              {marking.length ? <Group>{markRow(true)}</Group> : null}
+            </View>
           ) : (
             <View style={{ gap: Spacing.tight }}>
               {next ? (
@@ -261,9 +352,10 @@ export default function Home() {
                   />
                 </EnterUp>
               ) : null}
-              {rest.length ? (
+              {rest.length || marking.length ? (
                 <EnterUp index={1}>
                   <Group>
+                    {markRow(!rest.length)}
                     {rest.map((s, i) => (
                       <SessionRow
                         key={s.id}
@@ -280,6 +372,48 @@ export default function Home() {
           )}
         </Section>
 
+        {!stats && showSkeleton && !failed ? (
+          <View style={{ gap: Spacing.tight }} accessible accessibilityLabel="Loading">
+            <Skeleton width={96} height={12} radius={6} />
+            <SkeletonRows count={3} avatar />
+          </View>
+        ) : null}
+        {needs && stats && !newTrainer ? (
+          <View testID="home-needs-you">
+            <Section
+              title="Needs you"
+              action={
+                needs.more
+                  ? {
+                      label: 'See all',
+                      onPress: () => router.push('/needs-you'),
+                      accessibilityLabel: `See all ${needs.total} clients who need you`,
+                    }
+                  : undefined
+              }>
+              {needs.rows.length ? (
+                <Group>
+                  {needs.rows.map((need, i) => (
+                    <NeedsYouRow
+                      key={need.client.client_id}
+                      need={need}
+                      last={i === needs.rows.length - 1}
+                      onInvite={invite}
+                    />
+                  ))}
+                </Group>
+              ) : (
+                <EmptyState
+                  compact
+                  icon="checkmark-done-outline"
+                  title="Everyone’s on track"
+                  message="Check-ins to answer, clients who go quiet and open invites show here."
+                />
+              )}
+            </Section>
+          </View>
+        ) : null}
+
         <View style={styles.shortcuts}>
           {SHORTCUTS.map((s) => (
             <Shortcut key={s.label} {...s} />
@@ -293,23 +427,49 @@ export default function Home() {
                 <Step title="Add your first client" done={false} href="/clients/new" />
                 <Step title="Build a workout" done={stats.workouts > 0} href="/workouts/new" />
                 <Step title="Finish your profile" done={!profileMissing} href="/settings/profile" />
+                <Step
+                  title="Set your session price"
+                  done={profile?.session_price_cents != null}
+                  href="/settings/prices"
+                />
                 <Step title="Book a session" done={stats.today.length > 0} href="/sessions/new" last />
               </Group>
             </Section>
           ) : (
             <StatStrip
               items={[
-                { value: stats.activeClients, label: 'Active clients', onPress: () => router.navigate('/clients') },
-                { value: stats.workouts, label: 'Workouts', onPress: () => router.navigate('/programs') },
+                {
+                  value: stats.activeClients,
+                  label: 'Active clients',
+                  onPress: () => router.navigate('/clients'),
+                  testID: 'stat-active',
+                },
                 {
                   value: stats.thisWeek,
                   label: 'This week',
                   spoken: `${stats.thisWeek} ${stats.thisWeek === 1 ? 'session' : 'sessions'} this week`,
                   onPress: () => router.navigate('/calendar'),
+                  testID: 'stat-week',
                 },
+                showEarned && earned
+                  ? {
+                      value: formatMoney(earned.cents, currency),
+                      label: 'Earned this week',
+                      spoken: `${spokenMoney(earned.cents, currency)} earned this week`,
+                      onPress: () => router.push('/earnings'),
+                      testID: 'stat-earned',
+                    }
+                  : {
+                      value: stats.workouts,
+                      label: 'Workouts',
+                      onPress: () => router.navigate('/programs'),
+                      testID: 'stat-workouts',
+                    },
               ]}
             />
           )
+        ) : !failed && showSkeleton ? (
+          <Skeleton height={64} radius={Radius.medium} />
         ) : null}
 
         {account.length ? (
@@ -322,38 +482,17 @@ export default function Home() {
                   subtitle={a.subtitle}
                   leading={<IconTile icon={a.icon} color={a.color} />}
                   onPress={() => router.push(a.href)}
+                  testID={a.testID}
                   last={i === account.length - 1}
                 />
               ))}
             </Group>
           </Section>
         ) : null}
-
-        {stats && stats.recent.length > 0 ? (
-          <Section title="Recent clients" action={{ label: 'See all', onPress: () => router.navigate('/clients') }}>
-            <Group>
-              {stats.recent.map((c, i) => {
-                const status = appStatusOf(c);
-                return (
-                  <ListRow
-                    key={c.id}
-                    title={fullName(c)}
-                    subtitle={
-                      <Text variant="footnote" tone={c.goal ? 'secondary' : 'tertiary'} numberOfLines={1}>
-                        {c.goal || 'No goal yet'}
-                      </Text>
-                    }
-                    leading={<Avatar name={fullName(c)} size={40} />}
-                    status={status !== 'joined' ? <AppStatusLabel status={status} short /> : null}
-                    onPress={() => router.push({ pathname: '/clients/[id]', params: { id: c.id } })}
-                    last={i === stats.recent.length - 1}
-                  />
-                );
-              })}
-            </Group>
-          </Section>
-        ) : null}
       </ScrollView>
+
+      <ToMarkSheet visible={markOpen} sessions={marking} onClose={() => setMarkOpen(false)} onChanged={loadStats} />
+      <InviteSheet client={inviting} onClose={() => setInviting(null)} onShared={loadStats} onConnected={loadStats} />
     </SafeAreaView>
   );
 }

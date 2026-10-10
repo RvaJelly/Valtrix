@@ -14,11 +14,29 @@ export type Session = {
   status: SessionStatus;
   // A video call in the apps instead of meeting in person.
   online: boolean;
+  // What it costs, kept from when it was booked (0 is free; null: no price known), in this currency.
+  price_cents: number | null;
+  currency: string | null;
+  // When it was last marked done, no-show or cancelled (null while booked).
+  marked_at: string | null;
   clients: Pick<Client, 'first_name' | 'last_name' | 'user_id'> | null;
 };
 
 export const SESSION_COLUMNS =
-  'id, client_id, title, starts_at, duration_minutes, location, notes, status, online, clients(first_name, last_name, user_id)';
+  'id, client_id, title, starts_at, duration_minutes, location, notes, status, online, price_cents, currency, marked_at, clients(first_name, last_name, user_id)';
+
+// A session can be marked done or as a no-show from 15 minutes before it starts (the database's
+// rule too).
+export const MARK_GRACE_MS = 15 * 60_000;
+
+export function canMark(s: Pick<Session, 'starts_at'>, now = Date.now()) {
+  return new Date(s.starts_at).getTime() - MARK_GRACE_MS <= now;
+}
+
+// Booked, has ended, and nobody has said what happened yet.
+export function toMark(s: Pick<Session, 'status' | 'starts_at' | 'duration_minutes'>, now = Date.now()) {
+  return s.status === 'scheduled' && endOf(s).getTime() <= now;
+}
 
 export const ONLINE_LABEL = 'Online · Video call';
 
@@ -46,6 +64,13 @@ export const START_TIMES = Array.from({ length: 34 }, (_, i) => {
 export function sessionName(s: Pick<Session, 'title' | 'clients'>) {
   if (s.clients) return [s.clients.first_name, s.clients.last_name].filter(Boolean).join(' ');
   return s.title ?? 'Session';
+}
+
+// "Sam Jones and Pieter Botha", "Sam Jones, Pieter Botha and 2 more".
+export function namesOf(sessions: Pick<Session, 'title' | 'clients'>[]) {
+  const names = sessions.map(sessionName);
+  if (names.length <= 2) return names.join(' and ');
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
 }
 
 export function startOfDay(date: Date) {

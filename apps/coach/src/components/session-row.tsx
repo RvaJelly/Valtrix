@@ -4,6 +4,8 @@ import { StyleSheet, View } from 'react-native';
 import { canJoin, JoinCall } from '@/components/join-call';
 import { Group, ListRow, StatusPill, Text, type StatusTone } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
+import { shortDate } from '@/lib/format';
+import { priceLabel } from '@/lib/money';
 import {
   endOf,
   formatDay,
@@ -31,12 +33,15 @@ export function SessionRow({
   last,
   now,
   showDay,
+  price,
 }: {
   session: Session;
   variant?: 'card' | 'grouped';
   last?: boolean;
   now?: number;
   showDay?: boolean;
+  // Shows the session's price at the end ("R400", "Free", nothing without one).
+  price?: boolean;
 }) {
   const start = new Date(session.starts_at);
   const cancelled = session.status === 'cancelled';
@@ -44,7 +49,9 @@ export function SessionRow({
   const where = session.online ? 'Video call' : session.location || `${session.duration_minutes} min`;
   const joinable = now !== undefined && canJoin(session, now);
   const lastLine = variant === 'card' || last;
-  const title = showDay ? formatDay(start) : sessionName(session);
+  // 'Today', 'Tomorrow' or 'Mon 5 Oct': short, so a pill and a price still fit beside it.
+  const title = showDay ? shortDay(start) : sessionName(session);
+  const cost = price ? priceLabel(session.price_cents, session.currency ?? 'ZAR') : null;
   const row = (
     <>
       <ListRow
@@ -62,10 +69,17 @@ export function SessionRow({
           </View>
         }
         status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
+        trailing={
+          cost ? (
+            <Text variant="footnote" tone="secondary" style={Tabular}>
+              {cost}
+            </Text>
+          ) : null
+        }
         onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
-        accessibilityLabel={`${showDay ? `${title}, ` : ''}${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
+        accessibilityLabel={`${showDay ? `${formatDay(start)}, ` : ''}${formatTime(start)} to ${formatTime(endOf(session))}, ${sessionName(session)}, ${where}${
           pill ? `, ${SESSION_STATUS[session.status]}` : ''
-        }`}
+        }${cost ? `, ${cost}` : ''}`}
         last={lastLine || joinable}
       />
       {joinable ? (
@@ -76,6 +90,11 @@ export function SessionRow({
     </>
   );
   return variant === 'card' ? <Group>{row}</Group> : row;
+}
+
+function shortDay(date: Date) {
+  const day = formatDay(date);
+  return day === 'Today' || day === 'Tomorrow' ? day : shortDate(date);
 }
 
 const styles = themed(() => ({

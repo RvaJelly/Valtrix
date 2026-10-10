@@ -258,17 +258,20 @@ export function TextLink({
   label,
   onPress,
   end,
+  testID,
 }: {
   lead?: string;
   label: string;
   onPress: () => void;
   end?: boolean;
+  testID?: string;
 }) {
   const { hovered, hover } = useHover();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={lead ? `${lead} ${label}` : label}
+      testID={testID}
       onPress={onPress}
       {...hover}
       style={[styles.textLink, end && styles.textLinkEnd, pointer]}>
@@ -297,6 +300,7 @@ export function IconButton({
   variant = 'plain',
   tone = 'primary',
   disabled,
+  testID,
   style,
 }: {
   icon: IconName;
@@ -306,6 +310,7 @@ export function IconButton({
   // Secondary for a row action repeated down a list, such as a bin on every row, so it recedes.
   tone?: 'primary' | 'secondary';
   disabled?: boolean;
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const { hovered, hover } = useHover(!!disabled);
@@ -315,6 +320,7 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
+      testID={testID}
       onPress={onPress}
       disabled={disabled}
       hitSlop={tonal ? 2 : 0}
@@ -340,6 +346,8 @@ type FieldProps = TextInputProps & {
   error?: string | null;
   optional?: boolean;
   icon?: IconName;
+  // A short word or symbol before what is typed, such as the currency ("R").
+  prefix?: string;
   // A password box: hidden as it is typed, with an eye button on the right to show it.
   password?: boolean;
   // Lets Next on the keyboard move to this field (React 19 passes `ref` as a prop).
@@ -348,11 +356,22 @@ type FieldProps = TextInputProps & {
 
 // A labelled text box. The label stays above the field; focus and errors show on its border.
 // Focus is drawn in the text colour, which stands out on every theme and with every accent.
-export function TextField({ label, error, optional, icon, password, style, onFocus, onBlur, ...rest }: FieldProps) {
+export function TextField({
+  label,
+  error,
+  optional,
+  icon,
+  prefix,
+  password,
+  style,
+  onFocus,
+  onBlur,
+  ...rest
+}: FieldProps) {
   const [focused, setFocused] = useState(false);
   const [shown, setShown] = useState(false);
   const border = error ? Colors.danger : focused ? Colors.text : 'transparent';
-  const boxed = !!icon || !!password;
+  const boxed = !!icon || !!password || !!prefix;
   const input = (
     <TextInput
       accessibilityLabel={label}
@@ -380,6 +399,11 @@ export function TextField({ label, error, optional, icon, password, style, onFoc
       {boxed ? (
         <View style={[styles.inputBox, styles.inputRow, password && styles.inputBoxEnd, { borderColor: border }]}>
           {icon ? <Ionicons name={icon} size={18} color={Colors.textSecondary} /> : null}
+          {prefix ? (
+            <Text variant="body" tone="secondary" style={Tabular}>
+              {prefix}
+            </Text>
+          ) : null}
           {input}
           {password ? (
             <Pressable
@@ -475,11 +499,14 @@ export function Segmented<T extends string>({
   options,
   value,
   onChange,
+  testID,
   style,
 }: {
-  options: readonly { value: T; label: string }[];
+  // A disabled option shows in a fainter colour and can't be chosen.
+  options: readonly { value: T; label: string; disabled?: boolean }[];
   value: T;
   onChange: (value: T) => void;
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const reduceMotion = useReducedMotion();
@@ -498,6 +525,7 @@ export function Segmented<T extends string>({
     <View
       style={[styles.segmented, style]}
       accessibilityRole="tablist"
+      testID={testID}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {segment > 0 && found >= 0 ? (
         <Animated.View
@@ -520,16 +548,17 @@ export function Segmented<T extends string>({
           <Pressable
             key={o.value}
             accessibilityRole="tab"
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected, disabled: !!o.disabled }}
+            disabled={o.disabled}
             onPress={() => {
               if (selected) return;
               haptic.select();
               onChange(o.value);
             }}
-            style={[styles.segment, pointer, selected && segment === 0 && segmentOn()]}>
+            style={[styles.segment, !o.disabled && pointer, selected && segment === 0 && segmentOn()]}>
             <Text
               variant="callout"
-              tone={selected ? 'primary' : 'secondary'}
+              tone={selected ? 'primary' : o.disabled ? 'tertiary' : 'secondary'}
               style={{ fontFamily: Fonts.textSemi }}
               numberOfLines={1}>
               {o.label}
@@ -601,10 +630,10 @@ export function Toggle({
 
 // ---------- Messages ----------
 
-export function ErrorText({ children }: PropsWithChildren) {
+export function ErrorText({ children, testID }: PropsWithChildren<{ testID?: string }>) {
   if (!children) return null;
   return (
-    <View style={styles.errorRow} accessibilityRole="alert">
+    <View style={styles.errorRow} accessibilityRole="alert" testID={testID}>
       <Ionicons name="alert-circle-outline" size={14} color={Colors.danger} style={{ marginTop: 2 }} />
       <Text variant="footnote" tone="danger" style={{ flex: 1 }}>
         {children}
@@ -631,7 +660,7 @@ export function Notice({
   style,
 }: PropsWithChildren<{
   tone?: NoticeTone;
-  action?: { label: string; onPress: () => void; loading?: boolean };
+  action?: { label: string; onPress: () => void; loading?: boolean; testID?: string };
   // On a card the notice uses the see-through fill instead of the card colour.
   onCard?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -652,6 +681,7 @@ export function Notice({
           loading={action.loading}
           variant="secondary"
           size="small"
+          testID={action.testID}
         />
       ) : null}
     </View>
@@ -678,6 +708,7 @@ export function Card({
   pressedFill,
   accessibilityLabel,
   accessibilityHint,
+  testID,
 }: PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
   // The one big card at the top of a screen: roomier top and bottom.
@@ -688,6 +719,7 @@ export function Card({
   pressedFill?: string;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
 }>) {
   const { hovered, hover } = useHover();
   const [pressed, setPressed] = useState(false);
@@ -695,7 +727,7 @@ export function Card({
   const footerView = footer ? <View style={{ marginTop: Spacing.gutter }}>{footer}</View> : null;
   if (!onPress) {
     return (
-      <View style={look}>
+      <View style={look} testID={testID}>
         {children}
         {footerView}
       </View>
@@ -703,7 +735,7 @@ export function Card({
   }
   const y = hero ? HERO_Y : CARD_Y;
   return (
-    <View style={look}>
+    <View style={look} testID={testID}>
       {pressed || hovered ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: pressedFill ?? Colors.tint }]} />
       ) : null}
@@ -734,8 +766,16 @@ export function Card({
 }
 
 // One card holding a list of rows separated by hairlines.
-export function Group({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
-  return <View style={[styles.group, style]}>{children}</View>;
+export function Group({
+  children,
+  style,
+  testID,
+}: PropsWithChildren<{ style?: StyleProp<ViewStyle>; testID?: string }>) {
+  return (
+    <View style={[styles.group, style]} testID={testID}>
+      {children}
+    </View>
+  );
 }
 
 // For FlatList rows that can't sit inside a Group: the first and last rows round the corners.
@@ -780,6 +820,8 @@ type ListRowProps = {
   titleTone?: Tone;
   titleLines?: number;
   titleStyle?: StyleProp<TextStyle>;
+  // Lines a string subtitle may take (one by default, two with large text).
+  subtitleLines?: number;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   accessibilityState?: ComponentProps<typeof Pressable>['accessibilityState'];
@@ -801,6 +843,7 @@ export function ListRow({
   titleTone,
   titleLines = 1,
   titleStyle,
+  subtitleLines = 1,
   accessibilityLabel,
   accessibilityHint,
   accessibilityState,
@@ -822,7 +865,10 @@ export function ListRow({
             {title}
           </Text>
           {typeof subtitle === 'string' ? (
-            <Text variant="footnote" tone="secondary" numberOfLines={large ? 2 : 1}>
+            <Text
+              variant="footnote"
+              tone="secondary"
+              numberOfLines={large ? Math.max(subtitleLines, 2) : subtitleLines}>
               {subtitle}
             </Text>
           ) : (
@@ -1040,14 +1086,14 @@ export function StatusDot({ tone, label }: { tone: StatusTone; label: string }) 
 
 // A word on a tinted pill. On light themes the word is a deeper shade of its colour on a lighter
 // tint, so 12 px text clears 4.5:1 against the pill.
-export function StatusPill({ tone, label }: { tone: StatusTone; label: string }) {
+export function StatusPill({ tone, label, testID }: { tone: StatusTone; label: string; testID?: string }) {
   const color = statusColor(tone);
   const neutral = tone === 'neutral' || tone === 'muted';
   const light = Colors.scheme === 'light';
   const ink = neutral || !light ? color : mix(color, BRAND.iron, 0.15);
   const fill = neutral ? Colors.tint : withAlpha(color, light ? 0.1 : 0.14);
   return (
-    <View style={[styles.pill, { backgroundColor: fill }]}>
+    <View style={[styles.pill, { backgroundColor: fill }]} testID={testID}>
       <Text style={[styles.pillText, { color: ink }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
@@ -1063,7 +1109,13 @@ export function StatStrip({
   items,
 }: {
   // `spoken` replaces "value label" for screen readers when the short label needs more words.
-  items: { value: string | number | null | undefined; label: string; spoken?: string; onPress?: () => void }[];
+  items: {
+    value: string | number | null | undefined;
+    label: string;
+    spoken?: string;
+    onPress?: () => void;
+    testID?: string;
+  }[];
 }) {
   const grid = useWindowDimensions().fontScale > 1.2 && items.length > 2;
   return (
@@ -1085,6 +1137,7 @@ export function StatStrip({
             key={item.label}
             accessibilityRole="button"
             accessibilityLabel={item.spoken ?? `${item.value ?? 'No'} ${item.label}`}
+            testID={item.testID}
             onPress={item.onPress}
             style={({ pressed }) => [look, pointer, pressed && { backgroundColor: Colors.tint }]}>
             {content}
@@ -1093,6 +1146,7 @@ export function StatStrip({
           <View
             key={item.label}
             style={look}
+            testID={item.testID}
             accessible
             accessibilityLabel={item.spoken ?? `${item.value ?? 'No'} ${item.label}`}>
             {content}
@@ -1269,13 +1323,14 @@ type EmptyStateProps = {
   action?: ReactNode;
   // One row inside a page ("Nothing booked today") instead of a centred block.
   compact?: boolean;
+  testID?: string;
 };
 
 // Says what the state is, what will appear, and gives one action.
-export function EmptyState({ icon, title, message, action, compact }: EmptyStateProps) {
+export function EmptyState({ icon, title, message, action, compact, testID }: EmptyStateProps) {
   if (compact) {
     return (
-      <Group>
+      <Group testID={testID}>
         <ListRow
           title={title}
           titleLines={2}
@@ -1293,7 +1348,7 @@ export function EmptyState({ icon, title, message, action, compact }: EmptyState
     );
   }
   return (
-    <View style={styles.empty}>
+    <View style={styles.empty} testID={testID}>
       <View style={styles.emptyIcon}>
         <Ionicons name={icon} size={28} color={Colors.textSecondary} />
       </View>

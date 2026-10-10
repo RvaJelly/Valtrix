@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import {
   pickWorkoutVideo,
+  removeUnusedVideos,
   removeWorkoutVideos,
   uploadWorkoutVideo,
   VIDEO_HINT,
@@ -73,8 +74,8 @@ export function WorkoutVideo({ label, path, onChange, fallback, title, hint = tr
         await removeWorkoutVideos([uploaded]);
         setError(problem);
       } else {
-        // The old video isn't used any more.
-        await removeWorkoutVideos([path]);
+        // The old video goes, unless a copy of this workout still uses it.
+        await removeUnusedVideos([path]);
       }
     } catch (e) {
       setError(e instanceof VideoError ? e.message : 'Could not add that video. Try another one.');
@@ -89,7 +90,7 @@ export function WorkoutVideo({ label, path, onChange, fallback, title, hint = tr
     setBusy('removing');
     const problem = await onChange(null);
     if (problem) setError(problem);
-    else await removeWorkoutVideos([path]);
+    else await removeUnusedVideos([path]);
     setBusy(null);
   }
 

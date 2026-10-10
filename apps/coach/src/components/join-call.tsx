@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -62,9 +62,11 @@ export function JoinCall({
   if (!session.client_id || !canJoin(session, now)) return null;
   if (!onApp) {
     return (
-      <Text variant="callout" tone="secondary" style={style}>
-        You can call {name} here once they accept your invite in the Voltrix app.
-      </Text>
+      <View style={style}>
+        <Text variant="callout" tone="secondary">
+          You can call {name} here once they accept your invite in the Voltrix app.
+        </Text>
+      </View>
     );
   }
   const params = { chat: session.client_id, video: '1', name, avatar: avatar ?? '' };

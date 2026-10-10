@@ -329,7 +329,7 @@ export function TextField({ label, error, optional, icon, style, onFocus, onBlur
         {optional ? <Text tone="tertiary"> (optional)</Text> : null}
       </Text>
       {icon ? (
-        <View style={[styles.input, styles.inputRow, { borderColor: border }]}>
+        <View style={[styles.inputBox, styles.inputRow, { borderColor: border }]}>
           <Ionicons name={icon} size={18} color={Colors.textSecondary} />
           {input}
         </View>
@@ -1108,6 +1108,15 @@ const styles = themed(() => ({
     backgroundColor: Colors.tint,
     color: Colors.text,
     ...Type.body,
+    paddingHorizontal: Spacing.three,
+  },
+  // The same box as `input` without the text styles, for the row that holds an icon and the field.
+  inputBox: {
+    minHeight: 52,
+    borderRadius: Radius.medium,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: Colors.tint,
     paddingHorizontal: Spacing.three,
   },
   inputRow: {

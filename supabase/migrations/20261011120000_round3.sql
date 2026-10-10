@@ -21,7 +21,8 @@
 --     time, after agreeing to what the trainer will see; accepting links them like an invite.
 --   * A health form (PAR-Q style, in Voltrix's own words) the person fills in once and can change
 --     or remove. Their trainers read it only through client_health_form(), under the round 1
---     rule (coached_user()). Any yes flags it for a doctor's go-ahead.
+--     rule (coached_user()). Any yes flags it for a doctor's go-ahead. The news a trainer gets
+--     about it says only that it was filled in, changed or removed.
 --   * A private calendar link per person (an .ics feed with an unguessable token that can be
 --     reset or turned off), served by the calendar-feed Edge Function through calendar_feed(),
 --     which only the service role may call.
@@ -609,6 +610,53 @@ revoke execute on function public.session_packs_after_update() from public, anon
 create trigger session_packs_after_update after update of price_cents, sessions_total on public.session_packs
   for each row when (new.price_cents is distinct from old.price_cents or new.sessions_total is distinct from old.sessions_total)
   execute function public.session_packs_after_update();
+
+-- "Charge for no-shows" turned back on: no-shows on packs count again, so a pack whose place a
+-- no-show gave back while it was off (and another session then took) could hold more sessions
+-- than its size. On each such pack the latest sessions come off it, one at a time under the
+-- client's pack lock, until it fits; the earliest stay. Each one looks for another pack with room,
+-- as a new booking would; with none, a booked one takes the client's rate and a done one keeps its
+-- price and is owed on its own. Runs as the trainer saving their profile.
+create function public.profiles_after_charge_change()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  k record;
+  s record;
+  tz text := coalesce(new.time_zone, 'Africa/Johannesburg');
+begin
+  for k in
+    select x.id, x.client_id
+      from public.session_packs x
+     where x.trainer_id = new.id
+       and exists (select 1 from public.sessions y where y.pack_id = x.id and y.status = 'no_show')
+     order by x.client_id, x.id
+  loop
+    perform pg_advisory_xact_lock(hashtextextended('pack:' || k.client_id::text, 0));
+    for s in
+      select y.id, y.starts_at
+        from public.sessions y
+       where y.pack_id = k.id
+         and y.status in ('scheduled', 'completed', 'no_show')
+       order by y.starts_at desc, y.id desc
+    loop
+      exit when coalesce(public.pack_room(k.id, null), 0) >= 0;
+      update public.sessions y
+         set pack_id = public.pick_pack(new.id, k.client_id, (s.starts_at at time zone tz)::date, s.id)
+       where y.id = s.id;
+    end loop;
+  end loop;
+  return null;
+end;
+$$;
+
+revoke execute on function public.profiles_after_charge_change() from public, anon, authenticated;
+
+create trigger profiles_after_charge_change after update of charge_no_shows on public.profiles
+  for each row when (new.charge_no_shows and not old.charge_no_shows)
+  execute function public.profiles_after_charge_change();
 
 -- ---------- 5. Weekly repeats: the functions ----------
 
@@ -2188,7 +2236,8 @@ grant execute on function public.my_packs() to authenticated;
 -- Someone without a trainer asks one to train them. They saw what the trainer would see and
 -- agreed (consented_at) before sending, because accepting links them without another step. One
 -- request waiting per person at a time; one waiting more than 14 days has expired. note and
--- phone (optional) are what they chose to tell the trainer. Made and answered only by the
+-- phone (optional) are what they chose to tell the trainer; they are cleared when the request is
+-- withdrawn, declined or expires, and kept once it is accepted. Made and answered only by the
 -- functions below; the person reads their own.
 create table public.training_requests (
   id uuid primary key default gen_random_uuid(),
@@ -2329,9 +2378,10 @@ begin
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('ask:' || me::text, 0));
-  -- A request waiting more than 14 days has expired; the person may ask someone else.
+  -- A request waiting more than 14 days has expired; the person may ask someone else, and the
+  -- trainer no longer has the note and phone number it carried.
   update public.training_requests q
-     set status = 'expired', answered_at = now()
+     set status = 'expired', answered_at = now(), note = null, phone = null
    where q.user_id = me and q.status = 'pending' and q.created_at <= now() - interval '14 days';
   why := public.training_request_check(p_trainer);
   if why is not null then
@@ -2365,7 +2415,8 @@ $$;
 revoke execute on function public.ask_trainer(uuid, text, text, boolean) from public, anon;
 grant execute on function public.ask_trainer(uuid, text, text, boolean) to authenticated;
 
--- The person withdraws their waiting request. True when it was withdrawn now.
+-- The person withdraws their waiting request. True when it was withdrawn now. The note and phone
+-- number it carried are cleared, so the trainer no longer has them.
 create function public.withdraw_request(p_request uuid)
 returns boolean
 language plpgsql
@@ -2380,7 +2431,7 @@ begin
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   update public.training_requests x
-     set status = 'withdrawn', answered_at = now()
+     set status = 'withdrawn', answered_at = now(), note = null, phone = null
    where x.id = p_request and x.user_id = me and x.status = 'pending'
   returning x.* into q;
   if q.id is null then
@@ -2428,8 +2479,9 @@ revoke execute on function public.my_training_requests() from public, anon;
 grant execute on function public.my_training_requests() to authenticated;
 
 -- Requests to the signed-in trainer: waiting ones (oldest first), then those answered or withdrawn
--- in the last 30 days. What the person chose to share: their Voltrix name and photo, note and
--- phone; their email only once accepted.
+-- in the last 30 days. What the person chose to share: their Voltrix name and photo, and the note
+-- and phone only while the request waits or once accepted (a withdrawn, declined or expired
+-- request has them cleared anyway); their email only once accepted.
 create function public.training_requests_for_me()
 returns table (
   id uuid,
@@ -2449,7 +2501,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select q.id, q.user_id, p.full_name, p.avatar_url, q.note, q.phone, q.status, q.created_at, q.answered_at, q.client_id,
+  select q.id, q.user_id, p.full_name, p.avatar_url,
+         case when q.status in ('pending', 'accepted') then q.note end,
+         case when q.status in ('pending', 'accepted') then q.phone end,
+         q.status, q.created_at, q.answered_at, q.client_id,
          case when q.status = 'accepted' then (select u.email::text from auth.users u where u.id = q.user_id) end
     from public.training_requests q
     join public.profiles p on p.id = q.user_id
@@ -2469,8 +2524,8 @@ grant execute on function public.training_requests_for_me() to authenticated;
 -- before (the round 1 lock: only they can rejoin it), made active again; a row waiting with their
 -- email; else a new client with their Voltrix name, email and the phone they gave. The round 1
 -- triggers mark it joined and tell both sides ('link'). Returns the client row. Decline returns
--- null; with p_block the trainer also blocks the person, so they can't ask again. Answering the
--- same way twice answers the same again.
+-- null and clears the note and phone number the request carried; with p_block the trainer also
+-- blocks the person, so they can't ask again. Answering the same way twice answers the same again.
 create function public.answer_request(p_request uuid, p_accept boolean, p_block boolean default false)
 returns uuid
 language plpgsql
@@ -2558,7 +2613,9 @@ begin
        set status = 'accepted', answered_at = coalesce(x.answered_at, now()), client_id = linked
      where x.id = q.id;
   else
-    update public.training_requests x set status = 'declined', answered_at = now() where x.id = q.id;
+    update public.training_requests x
+       set status = 'declined', answered_at = now(), note = null, phone = null
+     where x.id = q.id;
     if coalesce(p_block, false) then
       insert into public.user_blocks (blocker_id, blocked_id) values (me, q.user_id) on conflict do nothing;
     end if;
@@ -2575,8 +2632,10 @@ grant execute on function public.answer_request(uuid, boolean, boolean) to authe
 
 -- When a person is linked to a trainer in any way (an invite, a code, a request), their waiting
 -- request to that trainer counts as accepted and one to anyone else is withdrawn (that trainer's
--- open app hears it). When a person leaves a trainer, or the trainer archives them, their booking
--- requests still waiting there are withdrawn, so they no longer hold times.
+-- open app hears it, and no longer has the note and phone number it carried). When a person
+-- leaves a trainer, or the trainer archives them, their booking requests still waiting there are
+-- withdrawn, so they no longer hold times, and the trainer's health news about them is marked
+-- seen (it never carried answers).
 create function public.clients_after_link_change()
 returns trigger
 language plpgsql
@@ -2591,7 +2650,9 @@ begin
       update public.training_requests t
          set status = case when t.trainer_id = new.trainer_id then 'accepted' else 'withdrawn' end,
              answered_at = now(),
-             client_id = case when t.trainer_id = new.trainer_id then new.id else t.client_id end
+             client_id = case when t.trainer_id = new.trainer_id then new.id else t.client_id end,
+             note = case when t.trainer_id = new.trainer_id then t.note end,
+             phone = case when t.trainer_id = new.trainer_id then t.phone end
        where t.user_id = new.user_id
          and t.status = 'pending'
       returning t.id, t.trainer_id
@@ -2611,6 +2672,12 @@ begin
     loop
       perform public.news_settled(r.trainer_id, 'requested', r.id, false);
     end loop;
+    update public.news n
+       set seen_at = now()
+     where n.person_id = new.trainer_id
+       and n.client_id = new.id
+       and n.kind = 'health'
+       and n.seen_at is null;
   end if;
   return null;
 end;
@@ -2784,7 +2851,8 @@ as $$
 declare
   me uuid := auth.uid();
 begin
-  if me is null then
+  -- An account deleted while its sign-in is still valid has no profile: refused like signed out.
+  if me is null or not exists (select 1 from public.profiles p where p.id = me) then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   if p_answers is null or not public.health_answers_ok(p_answers, 1::smallint) then
@@ -2828,7 +2896,12 @@ grant execute on function public.client_health_form(uuid) to authenticated;
 
 -- Each trainer who coaches the person (the round 1 rule) gets news when the form is filled in, its
 -- answers, details or emergency contact change, or it is removed (a new signature alone tells
--- nobody).
+-- nobody). The news says only what changed ({change: insert, update or delete}): never an answer
+-- or whether a doctor is needed, which the trainer reads through client_health_form() and
+-- clients_overview_v2() while they coach the person, so it can't outlast the coaching. While the
+-- trainer hasn't seen the last health news about this client, a new change updates that one
+-- (moved to now, no new live event) instead of adding another, so saving again and again can't
+-- flood the trainer's updates.
 create function public.health_forms_news()
 returns trigger
 language plpgsql
@@ -2837,7 +2910,9 @@ set search_path = ''
 as $$
 declare
   person uuid := coalesce(new.user_id, old.user_id);
+  change text := lower(tg_op);
   link record;
+  kept uuid;
 begin
   if tg_op = 'UPDATE'
      and (new.answers, new.details, new.emergency_name, new.emergency_phone)
@@ -2848,9 +2923,20 @@ begin
     select c.id, c.trainer_id from public.clients c
      where c.user_id = person and c.status <> 'archived' and c.invite_status = 'joined' and c.last_user_id = person
   loop
-    perform public.tell(link.trainer_id, 'health', link.id,
-      jsonb_build_object('needs_doctor', case when tg_op = 'DELETE' then null else new.needs_doctor end,
-                         'change', lower(tg_op)));
+    kept := null;
+    update public.news n
+       set payload = jsonb_build_object('change',
+                       case when n.payload ->> 'change' = 'insert' and change = 'update' then 'insert' else change end),
+           created_at = now()
+     where n.id = (select x.id from public.news x
+                    where x.person_id = link.trainer_id and x.client_id = link.id and x.kind = 'health'
+                      and x.seen_at is null
+                    order by x.created_at desc
+                    limit 1)
+    returning n.id into kept;
+    if kept is null then
+      perform public.tell(link.trainer_id, 'health', link.id, jsonb_build_object('change', change));
+    end if;
   end loop;
   return null;
 end;
@@ -2904,7 +2990,8 @@ declare
   me uuid := auth.uid();
   f private.calendar_feeds;
 begin
-  if me is null then
+  -- An account deleted while its sign-in is still valid has no profile: refused like signed out.
+  if me is null or not exists (select 1 from public.profiles p where p.id = me) then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   select * into f from private.calendar_feeds x where x.user_id = me;
@@ -2931,7 +3018,8 @@ declare
   me uuid := auth.uid();
   f private.calendar_feeds;
 begin
-  if me is null then
+  -- An account deleted while its sign-in is still valid has no profile: refused like signed out.
+  if me is null or not exists (select 1 from public.profiles p where p.id = me) then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   insert into private.calendar_feeds (user_id, token) values (me, public.new_feed_token())

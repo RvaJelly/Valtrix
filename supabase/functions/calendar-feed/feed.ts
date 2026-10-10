@@ -58,13 +58,19 @@ export async function handle(req: Request, env: Env, fetchFn: typeof fetch = fet
       body: JSON.stringify({ p_token: token }),
     });
     if (!res.ok) {
-      // Never log the token or the link.
-      console.error('calendar_feed failed', res.status, (await res.text()).slice(0, 200));
+      // Only the status and the database's error code: never the token, the link or an error's
+      // words, which could quote them. (Supabase's own request log still records the path.)
+      let code = '';
+      try {
+        const answer = (await res.json()) as { code?: unknown } | null;
+        code = typeof answer?.code === 'string' ? answer.code.slice(0, 10) : '';
+      } catch {}
+      console.error('calendar_feed failed', res.status, code);
       return text(503, LATER, { 'Retry-After': '600' });
     }
     feed = (await res.json()) as Feed | null;
   } catch (error) {
-    console.error('calendar_feed failed', String(error));
+    console.error('calendar_feed failed', error instanceof Error ? error.name : 'error');
     return text(503, LATER, { 'Retry-After': '600' });
   }
   if (!feed) return text(404, GONE);

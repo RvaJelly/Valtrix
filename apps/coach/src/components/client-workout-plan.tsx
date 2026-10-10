@@ -301,7 +301,11 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
         {shown?.step === 'pick' ? (
           <WorkoutPicker
             planned={new Set(items?.map((i) => i.workout_id))}
-            onPick={(workout) => setSheet({ step: 'days', workout })}
+            onPick={(workout) => {
+              // A workout already in the plan opens its days instead of going in twice.
+              const item = items?.find((i) => i.workout_id === workout.id);
+              setSheet(item ? { step: 'days', workout, item } : { step: 'days', workout });
+            }}
             onClose={() => setSheet(null)}
           />
         ) : null}
@@ -382,10 +386,10 @@ function WorkoutPicker({
             <ListRow
               key={w.id}
               title={w.name}
-              subtitle={planned.has(w.id) ? 'Already in the plan' : undefined}
+              subtitle={planned.has(w.id) ? 'In the plan: change its days' : undefined}
               leading={<IconTile icon="barbell-outline" />}
               onPress={() => onPick(w)}
-              accessibilityLabel={`Add ${w.name}`}
+              accessibilityLabel={planned.has(w.id) ? `${w.name}, in the plan. Change its days` : `Add ${w.name}`}
               compact
               last={index === workouts.length - 1}
             />

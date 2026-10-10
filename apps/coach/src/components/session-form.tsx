@@ -1,6 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
@@ -20,7 +28,7 @@ import {
   TextField,
   Toggle,
 } from '@/components/ui';
-import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, withAlpha } from '@/constants/theme';
 import { fullName, type Client } from '@/lib/clients';
 import { haptic } from '@/lib/haptics';
 import {
@@ -247,6 +255,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, i
           booked={dayBookings ?? []}
           day={day}
           duration={Number(duration ?? 60)}
+          background={inSheet ? Colors.surfaceHigh : undefined}
           onChange={setTime}
         />
         {clash ? (
@@ -344,8 +353,10 @@ function dayKeyOf(day: Date) {
   return `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
 }
 
-// The start times in one sideways row, opened at the chosen time or the next sensible one. A time
-// that clashes with another booking shows a small dot.
+// The start times. On a phone they are one sideways row, opened at the chosen time or the next sensible
+// one with the time before it showing too, and soft fades at the edges that still have more. On a wider
+// window (a mouse has no sideways scroll) they wrap onto lines. A time that clashes with another
+// booking shows a small dot.
 function TimeChips({
   times,
   value,
@@ -353,8 +364,11 @@ function TimeChips({
   booked,
   day,
   duration,
+  background,
   onChange,
 }: {
+  // The colour behind the row, for its edge fades: the page by default, or the sheet's.
+  background?: string;
   times: string[];
   value: string | null;
   scrollTo: string | null;
@@ -363,63 +377,92 @@ function TimeChips({
   duration: number;
   onChange: (time: string) => void;
 }) {
+  const wrap = useWindowDimensions().width >= 768;
   const scroll = useRef<ScrollView>(null);
   // Where each chip sits, and whether the row has been opened at the right time yet. The time to
   // open at can arrive after the chips are laid out (once the day's bookings load).
   const spots = useRef(new Map<string, number>());
   const placed = useRef(false);
+  const [edges, setEdges] = useState({ start: true, end: false });
 
   function place(time: string | null) {
     const x = time ? spots.current.get(time) : undefined;
-    if (placed.current || x === undefined) return;
+    if (wrap || placed.current || x === undefined) return;
     placed.current = true;
-    scroll.current?.scrollTo({ x: Math.max(0, x - Spacing.gutter), animated: false });
+    // The time before it stays in view, so the row opens mid-day without hiding that it goes earlier.
+    const before = times[times.indexOf(time!) - 1];
+    const from = (before ? spots.current.get(before) : undefined) ?? x;
+    scroll.current?.scrollTo({ x: Math.max(0, from - Spacing.gutter), animated: false });
   }
 
   useEffect(() => {
     place(scrollTo);
   });
 
+  const behind = background ?? Colors.background;
+  const fade = (to: 'left' | 'right') => {
+    const gradient = `linear-gradient(to ${to}, ${withAlpha(behind, 0)}, ${behind})`;
+    return (
+      Platform.OS === 'web' ? { backgroundImage: gradient } : { experimental_backgroundImage: gradient }
+    ) as ViewStyle;
+  };
+
+  const chips = times.map((t) => {
+    const selected = t === value;
+    const taken = booked.some((b) =>
+      overlaps({ starts_at: combine(day, t).toISOString(), duration_minutes: duration }, b),
+    );
+    return (
+      <Pressable
+        key={t}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={taken ? `${t}, overlaps another booking` : t}
+        onPress={() => {
+          if (!selected) haptic.select();
+          onChange(t);
+        }}
+        onLayout={(e) => {
+          spots.current.set(t, e.nativeEvent.layout.x);
+          if (t === scrollTo) place(t);
+        }}
+        style={styles.timeTarget}>
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.time,
+              pressed && { backgroundColor: Colors.tintPressed },
+              selected && { backgroundColor: Colors.text },
+            ]}>
+            <Text variant="callout" style={[styles.timeText, selected && { color: Colors.background }]}>
+              {t}
+            </Text>
+            {taken && !selected ? <View style={styles.takenDot} /> : null}
+          </View>
+        )}
+      </Pressable>
+    );
+  });
+
+  if (wrap) return <View style={styles.timeWrap}>{chips}</View>;
   return (
     <View style={styles.bleed}>
-      <ScrollView ref={scroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeRow}>
-        {times.map((t) => {
-          const selected = t === value;
-          const taken = booked.some((b) =>
-            overlaps({ starts_at: combine(day, t).toISOString(), duration_minutes: duration }, b),
-          );
-          return (
-            <Pressable
-              key={t}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              accessibilityLabel={taken ? `${t}, overlaps another booking` : t}
-              onPress={() => {
-                if (!selected) haptic.select();
-                onChange(t);
-              }}
-              onLayout={(e) => {
-                spots.current.set(t, e.nativeEvent.layout.x);
-                if (t === scrollTo) place(t);
-              }}
-              style={styles.timeTarget}>
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.time,
-                    pressed && { backgroundColor: Colors.tintPressed },
-                    selected && { backgroundColor: Colors.text },
-                  ]}>
-                  <Text variant="callout" style={[styles.timeText, selected && { color: Colors.background }]}>
-                    {t}
-                  </Text>
-                  {taken && !selected ? <View style={styles.takenDot} /> : null}
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
+      <ScrollView
+        ref={scroll}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          const start = contentOffset.x <= 2;
+          const end = contentOffset.x + layoutMeasurement.width >= contentSize.width - 2;
+          if (start !== edges.start || end !== edges.end) setEdges({ start, end });
+        }}
+        contentContainerStyle={styles.timeRow}>
+        {chips}
       </ScrollView>
+      {edges.start ? null : <View pointerEvents="none" style={[styles.fadeLeft, fade('left')]} />}
+      {edges.end ? null : <View pointerEvents="none" style={[styles.fadeRight, fade('right')]} />}
     </View>
   );
 }
@@ -532,6 +575,25 @@ const styles = themed(() => ({
   timeRow: {
     paddingHorizontal: Spacing.gutter,
     columnGap: Spacing.two,
+  },
+  timeWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: Spacing.two,
+  },
+  fadeLeft: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Spacing.four,
+  },
+  fadeRight: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: Spacing.four,
   },
   timeTarget: {
     minHeight: 44,

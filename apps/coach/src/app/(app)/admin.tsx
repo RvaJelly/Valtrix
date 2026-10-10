@@ -1,9 +1,22 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, TextInput, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 
-import { Body, ErrorText, Text, Toggle } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Avatar } from '@/components/avatar';
+import {
+  EmptyState,
+  ErrorText,
+  Group,
+  groupedItem,
+  ListRow,
+  SearchField,
+  SkeletonRows,
+  StatStrip,
+  Text,
+  Toggle,
+  useDelayed,
+} from '@/components/ui';
+import { Layout, Spacing, themed } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import type { Profile } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
@@ -49,6 +62,7 @@ export default function AllTrainers() {
   const [trainers, setTrainers] = useState<Trainer[] | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const showSkeleton = useDelayed(300);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,126 +100,78 @@ export default function AllTrainers() {
       contentContainerStyle={styles.list}
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={
-        <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
-          {trainers ? (
-            <View style={styles.statsRow}>
-              <Stat label="Trainers" value={trainers.length} />
-              <Stat label="Paying" value={paying} />
-              <Stat label="Free access" value={free} />
-            </View>
-          ) : null}
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by name, business or email"
-            placeholderTextColor={Colors.textSecondary}
-            selectionColor={Colors.accent}
-            style={styles.search}
-            autoCapitalize="none"
-            autoCorrect={false}
+        <View style={styles.header}>
+          <StatStrip
+            items={[
+              { value: trainers?.length, label: 'Trainers' },
+              { value: trainers ? paying : null, label: 'Paying' },
+              { value: trainers ? free : null, label: 'Free access' },
+            ]}
           />
+          <SearchField value={search} onChangeText={setSearch} placeholder="Search by name, business or email" />
           <ErrorText>{error}</ErrorText>
+          {!trainers && !error && showSkeleton ? (
+            <Group>
+              <SkeletonRows count={4} avatar />
+            </Group>
+          ) : null}
         </View>
       }
       ListEmptyComponent={
         trainers ? (
-          <Body secondary style={{ textAlign: 'center', marginTop: Spacing.four }}>
-            No trainers match.
-          </Body>
-        ) : error ? null : (
-          <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.five }} />
-        )
+          <EmptyState compact icon="search-outline" title="No trainers match" message="Try another name or email." />
+        ) : null
       }
-      ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
-      renderItem={({ item }) => (
-        <View style={styles.row}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.name}>{item.full_name || 'No name'}</Text>
-            <Body secondary style={styles.small} numberOfLines={1}>
-              {[item.business_name, item.email].filter(Boolean).join(' · ')}
-            </Body>
-            <Body secondary style={styles.small}>
-              {planLabel(item)} · {item.client_count === 1 ? '1 client' : `${item.client_count} clients`}
-            </Body>
+      renderItem={({ item, index }) => {
+        const name = item.full_name || item.business_name || item.email;
+        const clients = item.client_count === 1 ? '1 client' : `${item.client_count} clients`;
+        return (
+          <View style={groupedItem(index, visible.length)}>
+            <ListRow
+              title={name}
+              titleLines={1}
+              // Who they are (business and email), then where they stand.
+              subtitle={
+                <>
+                  <Text variant="footnote" tone="secondary" numberOfLines={1}>
+                    {[item.business_name, item.email].filter(Boolean).join(' · ')}
+                  </Text>
+                  <Text variant="footnote" tone="secondary" numberOfLines={1}>
+                    {planLabel(item)} · {clients}
+                  </Text>
+                </>
+              }
+              leading={<Avatar name={name} size={40} />}
+              trailing={
+                item.is_admin ? null : (
+                  <Toggle
+                    accessibilityLabel={`Free access for ${item.full_name ?? item.email}`}
+                    value={item.free_access}
+                    onValueChange={(v) => setFree(item, v)}
+                  />
+                )
+              }
+              accessibilityLabel={`${name}, ${item.email}. ${planLabel(item)}, ${clients}`}
+              last={index === visible.length - 1}
+            />
           </View>
-          {item.is_admin ? null : (
-            <View style={styles.toggle}>
-              <Toggle
-                accessibilityLabel={`Free access for ${item.full_name ?? item.email}`}
-                value={item.free_access}
-                onValueChange={(v) => setFree(item, v)}
-              />
-              <Text style={styles.toggleLabel}>Free</Text>
-            </View>
-          )}
-        </View>
-      )}
+        );
+      }}
     />
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statNumber}>{value}</Text>
-      <Body secondary style={styles.small}>
-        {label}
-      </Body>
-    </View>
   );
 }
 
 const styles = themed(() => ({
   list: {
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
     paddingHorizontal: Spacing.gutter,
-    paddingVertical: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.hero,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  stat: {
-    flex: 1,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  statNumber: {
-    color: Colors.accentText,
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  search: {
-    minHeight: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-    color: Colors.text,
-    fontSize: 16,
-    paddingHorizontal: Spacing.three,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  header: {
     gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  small: {
-    fontSize: 13,
-  },
-  toggle: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  toggleLabel: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+    marginBottom: Spacing.three,
   },
 }));

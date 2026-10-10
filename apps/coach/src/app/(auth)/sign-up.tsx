@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Linking, type TextInput } from 'react-native';
+import { Linking, Platform, type TextInput } from 'react-native';
 
 import { AuthPage } from '@/components/auth-page';
-import { Field, PasswordField } from '@/components/field';
-import { Button, ErrorText, TextLink } from '@/components/ui';
+import { Button, ErrorText, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
+
+// iPhone's Mail opens on its inbox with message://. "mailto:" would start a blank new email instead,
+// and Android and the web have no link to an inbox, so there "Send it again" is the main button.
+const MAIL_INBOX = Platform.OS === 'ios' ? 'message://' : null;
 
 type Where = 'name' | 'email' | 'password' | 'form';
 type Problem = { field: Where; text: string } | null;
@@ -62,15 +65,17 @@ export default function SignUp() {
         footer={
           <>
             <ErrorText>{resend.error}</ErrorText>
-            <Button
-              title="Open mail app"
-              icon="mail-outline"
-              onPress={() => Linking.openURL('mailto:').catch(() => {})}
-            />
+            {MAIL_INBOX ? (
+              <Button
+                title="Open mail app"
+                icon="mail-outline"
+                onPress={() => Linking.openURL(MAIL_INBOX).catch(() => {})}
+              />
+            ) : null}
             <Button
               title={resend.done ? 'Sent again' : 'Send it again'}
               icon={resend.done ? 'checkmark' : 'refresh-outline'}
-              variant="secondary"
+              variant={MAIL_INBOX ? 'secondary' : 'primary'}
               onPress={sendAgain}
               loading={resend.busy}
               disabled={resend.done}
@@ -96,7 +101,7 @@ export default function SignUp() {
           <TextLink lead="Already have an account?" label="Sign in" onPress={() => router.replace('/sign-in')} />
         </>
       }>
-      <Field
+      <TextField
         label="Your name"
         value={fullName}
         onChangeText={(text) => {
@@ -112,7 +117,7 @@ export default function SignUp() {
         onSubmitEditing={() => emailRef.current?.focus()}
         error={errorFor('name')}
       />
-      <Field
+      <TextField
         ref={emailRef}
         label="Email"
         value={email}
@@ -130,7 +135,8 @@ export default function SignUp() {
         onSubmitEditing={() => passwordRef.current?.focus()}
         error={errorFor('email')}
       />
-      <PasswordField
+      <TextField
+        password
         ref={passwordRef}
         label="Password"
         value={password}

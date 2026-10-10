@@ -17,8 +17,10 @@ const BENEFITS: { icon: IconName; text: string }[] = [
 ];
 
 type Props = {
-  // 'start' before or during the free trial, 'ended' once it has run out.
-  mode: 'start' | 'ended';
+  // 'start' before the free trial, 'trial' while it runs, 'ended' once it has run out.
+  mode: 'start' | 'trial' | 'ended';
+  // Days left in a running trial.
+  daysLeft?: number;
   // The trainer's name, for the headline.
   name?: string | null;
   // When the running trial ends, so the first charge shows the right day.
@@ -30,9 +32,10 @@ type Props = {
 
 // Trainers add a card here before they get into the app. Nothing is charged for the first TRIAL_DAYS (14) days;
 // after that the monthly plan starts on its own.
-export function SubscribeView({ mode, name, trialEndsAt, standalone, onSignOut }: Props) {
+export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, onSignOut }: Props) {
   const [notice, setNotice] = useState(false);
   const starting = mode === 'start';
+  const inTrial = mode === 'trial';
   const [chargeDate] = useState(() =>
     dayMonth(trialEndsAt ?? new Date(new Date().getTime() + TRIAL_DAYS * 86_400_000)),
   );
@@ -41,7 +44,16 @@ export function SubscribeView({ mode, name, trialEndsAt, standalone, onSignOut }
     ? first
       ? `Build your business, ${first}`
       : 'Build your business'
-    : `Welcome back, ${first || 'coach'}`;
+    : inTrial
+      ? daysLeft === 1
+        ? 'Last day of your trial'
+        : `${daysLeft ?? TRIAL_DAYS} days left in your trial`
+      : `Welcome back, ${first || 'coach'}`;
+  const intro = starting
+    ? 'Win clients, keep them and get paid.'
+    : inTrial
+      ? `Subscribe now and nothing changes when your trial ends on ${chargeDate}.`
+      : 'Your trial has ended. Everything is saved.';
 
   return (
     <View style={{ flex: 1 }}>
@@ -49,19 +61,18 @@ export function SubscribeView({ mode, name, trialEndsAt, standalone, onSignOut }
         {standalone ? <Logo style={styles.logo} /> : null}
 
         <View style={styles.intro}>
-          {standalone && starting && !trialEndsAt ? (
+          {standalone && starting ? (
             <Text variant="label" tone="secondary">
               Step 2 of 2
             </Text>
           ) : null}
-          {starting ? (
-            <StatusPill tone="success" label={trialEndsAt ? `Free until ${chargeDate}` : `${TRIAL_DAYS} days free`} />
-          ) : null}
+          {starting ? <StatusPill tone="success" label={`${TRIAL_DAYS} days free`} /> : null}
+          {inTrial ? <StatusPill tone="success" label={`Free until ${chargeDate}`} /> : null}
           <Text variant="largeTitle" accessibilityRole="header" style={{ textAlign: 'center' }}>
             {headline}
           </Text>
           <Text variant="body" tone="secondary" style={{ textAlign: 'center' }}>
-            {starting ? 'Win clients, keep them and get paid.' : 'Your trial has ended. Everything is saved.'}
+            {intro}
           </Text>
         </View>
 
@@ -105,6 +116,12 @@ export function SubscribeView({ mode, name, trialEndsAt, standalone, onSignOut }
             <Step icon="card-outline" title={chargeDate} text={`Your plan starts at ${PRICE_LABEL} a month.`} last />
           </View>
         ) : null}
+        {inTrial ? (
+          <View style={styles.timeline} accessibilityRole="list">
+            <Step icon="lock-open-outline" title="Until then" text="Your free trial keeps running. Nothing to pay." />
+            <Step icon="card-outline" title={chargeDate} text={`Your plan starts at ${PRICE_LABEL} a month.`} last />
+          </View>
+        ) : null}
 
         {standalone && onSignOut ? <Button title="Sign out" variant="ghost" onPress={onSignOut} /> : null}
       </ScrollView>
@@ -117,8 +134,8 @@ export function SubscribeView({ mode, name, trialEndsAt, standalone, onSignOut }
         ) : null}
         {/* Card payments are not connected yet; the provider is still being chosen. */}
         <Button title={starting ? 'Start my free trial' : 'Subscribe now'} onPress={() => setNotice(true)} />
-        <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
-          {starting
+        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
+          {starting || inTrial
             ? `No charge until ${chargeDate}, then ${PRICE_LABEL} a month until you cancel.`
             : `${PRICE_LABEL} a month until you cancel.`}
         </Text>

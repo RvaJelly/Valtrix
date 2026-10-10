@@ -26,6 +26,8 @@ type Props = {
   fallback?: { path: string; note: string } | null;
   // Name for the full-screen player.
   title?: string;
+  // Say the size limit on the empty row. Off where the page says it once for several videos.
+  hint?: boolean;
 };
 
 // Ask where the video comes from. Browsers only have "choose a file".
@@ -42,7 +44,7 @@ function askSource(): Promise<'camera' | 'library' | null> {
 
 // Add, play, replace or remove one workout video. Clients with the workout in their
 // plan can watch it in the Voltrix app and save it to their phone.
-export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) {
+export function WorkoutVideo({ label, path, onChange, fallback, title, hint = true }: Props) {
   const { session } = useAuth();
   const [busy, setBusy] = useState<'preparing' | 'uploading' | 'removing' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +169,7 @@ export function WorkoutVideo({ label, path, onChange, fallback, title }: Props) 
                   {label}
                 </Text>
                 <Text variant="footnote" tone="secondary">
-                  Add a video, {VIDEO_HINT}
+                  {hint ? `Add a video, ${VIDEO_HINT}` : 'Add a video'}
                 </Text>
               </View>
               <Ionicons name="add" size={20} color={Colors.textSecondary} />

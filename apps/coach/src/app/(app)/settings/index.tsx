@@ -22,9 +22,9 @@ export default function Settings() {
   const email = session?.user.email ?? '';
   const name = profile?.full_name || profile?.business_name || 'Your profile';
   const business = profile?.full_name && profile.business_name ? profile.business_name : email;
-  // Owners and free trainers have nothing to manage; anyone else opens the plan.
-  const manage =
-    access.kind === 'none' ? 'Subscribe' : access.kind === 'owner' || access.kind === 'free' ? null : 'Manage';
+  // Only a trainer on the free trial (or with no plan) has something to sign up for. A paying trainer
+  // sees their plan; billing gets its own page once card payments are connected.
+  const canSubscribe = access.kind === 'trial' || access.kind === 'none';
 
   const preferences: Row[] = [
     {
@@ -38,7 +38,7 @@ export default function Settings() {
     {
       icon: 'barbell-outline',
       title: 'Workouts and units',
-      subtitle: `${UNITS[settings.units].split(' ')[0]} · ${LENGTHS[settings.lengths].split(' ')[0]}`,
+      subtitle: `${UNITS[settings.units]} · ${LENGTHS[settings.lengths]}`,
       href: '/settings/units',
     },
     {
@@ -50,7 +50,7 @@ export default function Settings() {
     {
       icon: 'hand-left-outline',
       title: 'Privacy and blocked people',
-      subtitle: 'Who can see your stories and reels',
+      subtitle: 'Blocked people and what clients see',
       href: '/settings/privacy',
     },
   ];
@@ -90,14 +90,14 @@ export default function Settings() {
           }
           leading={<IconTile icon="card-outline" />}
           trailing={
-            manage ? (
+            canSubscribe ? (
               <Text variant="callout" style={{ fontFamily: Fonts.textSemi }}>
-                {manage}
+                Subscribe
               </Text>
             ) : null
           }
-          accessibilityLabel={manage ? `Subscription: ${planLabel(profile)}. ${manage}` : undefined}
-          onPress={manage ? () => router.push('/subscribe') : undefined}
+          accessibilityLabel={canSubscribe ? `Subscription: ${planLabel(profile)}. Subscribe` : undefined}
+          onPress={canSubscribe ? () => router.push('/subscribe') : undefined}
           last={!profile?.is_admin}
         />
         {profile?.is_admin ? (

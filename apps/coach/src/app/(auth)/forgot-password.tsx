@@ -2,8 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { AuthPage } from '@/components/auth-page';
-import { Field } from '@/components/field';
-import { Button, TextLink } from '@/components/ui';
+import { Button, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
@@ -51,7 +50,7 @@ export default function ForgotPassword() {
           <TextLink label="Back to sign in" onPress={backToSignIn} />
         </>
       }>
-      <Field
+      <TextField
         label="Email"
         value={email}
         onChangeText={(text) => {

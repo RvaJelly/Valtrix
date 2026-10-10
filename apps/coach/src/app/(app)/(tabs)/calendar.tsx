@@ -178,9 +178,9 @@ export default function CalendarScreen() {
             <EmptyState
               compact
               icon="calendar-clear-outline"
-              title={`Nothing booked ${isToday ? 'today' : 'on this day'}`}
-              message="Free for a session or a break."
-              action={<Button title="Book" icon="add" variant="secondary" size="small" onPress={book} />}
+              title="Nothing booked"
+              message="A free day."
+              action={<Button title="Book" variant="ghost" size="small" onPress={book} />}
             />
           ) : null}
           {dayList.length > 0 ? (

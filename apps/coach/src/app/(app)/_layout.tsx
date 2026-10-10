@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform, useWindowDimensions } from 'react-native';
 
 import { Colors, Fonts, Layout } from '@/constants/theme';
 import { ChatProvider } from '@/lib/chat-live';
@@ -13,6 +13,19 @@ import { useSettings } from '@/lib/settings';
 export const unstable_settings = { anchor: '(tabs)' };
 
 export default function AppLayout() {
+  // On a wide window the header's back button and actions line up with the centred column below
+  // them, instead of sitting at the window's far edges. (The web header takes these container
+  // styles; the phones' own headers are as wide as the screen anyway.)
+  const { width } = useWindowDimensions();
+  const columnHeader = (max: number) => {
+    const inset = Platform.OS === 'web' && width >= Layout.wide ? Math.max(0, Math.round((width - max) / 2)) : 0;
+    return inset
+      ? ({
+          headerLeftContainerStyle: { paddingLeft: inset },
+          headerRightContainerStyle: { paddingRight: inset },
+        } as object)
+      : {};
+  };
   return (
     <ChatProvider>
       <ReminderSync />
@@ -26,6 +39,7 @@ export default function AppLayout() {
           // Screen readers say "Back", not "(tabs), back" (the tabs group's name). The (tabs)
           // screen's title below is set to 'Back' for the same reason.
           headerBackTitle: 'Back',
+          ...columnHeader(Layout.maxCoach),
           // On a wide window every pushed screen is a centred column, so nothing stretches across a PC
           // screen. The tabs keep the full width for their sidebar.
           contentStyle: {
@@ -40,7 +54,21 @@ export default function AppLayout() {
           options={{ headerShown: false, title: 'Back', contentStyle: { backgroundColor: Colors.background } }}
         />
         <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
-        <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
+        {/* A client's page has two columns on a wide window, so its column is wider. */}
+        <Stack.Screen
+          name="clients/[id]"
+          options={{
+            title: 'Client',
+            headerTitle: '',
+            ...columnHeader(Layout.maxCoachWide),
+            contentStyle: {
+              backgroundColor: Colors.background,
+              width: '100%',
+              maxWidth: Layout.maxCoachWide,
+              alignSelf: 'center',
+            },
+          }}
+        />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />
         <Stack.Screen name="sessions/[id]" options={{ title: 'Session' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
@@ -54,7 +82,7 @@ export default function AppLayout() {
         <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
         <Stack.Screen name="subscribe" options={{ title: 'Subscription', presentation: 'modal' }} />
         <Stack.Screen name="workouts/new" options={{ title: 'New workout', presentation: 'modal' }} />
-        <Stack.Screen name="workouts/[id]" options={{ title: 'Workout' }} />
+        <Stack.Screen name="workouts/[id]" options={{ title: 'Workout', headerTitle: '' }} />
         <Stack.Screen name="exercises/index" options={{ title: 'Exercise library' }} />
         <Stack.Screen name="exercises/new" options={{ title: 'New exercise', presentation: 'modal' }} />
         <Stack.Screen

@@ -196,9 +196,9 @@ export function ClientNutrition({
           <View style={styles.row}>
             {(
               [
-                ['protein', 'Protein g'],
-                ['carbs', 'Carbs g'],
-                ['fat', 'Fat g'],
+                ['protein', 'Protein (g)'],
+                ['carbs', 'Carbs (g)'],
+                ['fat', 'Fat (g)'],
               ] as const
             ).map(([key, label]) => (
               <View key={key} style={{ flex: 1 }}>

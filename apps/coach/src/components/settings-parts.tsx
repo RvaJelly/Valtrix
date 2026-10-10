@@ -4,7 +4,6 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
-import { PasswordField } from '@/components/field';
 import { useToast } from '@/components/toast';
 import {
   Button,
@@ -17,6 +16,7 @@ import {
   Segmented,
   SkeletonRows,
   Text,
+  TextField,
   Toggle,
 } from '@/components/ui';
 import { ACCENTS, Colors, Layout, Spacing, themed, type AccentName } from '@/constants/theme';
@@ -40,14 +40,15 @@ export const APPEARANCE: Record<SettingsValues['appearance'], string> = {
   system: 'Auto',
 };
 
+// Whole words, so the choice fits at large text sizes; the numbers themselves show the short units.
 export const UNITS: Record<SettingsValues['units'], string> = {
-  kg: 'Kilograms (kg)',
-  lb: 'Pounds (lb)',
+  kg: 'Kilograms',
+  lb: 'Pounds',
 };
 
 export const LENGTHS: Record<SettingsValues['lengths'], string> = {
-  cm: 'Centimetres (cm)',
-  in: 'Inches (in)',
+  cm: 'Centimetres',
+  in: 'Inches',
 };
 
 function options<T extends string>(record: Record<T, string>) {
@@ -63,9 +64,9 @@ export function planLabel(profile: Profile | null) {
     case 'free':
       return 'Free access';
     case 'subscribed':
-      return `Voltrix Coach, ${PRICE_LABEL} / month`;
+      return `Voltrix Coach, ${PRICE_LABEL} a month`;
     case 'trial':
-      return `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left, then ${PRICE_LABEL} / month`;
+      return `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left, then ${PRICE_LABEL} a month`;
     default:
       return 'No active plan';
   }
@@ -320,7 +321,8 @@ export function PasswordForm() {
 
   return (
     <View style={{ gap: Spacing.three }}>
-      <PasswordField
+      <TextField
+        password
         label="New password"
         value={password}
         onChangeText={(text) => {

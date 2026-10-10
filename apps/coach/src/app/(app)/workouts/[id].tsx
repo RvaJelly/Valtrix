@@ -27,7 +27,7 @@ import { haptic } from '@/lib/haptics';
 import { useGoBack } from '@/lib/nav';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
-import { removeWorkoutVideos } from '@/lib/workout-videos';
+import { removeWorkoutVideos, VIDEO_TIP } from '@/lib/workout-videos';
 import {
   MUSCLE_GROUPS,
   WORKOUT_COLUMNS,
@@ -60,6 +60,7 @@ export default function WorkoutEditor() {
   const [detail, setDetail] = useState<string | null>(null);
   const [menu, setMenu] = useState<string | null>(null);
   const [videos, setVideos] = useState(false);
+  const [nameError, setNameError] = useState<string | undefined>();
   // What the row menu does once it has slid away: an iPhone shows one sheet or alert at a time.
   const afterMenu = useRef<(() => void) | null>(null);
   const { settings } = useSettings();
@@ -96,7 +97,9 @@ export default function WorkoutEditor() {
 
   async function saveName() {
     const trimmed = name.trim();
-    if (!workout || !trimmed || trimmed === workout.name) return;
+    // An empty name is never saved, and says so, rather than quietly putting the old one back.
+    if (workout && !trimmed) return setNameError('Give the workout a name.');
+    if (!workout || trimmed === workout.name) return;
     const { error } = await supabase.from('workouts').update({ name: trimmed }).eq('id', id);
     if (error) setError(plainError(error));
     else setWorkout({ ...workout, name: trimmed });
@@ -209,6 +212,7 @@ export default function WorkoutEditor() {
               title={editing ? 'Done' : 'Edit'}
               accessibilityLabel={editing ? 'Done editing' : 'Edit workout'}
               onPress={() => {
+                if (editing && !name.trim()) return setNameError('Give the workout a name.');
                 if (editing) saveName();
                 setEditing(!editing);
               }}
@@ -221,7 +225,11 @@ export default function WorkoutEditor() {
           <TextField
             label="Workout name"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              if (text.trim()) setNameError(undefined);
+            }}
+            error={nameError}
             onBlur={saveName}
             onSubmitEditing={saveName}
             autoCapitalize="words"
@@ -267,29 +275,14 @@ export default function WorkoutEditor() {
                     </Text>
                   }
                   trailing={
+                    // One menu button per row keeps every row the same height; moving is in the menu.
                     editing ? (
-                      <View style={styles.tools}>
-                        <IconButton
-                          icon="chevron-up"
-                          tone="secondary"
-                          label={`Move ${item.exercises.name} up`}
-                          disabled={index === 0}
-                          onPress={() => move(index, -1)}
-                        />
-                        <IconButton
-                          icon="chevron-down"
-                          tone="secondary"
-                          label={`Move ${item.exercises.name} down`}
-                          disabled={index === items.length - 1}
-                          onPress={() => move(index, 1)}
-                        />
-                        <IconButton
-                          icon="ellipsis-horizontal"
-                          tone="secondary"
-                          label={`More for ${item.exercises.name}`}
-                          onPress={() => setMenu(item.id)}
-                        />
-                      </View>
+                      <IconButton
+                        icon="ellipsis-horizontal"
+                        tone="secondary"
+                        label={`More for ${item.exercises.name}`}
+                        onPress={() => setMenu(item.id)}
+                      />
                     ) : null
                   }
                   onPress={editing ? undefined : () => setDetail(item.id)}
@@ -314,7 +307,7 @@ export default function WorkoutEditor() {
                       ]
                         .filter(Boolean)
                         .join(' · ')
-                    : 'A follow-along and demos clients can watch'
+                    : 'Follow-along and demos'
                 }
                 leading={<IconTile icon="videocam-outline" />}
                 onPress={() => setVideos(true)}
@@ -369,6 +362,32 @@ export default function WorkoutEditor() {
                 fromMenu(() => setDetail(itemId));
               }}
             />
+            {menuIndex > 0 ? (
+              <ListRow
+                title="Move up"
+                leading={<IconTile icon="arrow-up" />}
+                chevron={false}
+                compact
+                accessibilityLabel={`Move ${menuItem.exercises.name} up`}
+                onPress={() => {
+                  setMenu(null);
+                  move(menuIndex, -1);
+                }}
+              />
+            ) : null}
+            {menuIndex < items.length - 1 ? (
+              <ListRow
+                title="Move down"
+                leading={<IconTile icon="arrow-down" />}
+                chevron={false}
+                compact
+                accessibilityLabel={`Move ${menuItem.exercises.name} down`}
+                onPress={() => {
+                  setMenu(null);
+                  move(menuIndex, 1);
+                }}
+              />
+            ) : null}
             <ListRow
               title="Remove from workout"
               titleTone="danger"
@@ -386,15 +405,22 @@ export default function WorkoutEditor() {
       </Sheet>
 
       <Sheet visible={videos} onClose={() => setVideos(false)} title="Videos">
-        <Text variant="callout" tone="secondary">
-          Clients with this workout in their plan can watch these in the Voltrix app.
-        </Text>
+        <View style={{ gap: Spacing.one }}>
+          <Text variant="callout" tone="secondary">
+            Clients with this workout in their plan can watch these in the Voltrix app.
+          </Text>
+          {/* The size limit, said once for every video below. */}
+          <Text variant="footnote" tone="secondary">
+            {VIDEO_TIP}
+          </Text>
+        </View>
         <Card style={styles.videoCard}>
           <WorkoutVideo
             label="Workout video"
             path={workout.video_path}
             onChange={saveWorkoutVideo}
             title={workout.name}
+            hint={false}
           />
         </Card>
         <Text variant="label" tone="secondary" accessibilityRole="header" style={{ marginTop: Spacing.two }}>
@@ -411,6 +437,7 @@ export default function WorkoutEditor() {
                   item.exercises.video_path ? { path: item.exercises.video_path, note: 'From the exercise' } : null
                 }
                 title={item.exercises.name}
+                hint={false}
               />
             </View>
           ))}
@@ -469,7 +496,7 @@ function ExerciseDetails({
       <View style={styles.pair}>
         <View style={{ flex: 1 }}>
           <TextField
-            label={`Weight (${unit})`}
+            label={`Weight in ${unit}`}
             optional
             value={weight}
             onChangeText={setWeight}
@@ -479,12 +506,12 @@ function ExerciseDetails({
         </View>
         <View style={{ flex: 1 }}>
           <TextField
-            label="Rest (s)"
+            label="Rest in seconds"
             optional
             value={rest}
             onChangeText={setRest}
             keyboardType="number-pad"
-            placeholder="90"
+            placeholder="For example 90"
             maxLength={3}
           />
         </View>
@@ -507,12 +534,10 @@ const styles = themed(() => ({
     width: 28,
     fontFamily: Fonts.displaySemi,
   },
-  tools: {
-    flexDirection: 'row',
-    marginRight: -Spacing.two,
-  },
+  // Two fields side by side; their boxes line up even when one label takes two lines.
   pair: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: Spacing.tight,
   },
   videoCard: {

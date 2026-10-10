@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { HeaderTextButton } from '@/components/header-button';
@@ -21,6 +21,7 @@ import {
   Skeleton,
   StatusPill,
   Text,
+  Toggle,
   type StatusTone,
 } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
@@ -49,6 +50,15 @@ const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
   no_show: 'warning',
 };
 
+// The status control: three choices that always fit on a phone. A no-show is its own switch under it.
+const CHOICES: readonly { value: SessionStatus; label: string }[] = (
+  ['scheduled', 'completed', 'cancelled'] as const
+).map((value) => ({ value, label: SESSION_STATUS[value] }));
+
+function loadSession(id: string) {
+  return supabase.from('sessions').select(SESSION_COLUMNS).eq('id', id).maybeSingle();
+}
+
 // What the toast says after the status changes.
 const MARKED: Record<SessionStatus, string> = {
   scheduled: 'Booked again',
@@ -66,35 +76,42 @@ export default function SessionDetail() {
   const [editing, setEditing] = useState(false);
   // Deleting, so a second tap on a slow connection does nothing.
   const [deleting, setDeleting] = useState(false);
+  // A status change on its way to the server; taps in the meantime are ignored.
+  const saving = useRef(false);
   const { chats } = useChat();
 
   useEffect(() => {
-    supabase
-      .from('sessions')
-      .select(SESSION_COLUMNS)
-      .eq('id', id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) setError(plainError(error));
-        else if (!data) setError('This session could not be found.');
-        else setSession(data as unknown as Session);
-      });
+    loadSession(id).then(({ data, error }) => {
+      if (error) setError(plainError(error));
+      else if (!data) setError('This session could not be found.');
+      else setSession(data as unknown as Session);
+    });
   }, [id]);
 
-  // The status changes at once and is saved behind it; a failure puts it back.
-  async function setStatus(status: SessionStatus) {
-    if (!session || status === session.status) return;
-    const before = session.status;
+  // The status changes at once and is saved behind it; a failure puts it back. The toast offers Undo,
+  // so a slip of the thumb (Cancelled instead of Done) is one tap to put right.
+  async function changeStatus(status: SessionStatus, before: SessionStatus, undoable: boolean) {
+    if (saving.current) return;
+    saving.current = true;
     haptic.select();
     setError(null);
-    setSession({ ...session, status });
+    setSession((s) => (s ? { ...s, status } : s));
     const { error } = await supabase.from('sessions').update({ status }).eq('id', id);
+    saving.current = false;
     if (error) {
       setSession((s) => (s ? { ...s, status: before } : s));
       return setError(plainError(error));
     }
     refreshReminders();
-    toast(MARKED[status]);
+    toast(
+      MARKED[status],
+      undoable ? { action: { label: 'Undo', onPress: () => changeStatus(before, status, false) } } : undefined,
+    );
+  }
+
+  function setStatus(status: SessionStatus) {
+    if (!session || status === session.status) return;
+    changeStatus(status, session.status, true);
   }
 
   async function remove() {
@@ -140,10 +157,8 @@ export default function SessionDetail() {
   const onApp = !!session.clients?.user_id;
   const joinable = canJoin(session, new Date().getTime());
   const place = session.online ? 'Video call' : session.location || 'No place set';
-  const statuses = (['scheduled', 'completed', 'no_show', 'cancelled'] as const).filter(
-    // A no-show only makes sense once the session has started.
-    (s) => s !== 'no_show' || isPast || session.status === 'no_show',
-  );
+  // A no-show only makes sense once the session has started.
+  const canNoShow = isPast || session.status === 'no_show';
 
   return (
     <>
@@ -213,11 +228,25 @@ export default function SessionDetail() {
         </Card>
 
         <Section title="Status">
-          <Segmented
-            options={statuses.map((s) => ({ value: s, label: SESSION_STATUS[s] }))}
-            value={session.status}
-            onChange={setStatus}
-          />
+          <Segmented options={CHOICES} value={session.status} onChange={setStatus} />
+          {canNoShow ? (
+            <Group>
+              <ListRow
+                title="Client didn't show"
+                leading={<IconTile icon="person-remove-outline" />}
+                trailing={
+                  <Toggle
+                    value={session.status === 'no_show'}
+                    // Off again means they did come: the session is done.
+                    onValueChange={(on) => setStatus(on ? 'no_show' : 'completed')}
+                    accessibilityLabel="Client didn't show"
+                  />
+                }
+                compact
+                last
+              />
+            </Group>
+          ) : null}
         </Section>
 
         {session.notes ? (
@@ -254,8 +283,11 @@ export default function SessionDetail() {
             const { error } = await supabase.from('sessions').update(input).eq('id', id);
             if (error) return saveError(error);
             refreshReminders();
+            // Stay on the session: show what was saved and say so.
+            const { data } = await loadSession(id);
+            if (data) setSession(data as unknown as Session);
             setEditing(false);
-            goBack('/calendar');
+            toast('Session updated');
             return null;
           }}
         />

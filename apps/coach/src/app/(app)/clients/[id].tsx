@@ -1,6 +1,6 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState, type ComponentProps } from 'react';
-import { View } from 'react-native';
+import { Platform, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { AppStatusPill } from '@/components/app-status';
 import { Avatar } from '@/components/avatar';
@@ -10,22 +10,29 @@ import { ClientNutrition } from '@/components/client-nutrition';
 import { ClientProgress } from '@/components/client-progress';
 import { ClientTrainingLog } from '@/components/client-training-log';
 import { ClientWorkoutPlan } from '@/components/client-workout-plan';
+import { HeaderTextButton } from '@/components/header-button';
 import { SessionRow } from '@/components/session-row';
+import { Sheet } from '@/components/sheet';
+import { useToast } from '@/components/toast';
 import {
   Button,
   Card,
   EmptyState,
   ErrorText,
   Group,
+  IconButton,
+  IconTile,
+  ListRow,
   Notice,
   Section,
+  Segmented,
   Shortcuts,
   Skeleton,
   SkeletonRows,
   StatusPill,
   Text,
 } from '@/components/ui';
-import { Spacing, themed } from '@/constants/theme';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
@@ -48,41 +55,28 @@ import { saveError } from '@/lib/save-error';
 import { SESSION_COLUMNS, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
-// What 'Save changes' asks before leaving with something not saved: [title, message, button].
-function leaveWarning(name: string, plan: boolean, reply: boolean): [string, string, string] {
-  if (plan && reply) {
-    return [
-      'Not everything is saved',
-      `${name}’s details are saved, but your changes to the nutrition plan aren’t, and your reply to ${name}’s check-in isn’t sent. Leave anyway?`,
-      'Leave',
-    ];
-  }
-  if (reply) {
-    return [
-      'Reply not sent',
-      `${name}’s details are saved, but your reply to ${name}’s check-in isn’t sent yet. Leave without sending it?`,
-      'Leave',
-    ];
-  }
-  return [
-    'Nutrition plan not saved',
-    `${name}’s details are saved, but your changes to the nutrition plan aren’t. Leave without saving them?`,
-    'Leave',
-  ];
-}
+// The page's views. Workouts and nutrition share "Plan" (what the trainer sets); "Progress" is what the
+// client logs, there only while they share it. Three short words fit one row at any text size.
+type View3 = 'overview' | 'plan' | 'progress';
+const VIEWS: Record<View3, string> = { overview: 'Overview', plan: 'Plan', progress: 'Progress' };
 
 export default function ClientDetail() {
   const goBack = useGoBack();
+  const toast = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [client, setClient] = useState<Client | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [upcoming, setUpcoming] = useState<Session[] | null>(null);
-  // Changes typed into the nutrition plan editor that aren't saved yet.
-  const [planUnsaved, setPlanUnsaved] = useState(false);
-  // A check-in reply typed but not sent yet.
-  const [replyUnsaved, setReplyUnsaved] = useState(false);
+  const [view, setView] = useState<View3>('overview');
+  // The details form (behind Edit) and the More menu (Pause, Archive).
+  const [editing, setEditing] = useState(false);
+  const [more, setMore] = useState(false);
+  // What the More menu does once it has slid away: an iPhone shows one sheet or alert at a time.
+  const afterMore = useRef<(() => void) | null>(null);
   const loaded = useRef(false);
   const { session } = useAuth();
+  // Two columns on a wide window: the person on the left, the chosen view on the right.
+  const wide = useWindowDimensions().width >= Layout.wide;
 
   // Loaded each time the page shows or the app comes back, so it notices the client
   // accepting the invite (Message and Call appear) while the page stays open.
@@ -128,13 +122,23 @@ export default function ClientDetail() {
     if (error) return setError(plainError(error));
     haptic.success();
     if (status === 'archived') goBack('/clients');
-    else setClient((c) => (c ? { ...c, status } : c));
+    else {
+      setClient((c) => (c ? { ...c, status } : c));
+      toast(status === 'paused' ? 'Client paused' : 'Marked as active');
+    }
   }
 
   async function archive() {
     if (await confirm('Archive client?', 'They will be hidden from your client list.', 'Archive')) {
       await setStatus('archived');
     }
+  }
+
+  function fromMore(action: () => void) {
+    setMore(false);
+    // Android has no "sheet has gone" signal, and shows the next one over it fine.
+    if (Platform.OS === 'android') action();
+    else afterMore.current = action;
   }
 
   if (error && !client) {
@@ -153,6 +157,13 @@ export default function ClientDetail() {
   const status = appStatusOf(client);
   // Message and Call need the client in Voltrix, linked to this trainer.
   const linked = !!client.user_id && client.user_id !== session?.user.id;
+  // What the client logs in Voltrix, only while they have accepted this trainer.
+  const sharing = status === 'joined' && !!client.user_id && client.status !== 'archived';
+  const views = (Object.keys(VIEWS) as View3[])
+    .filter((v) => v !== 'progress' || sharing)
+    .map((value) => ({ value, label: VIEWS[value] }));
+  const shown: View3 = views.some((v) => v.value === view) ? view : 'overview';
+  const book = () => router.push({ pathname: '/sessions/new', params: { clientId: client.id } });
   const actions: ComponentProps<typeof Shortcuts>['items'] = [
     ...(linked
       ? [
@@ -176,99 +187,88 @@ export default function ClientDetail() {
             icon: 'calendar-clear-outline' as const,
             label: 'Book',
             accessibilityLabel: `Book a session with ${name}`,
-            onPress: () => router.push({ pathname: '/sessions/new', params: { clientId: client.id } }),
+            onPress: book,
           },
         ]
       : []),
   ];
+  // Only a view that isn't showing is hidden, never unmounted: an open nutrition edit or an unsent
+  // check-in reply survives a look at another view.
+  const hiddenUnless = (v: View3) => (shown === v ? null : styles.hidden);
 
   return (
     <>
-      <Stack.Screen options={{ title: name, headerTitle: '' }} />
-      <ClientForm
-        initial={client}
-        submitLabel="Save changes"
-        titles={['Details', 'Contact and goal']}
-        onSubmit={async (input) => {
-          const same =
-            input.email?.toLowerCase() !== client.email?.trim().toLowerCase()
-              ? await clientWithEmail(input.email, id)
-              : null;
-          if (
-            same &&
-            !(await confirm(
-              `You already have ${fullName(same)}`,
-              `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them twice. Save anyway?`,
-              'Save anyway',
-            ))
-          ) {
-            return null;
-          }
-          const { error } = await supabase.from('clients').update(input).eq('id', id);
-          if (error) return saveError(error);
-          setClient((c) => (c ? { ...c, ...input } : c));
-          // This button saves the details only. Don't quietly drop an open plan edit or an
-          // unsent check-in reply.
-          if (
-            (planUnsaved || replyUnsaved) &&
-            !(await confirm(...leaveWarning(input.first_name, planUnsaved, replyUnsaved)))
-          ) {
-            return null;
-          }
-          goBack('/clients');
-          return null;
+      <Stack.Screen
+        options={{
+          title: name,
+          headerTitle: '',
+          headerRight: () => (
+            <View style={styles.headerActions}>
+              <HeaderTextButton title="Edit" accessibilityLabel={`Edit ${name}`} onPress={() => setEditing(true)} />
+              <IconButton
+                icon="ellipsis-horizontal"
+                label={`More for ${name}`}
+                onPress={() => setMore(true)}
+                style={styles.headerMore}
+              />
+            </View>
+          ),
         }}
-        header={
-          <View style={styles.sections}>
-            <View style={styles.profile}>
-              <Avatar name={name} size={96} />
-              <View style={styles.names}>
-                <Text variant="largeTitle" numberOfLines={2} style={styles.center} accessibilityRole="header">
-                  {name}
+      />
+      <ScrollView contentContainerStyle={[styles.content, wide && styles.columns]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.sections, wide && styles.side]}>
+          <View style={styles.profile}>
+            <Avatar name={name} size={96} />
+            <View style={styles.names}>
+              <Text variant="largeTitle" numberOfLines={2} style={styles.center} accessibilityRole="header">
+                {name}
+              </Text>
+              {client.goal ? (
+                <Text variant="callout" tone="secondary" numberOfLines={2} style={styles.center}>
+                  {client.goal}
                 </Text>
-                {client.goal ? (
-                  <Text variant="callout" tone="secondary" numberOfLines={2} style={styles.center}>
-                    {client.goal}
-                  </Text>
-                ) : null}
-              </View>
-              <View style={styles.pills}>
-                <AppStatusPill status={status} />
-                {client.status !== 'active' ? (
-                  <StatusPill
-                    tone={client.status === 'paused' ? 'warning' : 'muted'}
-                    label={STATUS_LABELS[client.status]}
-                  />
-                ) : null}
-              </View>
-              {actions.length ? (
-                <View style={{ width: actions.length * 96, maxWidth: '100%' }}>
-                  <Shortcuts items={actions} />
-                </View>
               ) : null}
             </View>
-            {status !== 'joined' ? <AppLink client={client} status={status} onChanged={load} /> : null}
-            <ClientWorkoutPlan clientId={client.id} clientName={client.first_name} />
-            <ClientNutrition client={client} onUnsavedChange={setPlanUnsaved} />
-            {/* What the client logs in Voltrix, only while they have accepted this trainer. */}
-            {status === 'joined' && client.user_id && client.status !== 'archived' ? (
-              <>
-                <ClientTrainingLog client={client} />
-                <ClientProgress client={client} onUnsavedChange={setReplyUnsaved} />
-                <ClientHabits client={client} />
-              </>
+            <View style={styles.pills}>
+              <AppStatusPill status={status} />
+              {client.status !== 'active' ? (
+                <StatusPill
+                  tone={client.status === 'paused' ? 'warning' : 'muted'}
+                  label={STATUS_LABELS[client.status]}
+                />
+              ) : null}
+            </View>
+            {actions.length ? (
+              <View style={{ width: actions.length * 96, maxWidth: '100%' }}>
+                <Shortcuts items={actions} />
+              </View>
             ) : null}
+          </View>
+          {status !== 'joined' ? <AppLink client={client} status={status} onChanged={load} /> : null}
+          <ErrorText>{error}</ErrorText>
+        </View>
+
+        <View style={[styles.sections, wide && styles.main]}>
+          {views.length > 1 ? <Segmented options={views} value={shown} onChange={setView} /> : null}
+
+          <View style={[styles.sections, hiddenUnless('overview')]}>
             <Section title="Upcoming sessions">
               {upcoming === null ? (
                 <Group>
                   <SkeletonRows count={2} />
                 </Group>
               ) : upcoming.length === 0 ? (
-                <Card>
-                  <Text variant="callout" tone="secondary">
-                    Nothing booked yet.
-                  </Text>
-                </Card>
+                <EmptyState
+                  compact
+                  icon="calendar-clear-outline"
+                  title="Nothing booked"
+                  message={client.status === 'active' ? 'No sessions coming up.' : 'Paused clients can’t be booked.'}
+                  action={
+                    client.status === 'active' ? (
+                      <Button title="Book" variant="ghost" size="small" onPress={book} />
+                    ) : undefined
+                  }
+                />
               ) : (
                 <Group>
                   {upcoming.map((s, index) => (
@@ -277,18 +277,134 @@ export default function ClientDetail() {
                 </Group>
               )}
             </Section>
+            <Section
+              title="Notes"
+              action={{
+                label: client.notes ? 'Edit' : 'Add',
+                onPress: () => setEditing(true),
+                accessibilityLabel: client.notes ? 'Edit notes' : 'Add notes',
+              }}>
+              <Card>
+                <Text variant="callout" tone={client.notes ? 'primary' : 'secondary'}>
+                  {client.notes || 'Injuries, preferences, anything useful to remember.'}
+                </Text>
+              </Card>
+            </Section>
+            {client.email || client.phone ? (
+              <Section title="Contact">
+                <Group>
+                  {client.email ? (
+                    <ListRow
+                      title={client.email}
+                      leading={<IconTile icon="mail-outline" />}
+                      accessibilityLabel={`Email ${client.email}`}
+                      compact
+                      last={!client.phone}
+                    />
+                  ) : null}
+                  {client.phone ? (
+                    <ListRow
+                      title={client.phone}
+                      leading={<IconTile icon="call-outline" />}
+                      accessibilityLabel={`Phone ${client.phone}`}
+                      compact
+                      last
+                    />
+                  ) : null}
+                </Group>
+              </Section>
+            ) : null}
           </View>
-        }>
-        <ErrorText>{error}</ErrorText>
-        <View style={styles.manage}>
-          {client.status === 'active' ? (
-            <Button title="Pause client" variant="secondary" onPress={() => setStatus('paused')} />
-          ) : (
-            <Button title="Mark as active" variant="secondary" onPress={() => setStatus('active')} />
-          )}
-          <Button title="Archive client" variant="destructive" onPress={archive} />
+
+          <View style={[styles.sections, hiddenUnless('plan')]}>
+            <ClientWorkoutPlan clientId={client.id} clientName={client.first_name} />
+            <ClientNutrition client={client} />
+          </View>
+
+          {sharing ? (
+            <View style={[styles.sections, hiddenUnless('progress')]}>
+              <ClientTrainingLog client={client} />
+              <ClientProgress client={client} />
+              <ClientHabits client={client} />
+            </View>
+          ) : null}
         </View>
-      </ClientForm>
+      </ScrollView>
+
+      <Sheet visible={editing} onClose={() => setEditing(false)} title={`Edit ${client.first_name}`}>
+        <ClientForm
+          key={editing ? 'open' : 'closed'}
+          inSheet
+          initial={client}
+          submitLabel="Save changes"
+          titles={['Details', 'Contact and goal']}
+          onSubmit={async (input) => {
+            const same =
+              input.email?.toLowerCase() !== client.email?.trim().toLowerCase()
+                ? await clientWithEmail(input.email, id)
+                : null;
+            if (
+              same &&
+              !(await confirm(
+                `You already have ${fullName(same)}`,
+                `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them twice. Save anyway?`,
+                'Save anyway',
+              ))
+            ) {
+              return null;
+            }
+            const { error } = await supabase.from('clients').update(input).eq('id', id);
+            if (error) return saveError(error);
+            setClient((c) => (c ? { ...c, ...input } : c));
+            setEditing(false);
+            haptic.success();
+            toast('Saved');
+            // A new email can mean a new invite: the status line catches up.
+            load();
+            return null;
+          }}
+        />
+      </Sheet>
+
+      <Sheet
+        visible={more}
+        onClose={() => setMore(false)}
+        onClosed={() => {
+          const action = afterMore.current;
+          afterMore.current = null;
+          action?.();
+        }}
+        title={name}>
+        <Group style={{ backgroundColor: Colors.tint }}>
+          {client.status === 'active' ? (
+            <ListRow
+              title="Pause client"
+              subtitle="Off the active list; nothing is deleted"
+              leading={<IconTile icon="pause-outline" />}
+              chevron={false}
+              compact
+              onPress={() => fromMore(() => setStatus('paused'))}
+            />
+          ) : (
+            <ListRow
+              title="Mark as active"
+              leading={<IconTile icon="play-outline" />}
+              chevron={false}
+              compact
+              onPress={() => fromMore(() => setStatus('active'))}
+            />
+          )}
+          <ListRow
+            title="Archive client"
+            titleTone="danger"
+            leading={<IconTile icon="archive-outline" color={Colors.danger} />}
+            chevron={false}
+            compact
+            last
+            onPress={() => fromMore(archive)}
+          />
+        </Group>
+      </Sheet>
     </>
   );
 }
@@ -373,8 +489,37 @@ function AppLink({ client, status, onChanged }: { client: Client; status: AppSta
 }
 
 const styles = themed(() => ({
+  content: {
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
+  },
+  // Wide window: the person (320) beside the chosen view.
+  columns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  side: {
+    width: 320,
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+  },
   sections: {
     gap: Spacing.section,
+  },
+  hidden: {
+    display: 'none',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // The web header has no right inset of its own; the phones' headers do.
+  headerMore: {
+    marginRight: Platform.OS === 'web' ? Spacing.tight : 0,
   },
   profile: {
     alignItems: 'center',
@@ -394,10 +539,6 @@ const styles = themed(() => ({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: Spacing.two,
-  },
-  manage: {
-    gap: Spacing.tight,
-    marginTop: Spacing.two,
   },
   skeleton: {
     gap: Spacing.section,

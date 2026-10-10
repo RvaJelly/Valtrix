@@ -1,8 +1,7 @@
 import { useState } from 'react';
 
 import { AuthPage } from '@/components/auth-page';
-import { Field } from '@/components/field';
-import { Button, Text, TextLink } from '@/components/ui';
+import { Button, Text, TextField, TextLink } from '@/components/ui';
 import { coachAccess, TRIAL_DAYS } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
@@ -51,7 +50,7 @@ export default function BusinessSetup() {
           <TextLink label="Sign out" onPress={signOut} />
         </>
       }>
-      <Field
+      <TextField
         label="Business name"
         value={name}
         onChangeText={(text) => {

@@ -2,11 +2,10 @@ import { useRef, useState } from 'react';
 import { Platform, Pressable, View, type TextInput } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Field } from '@/components/field';
 import { SettingsPage } from '@/components/settings-parts';
 import { StickyFooter } from '@/components/sticky-footer';
 import { useToast } from '@/components/toast';
-import { Button, ErrorText, Group, IconTile, ListRow, Section, Text } from '@/components/ui';
+import { Button, ErrorText, Group, IconTile, ListRow, Section, Text, TextField } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
@@ -192,7 +191,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
       </View>
 
       <View style={styles.fields}>
-        <Field
+        <TextField
           label="Your name"
           value={name}
           onChangeText={setName}
@@ -202,7 +201,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           submitBehavior="submit"
           onSubmitEditing={() => businessRef.current?.focus()}
         />
-        <Field
+        <TextField
           ref={businessRef}
           label="Business name"
           value={business}
@@ -218,7 +217,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           error={errors.business}
         />
         {/* Locked while finding the location, which may fill it in, so nothing typed meanwhile is lost. */}
-        <Field
+        <TextField
           ref={cityRef}
           label="City"
           optional
@@ -232,7 +231,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           onSubmitEditing={() => yearsRef.current?.focus()}
           style={locating ? { opacity: 0.5 } : null}
         />
-        <Field
+        <TextField
           ref={yearsRef}
           label="Years of experience"
           optional
@@ -247,7 +246,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           onSubmitEditing={() => bioRef.current?.focus()}
           error={errors.years}
         />
-        <Field
+        <TextField
           ref={bioRef}
           label="About you"
           optional

@@ -19,8 +19,8 @@ import {
   deleteBodyWeight,
   loadBodyWeights,
   loadCheckIns,
+  loadLatestPhotos,
   loadMeasurements,
-  loadPhotos,
   MEASUREMENTS,
   photoUrls,
   POSES,
@@ -89,7 +89,7 @@ export default function Progress() {
         const [w, m, p, c] = await Promise.all([
           loadBodyWeights(from, to).catch(() => null),
           loadMeasurements(from, to).catch(() => null),
-          loadPhotos(6).catch(() => null),
+          loadLatestPhotos().catch(() => null),
           loadCheckIns(12).catch(() => null),
         ]);
         const signedLinks = p ? await photoUrls(p.map((x) => x.path)).catch(() => null) : null;

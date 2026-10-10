@@ -31,6 +31,29 @@ import { saveError } from '@/lib/save-error';
 import { formatDay, SESSION_COLUMNS, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
+// What 'Save changes' asks before leaving with something not saved: [title, message, button].
+function leaveWarning(name: string, plan: boolean, reply: boolean): [string, string, string] {
+  if (plan && reply) {
+    return [
+      'Not everything is saved',
+      `${name}’s details are saved, but your changes to the nutrition plan aren’t, and your reply to ${name}’s check-in isn’t sent. Leave anyway?`,
+      'Leave',
+    ];
+  }
+  if (reply) {
+    return [
+      'Reply not sent',
+      `${name}’s details are saved, but your reply to ${name}’s check-in isn’t sent yet. Leave without sending it?`,
+      'Leave',
+    ];
+  }
+  return [
+    'Nutrition plan not saved',
+    `${name}’s details are saved, but your changes to the nutrition plan aren’t. Leave without saving them?`,
+    'Leave',
+  ];
+}
+
 export default function ClientDetail() {
   const goBack = useGoBack();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,6 +62,8 @@ export default function ClientDetail() {
   const [upcoming, setUpcoming] = useState<Session[]>([]);
   // Changes typed into the nutrition plan editor that aren't saved yet.
   const [planUnsaved, setPlanUnsaved] = useState(false);
+  // A check-in reply typed but not sent yet.
+  const [replyUnsaved, setReplyUnsaved] = useState(false);
   const loaded = useRef(false);
   const { session } = useAuth();
 
@@ -126,14 +151,11 @@ export default function ClientDetail() {
           const { error } = await supabase.from('clients').update(input).eq('id', id);
           if (error) return saveError(error);
           setClient((c) => (c ? { ...c, ...input } : c));
-          // This button saves the details only. Don't quietly drop an open plan edit.
+          // This button saves the details only. Don't quietly drop an open plan edit or an
+          // unsent check-in reply.
           if (
-            planUnsaved &&
-            !(await confirm(
-              'Nutrition plan not saved',
-              `${input.first_name}’s details are saved, but your changes to the nutrition plan aren’t. Leave without saving them?`,
-              'Leave',
-            ))
+            (planUnsaved || replyUnsaved) &&
+            !(await confirm(...leaveWarning(input.first_name, planUnsaved, replyUnsaved)))
           ) {
             return null;
           }
@@ -170,7 +192,7 @@ export default function ClientDetail() {
           {appStatusOf(client) === 'joined' && client.user_id && client.status !== 'archived' ? (
             <>
               <ClientTrainingLog client={client} />
-              <ClientProgress client={client} />
+              <ClientProgress client={client} onUnsavedChange={setReplyUnsaved} />
               <ClientHabits client={client} />
             </>
           ) : null}

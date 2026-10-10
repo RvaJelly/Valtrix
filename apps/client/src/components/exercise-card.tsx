@@ -15,6 +15,8 @@ type ExerciseCardProps = {
   exercise: ActiveExercise;
   index: number;
   unit: WeightUnit;
+  // Save was tried: nothing can change until it is saved or the person keeps logging.
+  locked: boolean;
   // Typing, Add set, Remove set.
   onChange: (index: number, next: ActiveExercise) => void;
   onTick: (index: number, setIndex: number, done: boolean) => void;
@@ -52,7 +54,7 @@ function targetLine(exercise: ActiveExercise, unit: WeightUnit) {
 
 // One exercise in the live workout: what the trainer planned, last time's numbers, and a row
 // per set to fill in and tick. Only redraws when its own exercise changes.
-function ExerciseCardView({ exercise, index, unit, onChange, onTick, onLayoutY }: ExerciseCardProps) {
+function ExerciseCardView({ exercise, index, unit, locked, onChange, onTick, onLayoutY }: ExerciseCardProps) {
   const [info, setInfo] = useState(false);
   const { target } = exercise;
   const hasInfo = !!(target.notes || target.instructions || target.videoPath);
@@ -109,8 +111,10 @@ function ExerciseCardView({ exercise, index, unit, onChange, onTick, onLayoutY }
         <SetRow
           key={set.key}
           set={set}
+          name={exercise.name}
           number={setIndex + 1}
           unit={unit}
+          locked={locked}
           repsPlaceholder={/^\s*\d+(\s*[-–]\s*\d+)?\s*(reps?)?\s*$/i.test(target.reps) ? '–' : target.reps}
           newBest={isNewBest(exercise, set, unit)}
           testIDPrefix={`set-${index}-${setIndex}`}
@@ -121,7 +125,7 @@ function ExerciseCardView({ exercise, index, unit, onChange, onTick, onLayoutY }
       ))}
 
       <View style={styles.setButtons}>
-        {exercise.sets.length < MAX_SETS ? (
+        {!locked && exercise.sets.length < MAX_SETS ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Add a set to ${exercise.name}`}
@@ -132,7 +136,7 @@ function ExerciseCardView({ exercise, index, unit, onChange, onTick, onLayoutY }
             <Text style={styles.setButtonText}>Add set</Text>
           </Pressable>
         ) : null}
-        {exercise.sets.length > 1 && !lastSet?.done ? (
+        {!locked && exercise.sets.length > 1 && !lastSet?.done ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Remove the last set of ${exercise.name}`}
@@ -155,8 +159,10 @@ function ExerciseCardView({ exercise, index, unit, onChange, onTick, onLayoutY }
 
 function SetRow({
   set,
+  name,
   number,
   unit,
+  locked,
   repsPlaceholder,
   newBest,
   testIDPrefix,
@@ -165,8 +171,11 @@ function SetRow({
   onTick,
 }: {
   set: ActiveSet;
+  // The exercise, so a screen reader can tell set 1 of one exercise from set 1 of the next.
+  name: string;
   number: number;
   unit: WeightUnit;
+  locked: boolean;
   repsPlaceholder: string;
   newBest: boolean;
   testIDPrefix: string;
@@ -190,9 +199,10 @@ function SetRow({
           returnKeyType="next"
           onSubmitEditing={() => reps.current?.focus()}
           submitBehavior="submit"
-          accessibilityLabel={`Set ${number} weight in ${unit}`}
+          editable={!locked}
+          accessibilityLabel={`${name}, set ${number} weight in ${unit}`}
           testID={`${testIDPrefix}-weight`}
-          style={[styles.input, styles.weightColumn]}
+          style={[styles.input, styles.weightColumn, locked && styles.lockedInput]}
         />
         <Text style={[styles.times, styles.timesText]}>×</Text>
         <TextInput
@@ -206,20 +216,22 @@ function SetRow({
           selectTextOnFocus
           returnKeyType="done"
           onSubmitEditing={() => {
-            if (!set.done) onTick(true);
+            if (!set.done && !locked) onTick(true);
           }}
-          accessibilityLabel={`Set ${number} reps`}
+          editable={!locked}
+          accessibilityLabel={`${name}, set ${number} reps`}
           testID={`${testIDPrefix}-reps`}
-          style={[styles.input, styles.repsColumn]}
+          style={[styles.input, styles.repsColumn, locked && styles.lockedInput]}
         />
         <Pressable
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: set.done }}
-          accessibilityLabel={`Set ${number} done`}
+          accessibilityState={{ checked: set.done, disabled: locked }}
+          accessibilityLabel={`${name}, set ${number} done`}
           testID={`${testIDPrefix}-tick`}
           hitSlop={8}
+          disabled={locked}
           onPress={() => onTick(!set.done)}
-          style={styles.tickColumn}>
+          style={[styles.tickColumn, locked && { opacity: 0.6 }]}>
           <View style={[styles.tick, set.done && styles.ticked]}>
             {set.done ? <Ionicons name="checkmark" size={24} color={Colors.onAccent} /> : null}
           </View>
@@ -348,6 +360,10 @@ const styles = themed(() => ({
     fontWeight: '700',
     textAlign: 'center',
     paddingHorizontal: Spacing.one,
+  },
+  lockedInput: {
+    color: Colors.textSecondary,
+    backgroundColor: Colors.surface,
   },
   tick: {
     width: 40,

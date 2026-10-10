@@ -1,3 +1,4 @@
+import { within } from '@/lib/serial';
 import { supabase } from '@/lib/supabase';
 import { formatEstimate, formatNumber, formatWeight, type WeightUnit } from '@/lib/units';
 
@@ -243,6 +244,7 @@ export async function loadRecords(limit = 50): Promise<RecordRow[]> {
 export async function loadLastSets(exerciseNames: string[]): Promise<Map<string, LastSet[]>> {
   const names = [...new Set(exerciseNames.map((n) => n.trim()).filter(Boolean))].slice(0, 50);
   const found = new Map<string, LastSet[]>();
+  const finished = new Set<string>();
   if (!names.length) return found;
   const { data, error } = await supabase.rpc('my_last_sets', { p_exercises: names });
   if (error) throw error;
@@ -255,20 +257,30 @@ export async function loadLastSets(exerciseNames: string[]): Promise<Map<string,
       weight_kg: num(row.weight_kg),
       reps: num(row.reps),
     };
+    // Rows come in workout order. An exercise done twice that day (bench press first and
+    // last) only shows its first go, so the sets don't get mixed up.
+    if (finished.has(set.exercise_key)) continue;
     const list = found.get(set.exercise_key) ?? [];
+    if (list.length && set.set_number <= list[list.length - 1].set_number) {
+      finished.add(set.exercise_key);
+      continue;
+    }
     list.push(set);
     found.set(set.exercise_key, list);
   }
-  for (const list of found.values()) list.sort((a, b) => a.set_number - b.set_number);
   return found;
 }
+
+// A save that hangs on a bad connection gives up after this, so Save never spins forever.
+const SAVE_MS = 20_000;
 
 // Saves a finished workout. Saving the same id again is safe: the database answers with what
 // was saved. Two saves that crossed (a double tap) can give 23505 once; asking again gets the
 // saved answer.
 export async function finishWorkout(payload: FinishPayload): Promise<FinishResult> {
-  let { data, error } = await supabase.rpc('finish_workout', { p_log: payload });
-  if (error?.code === '23505') ({ data, error } = await supabase.rpc('finish_workout', { p_log: payload }));
+  const save = () => within(supabase.rpc('finish_workout', { p_log: payload }), SAVE_MS);
+  let { data, error } = await save();
+  if (error?.code === '23505') ({ data, error } = await save());
   if (error) throw error;
   const result = (data ?? {}) as Record<string, unknown>;
   const records = Array.isArray(result.records) ? (result.records as Record<string, unknown>[]) : [];

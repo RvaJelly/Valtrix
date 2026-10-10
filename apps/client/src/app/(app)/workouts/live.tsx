@@ -59,6 +59,8 @@ import {
   saveRestSound,
   unlockRestBeep,
 } from '@/lib/rest-timer';
+import { within } from '@/lib/serial';
+import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
 import { formatNumber, fromKg, type WeightUnit } from '@/lib/units';
 import {
@@ -66,6 +68,7 @@ import {
   finishWorkout,
   loadLastSets,
   loadPersonalBests,
+  loadWorkoutLog,
   recordLabel,
   topRecords,
   volumeKg,
@@ -115,11 +118,33 @@ function withoutLateRest(workout: ActiveWorkout | null): ActiveWorkout | null {
   return { ...workout, restEndsAt: null, restTotal: null };
 }
 
+// A workout opened earlier but never touched starts now: its clock and its day are from when
+// the person really begins, not from when they first looked at it.
+function begunNow(workout: ActiveWorkout): ActiveWorkout {
+  if (isUnderway(workout)) return workout;
+  return {
+    ...workout,
+    startedAt: Date.now(),
+    day: dayKey(new Date()),
+    restEndsAt: null,
+    restTotal: null,
+    lastTickAt: null,
+  };
+}
+
 type Fresh =
   | { kind: 'ready'; workout: ActiveWorkout; fromPhone: boolean }
   | { kind: 'gone' }
   | { kind: 'error' }
   | { kind: 'noExercises' };
+
+// How long to wait for the plan before using the copy on the phone, and for last time's
+// numbers and the bests before starting without them. A weak gym connection can hang for
+// minutes rather than fail.
+const PLAN_MS = 6_000;
+const EXTRAS_MS = 4_000;
+// Checking whether a save that seemed to fail went through after all.
+const CHECK_MS = 10_000;
 
 // A new workout from the plan. Without a connection it uses the copy kept on the phone the
 // last time this workout was opened.
@@ -128,7 +153,7 @@ async function freshWorkout(userId: string, planItemId: string, unit: WeightUnit
   let exercises: PlanExercise[];
   let fromPhone = false;
   try {
-    const [plan, list] = await Promise.all([loadPlan(), loadPlanWorkout(planItemId)]);
+    const [plan, list] = await within(Promise.all([loadPlan(), loadPlanWorkout(planItemId)]), PLAN_MS);
     const found = plan.find((p) => p.plan_item_id === planItemId);
     if (!found) return { kind: 'gone' };
     item = found;
@@ -144,8 +169,8 @@ async function freshWorkout(userId: string, planItemId: string, unit: WeightUnit
   if (!exercises.length) return { kind: 'noExercises' };
   const names = exercises.map((e) => e.exercise_name);
   const [last, bests] = await Promise.all([
-    loadLastSets(names).catch(() => new Map<string, LastSet[]>()),
-    loadPersonalBests().catch((): PersonalBest[] => []),
+    within(loadLastSets(names), EXTRAS_MS).catch(() => new Map<string, LastSet[]>()),
+    within(loadPersonalBests(), EXTRAS_MS).catch((): PersonalBest[] => []),
   ]);
   return { kind: 'ready', workout: startWorkout({ userId, item, exercises, last, bests, unit }), fromPhone };
 }
@@ -183,6 +208,8 @@ export default function LiveWorkout() {
   // When the finish sheet was opened, for the time it shows.
   const [finishOpenedAt, setFinishOpenedAt] = useState(0);
   const [saving, setSaving] = useState(false);
+  // Keep logging: asking whether the save that seemed to fail went through.
+  const [checking, setChecking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const scroll = useRef<ScrollView>(null);
   // Where each exercise card is, to scroll to the next one when an exercise is done.
@@ -197,7 +224,7 @@ export default function LiveWorkout() {
   const startUp = useEffectEvent(
     async (person: string, planItemId: string | null, stored: ActiveWorkout | null, alive: () => boolean) => {
       if (stored && (!planItemId || stored.planItemId === planItemId)) {
-        setWorkout(withoutLateRest(stored));
+        setWorkout(withoutLateRest(begunNow(stored)));
         setPhase({ kind: 'ready' });
         return;
       }
@@ -251,6 +278,9 @@ export default function LiveWorkout() {
     };
   }, []);
 
+  // Once Save has been tried the workout is locked until it is saved, or until Keep logging
+  // finds it wasn't: a save whose answer was lost may have gone through, and a later save
+  // with the same id would quietly drop anything added since.
   async function save(tickEverything = false) {
     if (!workout || !userId || saving) return;
     const ticked = tickEverything ? tickAll(workout) : workout;
@@ -287,9 +317,28 @@ export default function LiveWorkout() {
     setSaving(false);
   }
 
+  // Back to logging after a save that didn't go through. If it went through after all, the
+  // same save answers with what was saved.
+  async function keepLogging() {
+    if (!workout || saving || checking) return;
+    const id = workout.id;
+    setChecking(true);
+    setProblem(null);
+    let landed = false;
+    try {
+      landed = (await within(loadWorkoutLog(id), CHECK_MS)) !== null;
+      if (!landed) setWorkout((w) => (w && w.id === id ? { ...w, finishedAt: null } : w));
+    } catch {
+      setProblem('Check your connection and try again.');
+    }
+    setChecking(false);
+    if (landed) save();
+  }
+
   // A save that didn't go through tries once more when the connection or the app comes back.
+  // The workout is locked meanwhile, so it sends exactly what the person saved.
   function retrySave() {
-    if (workout?.finishedAt != null && !saving && !saved) save();
+    if (workout?.finishedAt != null && !saving && !checking && !saved) save();
   }
 
   useChatEvents((event) => {
@@ -325,18 +374,22 @@ export default function LiveWorkout() {
     };
   }, []);
 
+  // Neither changes a locked workout (one that Save was tried on).
   const onChange = useCallback((index: number, next: ActiveExercise) => {
     setWorkout((w) =>
-      w ? { ...w, touched: true, exercises: w.exercises.map((e, i) => (i === index ? next : e)) } : w,
+      w && w.finishedAt === null
+        ? { ...w, touched: true, exercises: w.exercises.map((e, i) => (i === index ? next : e)) }
+        : w,
     );
   }, []);
 
   const onTick = useCallback((index: number, setIndex: number, done: boolean) => {
+    if (latest.current?.finishedAt != null) return;
     Keyboard.dismiss();
     // iPhone browsers only play the rest beep later if a sound started during a tap.
     if (done) unlockRestBeep();
     const before = latest.current;
-    setWorkout((w) => (w ? tickSet(w, index, setIndex, done) : w));
+    setWorkout((w) => (w && w.finishedAt === null ? tickSet(w, index, setIndex, done) : w));
     if (!done || !before) return;
     // The last set of an exercise: bring the next exercise into view.
     const exercise = before.exercises[index];
@@ -516,6 +569,7 @@ export default function LiveWorkout() {
 
   const { done, total } = setCounts(workout);
   const unticked = total - done;
+  const locked = workout.finishedAt !== null;
   const soFar = durationLabel(
     new Date(workout.startedAt).toISOString(),
     new Date(workout.finishedAt ?? Math.max(finishOpenedAt, workout.startedAt)).toISOString(),
@@ -538,6 +592,7 @@ export default function LiveWorkout() {
             exercise={exercise}
             index={index}
             unit={workout.unit}
+            locked={locked}
             onChange={onChange}
             onTick={onTick}
             onLayoutY={onLayoutY}
@@ -558,18 +613,40 @@ export default function LiveWorkout() {
         />
       ) : null}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
-        <View style={styles.footerInner}>
-          <Button
-            title="Finish workout"
-            testID="finish-workout"
-            onPress={() => {
-              Keyboard.dismiss();
-              setProblem(null);
-              setFinishOpenedAt(Date.now());
-              setFinishing(true);
-            }}
-          />
-        </View>
+        {locked ? (
+          <View style={[styles.footerInner, { gap: Spacing.two }]} testID="workout-not-saved">
+            <Text style={styles.unsavedTitle}>Your workout isn&apos;t saved yet.</Text>
+            <ErrorText>{problem}</ErrorText>
+            <Button
+              title="Save workout"
+              testID="save-workout-again"
+              onPress={() => save()}
+              loading={saving}
+              disabled={saving || checking}
+            />
+            <Button
+              title="Keep logging"
+              variant="secondary"
+              testID="keep-logging"
+              onPress={keepLogging}
+              loading={checking}
+              disabled={saving || checking}
+            />
+          </View>
+        ) : (
+          <View style={styles.footerInner}>
+            <Button
+              title="Finish workout"
+              testID="finish-workout"
+              onPress={() => {
+                Keyboard.dismiss();
+                setProblem(null);
+                setFinishOpenedAt(Date.now());
+                setFinishing(true);
+              }}
+            />
+          </View>
+        )}
       </View>
 
       <Sheet visible={finishing} onClose={() => setFinishing(false)} title="Finish workout">
@@ -579,7 +656,8 @@ export default function LiveWorkout() {
         <TextField
           label="Note for your trainers (optional)"
           value={workout.note}
-          onChangeText={(note) => setWorkout((w) => (w ? { ...w, note, touched: true } : w))}
+          onChangeText={(note) => setWorkout((w) => (w && w.finishedAt === null ? { ...w, note, touched: true } : w))}
+          editable={!locked}
           multiline
           maxLength={1000}
           style={{ minHeight: 88, paddingTop: Spacing.three, textAlignVertical: 'top' }}
@@ -593,7 +671,7 @@ export default function LiveWorkout() {
         ) : null}
         <ErrorText>{problem}</ErrorText>
         <Button title="Save workout" testID="save-workout" onPress={() => save()} loading={saving} disabled={saving} />
-        {hasUntickedNumbers(workout) ? (
+        {!locked && hasUntickedNumbers(workout) ? (
           <Button
             title="Tick all and save"
             variant="secondary"
@@ -652,6 +730,11 @@ const styles = themed(() => ({
     color: Colors.text,
     fontSize: 15,
     fontWeight: '700',
+  },
+  unsavedTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '800',
   },
   conflictTitle: {
     color: Colors.text,

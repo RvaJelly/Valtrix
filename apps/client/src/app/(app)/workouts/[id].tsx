@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -30,10 +30,14 @@ import {
   type PlanExercise,
   type PlanItem,
 } from '@/lib/plan';
+import { within } from '@/lib/serial';
 import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
 import { restLabel, weightLabel } from '@/lib/units';
-import { loadLastSets, loadPersonalBests, loggedOn } from '@/lib/workout-log';
+import { loadLastSets, loadPersonalBests, loggedOn, type LastSet, type PersonalBest } from '@/lib/workout-log';
+
+// How long Start waits for last time's numbers and the bests before starting without them.
+const EXTRAS_MS = 4_000;
 
 // One workout from the client's plan: its exercises with sets, reps, weight, rest,
 // notes and demo videos, Start workout to log the sets, and a quick tick for today.
@@ -53,31 +57,39 @@ export default function PlanWorkout() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([loadPlan(), loadPlanWorkout(id)])
-      .then(([plan, list]) => {
-        const found = plan.find((p) => p.plan_item_id === id);
-        if (!found) return setError('This workout is no longer in your plan.');
-        setItem(found);
-        setExercises(list);
-        setDoneToday(found.done_on.includes(dayKey(new Date())));
-        // A copy on the phone, so the workout can be started with no signal.
-        if (userId) rememberPlanWorkout(userId, found, list);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load this workout.'));
-  }, [id, userId]);
-
+  // Loaded each time the screen shows, so coming back from a saved workout shows it done
+  // today. A failed reload keeps what is on screen.
   useFocusEffect(
     useCallback(() => {
-      if (!userId) return;
       let alive = true;
-      readActiveWorkout(userId).then((w) => {
-        if (alive) setActive(w);
-      });
+      if (userId) {
+        readActiveWorkout(userId).then((w) => {
+          if (alive) setActive(w);
+        });
+      }
+      Promise.all([loadPlan(), loadPlanWorkout(id)]).then(
+        ([plan, list]) => {
+          if (!alive) return;
+          const found = plan.find((p) => p.plan_item_id === id);
+          if (!found) {
+            setItem(null);
+            setExercises(null);
+            return setError('This workout is no longer in your plan.');
+          }
+          setItem(found);
+          setExercises(list);
+          setDoneToday(found.done_on.includes(dayKey(new Date())));
+          // A copy on the phone, so the workout can be started with no signal.
+          if (userId) rememberPlanWorkout(userId, found, list);
+        },
+        (e: unknown) => {
+          if (alive) setError(e instanceof Error ? e.message : 'Could not load this workout.');
+        },
+      );
       return () => {
         alive = false;
       };
-    }, [userId]),
+    }, [id, userId]),
   );
 
   // Builds the workout from what this screen loaded, so it starts with no signal too.
@@ -92,10 +104,11 @@ export default function PlanWorkout() {
       setStarting(false);
       return router.push({ pathname: '/workouts/live', params: { plan: id } });
     }
+    // Last time's numbers and the bests are extras: a slow connection doesn't hold up the start.
     const names = exercises.map((e) => e.exercise_name);
     const [last, bests] = await Promise.all([
-      loadLastSets(names).catch(() => new Map()),
-      loadPersonalBests().catch(() => []),
+      within(loadLastSets(names), EXTRAS_MS).catch(() => new Map<string, LastSet[]>()),
+      within(loadPersonalBests(), EXTRAS_MS).catch((): PersonalBest[] => []),
     ]);
     await saveActiveWorkout(startWorkout({ userId, item, exercises, last, bests, unit: settings.units }));
     setStarting(false);

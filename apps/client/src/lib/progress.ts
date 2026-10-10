@@ -203,11 +203,17 @@ export async function loadPhotos(limit = 30, beforeDay?: string): Promise<Progre
     .sort((a, b) => (a.day === b.day ? POSE_ORDER[a.pose] - POSE_ORDER[b.pose] : a.day < b.day ? 1 : -1));
 }
 
-// The first photo of each pose, to compare with the latest one.
-export async function loadFirstPhotos(): Promise<ProgressPhoto[]> {
+// The first (or newest) photo of each pose: one small query each, so a pose taken less often
+// is still found.
+async function onePerPose(first: boolean): Promise<ProgressPhoto[]> {
   const answers = await Promise.all(
     POSES.map(({ key }) =>
-      supabase.from('progress_photos').select(PHOTO_COLUMNS).eq('pose', key).order('day').limit(1),
+      supabase
+        .from('progress_photos')
+        .select(PHOTO_COLUMNS)
+        .eq('pose', key)
+        .order('day', { ascending: first })
+        .limit(1),
     ),
   );
   const photos: ProgressPhoto[] = [];
@@ -217,6 +223,16 @@ export async function loadFirstPhotos(): Promise<ProgressPhoto[]> {
     if (row) photos.push(cleanPhoto(row));
   }
   return photos;
+}
+
+// The first photo of each pose, to compare with the latest one.
+export function loadFirstPhotos(): Promise<ProgressPhoto[]> {
+  return onePerPose(true);
+}
+
+// The newest photo of each pose, for the Progress screen.
+export function loadLatestPhotos(): Promise<ProgressPhoto[]> {
+  return onePerPose(false);
 }
 
 export type SignedPhoto = { url: string; signedAt: number };
@@ -364,6 +380,8 @@ export async function removeProgressPhotoFiles(userId: string): Promise<void> {
   const bucket = supabase.storage.from(PHOTO_BUCKET);
   for (let round = 0; round < 5; round++) {
     const { data, error } = await bucket.list(userId, { limit: 1000 });
+    // No photo bucket yet (the database update isn't in): there is nothing to remove.
+    if (error && round === 0 && /not found/i.test(error.message)) return;
     if (error) throw error;
     const paths = (data ?? []).map((f) => `${userId}/${f.name}`);
     if (!paths.length) return;

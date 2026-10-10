@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
@@ -13,6 +13,7 @@ import { dayMonth } from '@/lib/days';
 import { fromDayKey } from '@/lib/food';
 import {
   CHECK_IN_QUESTIONS,
+  freshPhotoUrl,
   loadClientBodyWeights,
   loadClientCheckIns,
   loadClientMeasurements,
@@ -80,8 +81,14 @@ function daysBetween(a: string, b: string) {
 
 // A client's body weight, measurements, progress photos and weekly check-ins, with the
 // trainer's reply to each check-in. Read-only apart from the replies. Shown only for a client
-// who accepted the trainer.
-export function ClientProgress({ client }: { client: Pick<Client, 'id' | 'first_name' | 'user_id'> }) {
+// who accepted the trainer. onUnsavedChange says whether a reply is typed but not sent.
+export function ClientProgress({
+  client,
+  onUnsavedChange,
+}: {
+  client: Pick<Client, 'id' | 'first_name' | 'user_id'>;
+  onUnsavedChange?: (unsaved: boolean) => void;
+}) {
   const { settings } = useSettings();
   const { data, failed, again } = useClientData(client.id, load, KINDS);
   const [viewing, setViewing] = useState<ProgressPhoto | null>(null);
@@ -110,7 +117,12 @@ export function ClientProgress({ client }: { client: Pick<Client, 'id' | 'first_
         <PhotosCard photos={data.photos} urls={data.urls} name={client.first_name} onOpen={setViewing} />
       ) : null}
       {data?.checkIns.length ? (
-        <CheckIns checkIns={data.checkIns} name={client.first_name} unit={settings.units} />
+        <CheckIns
+          checkIns={data.checkIns}
+          name={client.first_name}
+          unit={settings.units}
+          onUnsavedChange={onUnsavedChange}
+        />
       ) : null}
       <PhotoViewer photo={viewing} name={client.first_name} onClose={() => setViewing(null)} />
     </View>
@@ -126,7 +138,10 @@ function BodyWeightCard({ weights, unit }: { weights: BodyWeight[]; unit: Weight
       return gap >= 25 && gap <= 35;
     })
     .sort((a, b) => Math.abs(daysBetween(a.day, latest.day) - 30) - Math.abs(daysBetween(b.day, latest.day) - 30))[0];
-  const change = before ? fromKg(latest.weight_kg, unit) - fromKg(before.weight_kg, unit) : null;
+  // Rounded as shown, so a change too small to show reads "No change", not "+0 kg".
+  const change = before
+    ? Math.round((fromKg(latest.weight_kg, unit) - fromKg(before.weight_kg, unit)) * 10) / 10
+    : null;
   const first = weights[0];
   const label =
     weights.length > 1
@@ -169,13 +184,15 @@ function MeasurementsCard({ measurements, unit }: { measurements: Measurements[]
   return (
     <View style={styles.card}>
       <Text style={styles.subhead}>Measurements</Text>
-      <Text style={styles.meta}>
-        Latest {dayMonth(latestDay)} · change since {dayMonth(measurements[0].day)}
-      </Text>
+      <Text style={styles.meta}>Latest {dayMonth(latestDay)} · change since first logged</Text>
       <View style={styles.table}>
         {logged.map((m) => {
-          const values = measurements.filter((row) => row[m.key] !== null).map((row) => row[m.key] as number);
+          // Each measurement's own days: one not taken on the latest day shows when it was.
+          const rows = measurements.filter((row) => row[m.key] !== null);
+          const values = rows.map((row) => row[m.key] as number);
           const last = values[values.length - 1];
+          const lastDay = rows[rows.length - 1].day;
+          const older = lastDay !== latestDay ? dayMonth(lastDay) : null;
           const diff = values.length > 1 ? fromCm(last, unit) - fromCm(values[0], unit) : null;
           const diffText =
             diff === null ? '–' : diff === 0 ? 'No change' : signed(diff, `${formatNumber(Math.abs(diff), 2)} ${unit}`);
@@ -184,8 +201,13 @@ function MeasurementsCard({ measurements, unit }: { measurements: Measurements[]
               key={m.key}
               style={styles.tableRow}
               accessible
-              accessibilityLabel={`${m.label} ${formatLength(last, unit)}${diff !== null ? `, ${diffText}` : ''}`}>
-              <Text style={styles.tableName}>{m.label}</Text>
+              accessibilityLabel={`${m.label} ${formatLength(last, unit)}${older ? ` on ${older}` : ''}${
+                diff !== null ? `, ${diffText} since ${dayMonth(rows[0].day)}` : ''
+              }`}>
+              <View style={styles.tableNameBox}>
+                <Text style={styles.tableName}>{m.label}</Text>
+                {older ? <Text style={styles.tableDay}>{older}</Text> : null}
+              </View>
               <Text style={styles.tableValue}>{formatLength(last, unit)}</Text>
               <Text style={[styles.tableChange, diff === null && { color: Colors.textSecondary }]}>{diffText}</Text>
             </View>
@@ -242,15 +264,7 @@ function PhotosCard({
                       accessibilityLabel={`${name}'s ${pose.label.toLowerCase()} photo, ${dayMonth(day)}. Open it bigger`}
                       onPress={() => onOpen(photo)}
                       style={({ pressed }) => [styles.photo, pressed && { opacity: 0.8 }]}>
-                      {url ? (
-                        // Memory only: a client's photos never stay on the trainer's phone.
-                        <Image
-                          source={{ uri: url }}
-                          cachePolicy="memory"
-                          contentFit="cover"
-                          style={styles.photoImage}
-                        />
-                      ) : null}
+                      <PhotoThumb key={photo.path} photo={photo} initial={url} />
                     </Pressable>
                   ) : (
                     <View style={[styles.photo, styles.noPhoto]} />
@@ -274,6 +288,45 @@ function PhotosCard({
   );
 }
 
+// One thumbnail. Its link is checked when it shows (links only last 10 minutes, and "Show
+// all" can come much later than the load) and signed afresh once if the photo doesn't load.
+function PhotoThumb({ photo, initial }: { photo: ProgressPhoto; initial?: string }) {
+  const [url, setUrl] = useState<string | null>(initial ?? null);
+  const [retried, setRetried] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    freshPhotoUrl(photo.path).then(
+      (link) => {
+        if (alive) setUrl(link.url);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [photo.path]);
+
+  if (!url) return null;
+  return (
+    // Memory only: a client's photos never stay on the trainer's phone.
+    <Image
+      source={{ uri: url }}
+      cachePolicy="memory"
+      contentFit="cover"
+      style={styles.photoImage}
+      onError={() => {
+        if (retried) return;
+        setRetried(true);
+        freshPhotoUrl(photo.path, true).then(
+          (link) => setUrl(link.url),
+          () => {},
+        );
+      }}
+    />
+  );
+}
+
 // Stress 4–5 and low energy or sleep (1–2) stand out.
 function worrying(key: string, value: number) {
   return key === 'stress' ? value >= 4 : key === 'energy' || key === 'sleep' ? value <= 2 : false;
@@ -281,14 +334,25 @@ function worrying(key: string, value: number) {
 
 type Reply = { body: string; at: string | null };
 
-function CheckIns({ checkIns, name, unit }: { checkIns: ClientCheckIn[]; name: string; unit: WeightUnit }) {
+function CheckIns({
+  checkIns,
+  name,
+  unit,
+  onUnsavedChange,
+}: {
+  checkIns: ClientCheckIn[];
+  name: string;
+  unit: WeightUnit;
+  onUnsavedChange?: (unsaved: boolean) => void;
+}) {
   const [all, setAll] = useState(false);
   // What the trainer typed, by check-in. Reloads never touch it.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   // Replies saved from this page, until a reload brings them back.
   const [saved, setSaved] = useState<Record<string, Reply>>({});
-  const [sending, setSending] = useState<string | null>(null);
+  // By check-in, so one reply finishing doesn't free the button of another still on its way.
+  const [sending, setSending] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
   // The newest of the saved reply and the one on screen.
@@ -300,11 +364,23 @@ function CheckIns({ checkIns, name, unit }: { checkIns: ClientCheckIn[]; name: s
     return Date.parse(mine.at) >= Date.parse(loaded.at) ? mine : loaded;
   }
 
+  // A reply typed in an open box that isn't sent yet (an edit that changed nothing doesn't count).
+  const unsaved = checkIns.some((ci) => {
+    const draft = (drafts[ci.id] ?? '').trim();
+    const reply = replyOf(ci);
+    return !!draft && (!reply || !!editing[ci.id]) && draft !== reply?.body.trim();
+  });
+  useEffect(() => {
+    onUnsavedChange?.(unsaved);
+  }, [unsaved, onUnsavedChange]);
+  // Gone from the page (the client left): nothing is waiting any more.
+  useEffect(() => () => onUnsavedChange?.(false), [onUnsavedChange]);
+
   async function send(ci: ClientCheckIn) {
     const body = (drafts[ci.id] ?? '').trim();
     if (!body) return setErrors((e) => ({ ...e, [ci.id]: 'Write a reply first.' }));
     setErrors((e) => ({ ...e, [ci.id]: null }));
-    setSending(ci.id);
+    setSending((s) => ({ ...s, [ci.id]: true }));
     try {
       const reply = await replyToCheckIn(ci.id, body);
       setSaved((s) => ({ ...s, [ci.id]: { body: reply.body, at: reply.updated_at } }));
@@ -316,7 +392,7 @@ function CheckIns({ checkIns, name, unit }: { checkIns: ClientCheckIn[]; name: s
         [ci.id]: e instanceof Error ? e.message : "That didn't save. Check your connection and try again.",
       }));
     }
-    setSending(null);
+    setSending((s) => ({ ...s, [ci.id]: false }));
   }
 
   return (
@@ -377,7 +453,8 @@ function CheckIns({ checkIns, name, unit }: { checkIns: ClientCheckIn[]; name: s
                   <Button
                     title="Send reply"
                     onPress={() => send(ci)}
-                    loading={sending === ci.id}
+                    loading={!!sending[ci.id]}
+                    disabled={!!sending[ci.id]}
                     testID={`send-reply-${ci.id}`}
                   />
                   {reply ? (
@@ -388,7 +465,7 @@ function CheckIns({ checkIns, name, unit }: { checkIns: ClientCheckIn[]; name: s
                         setEditing((e) => ({ ...e, [ci.id]: false }));
                         setErrors((errs) => ({ ...errs, [ci.id]: null }));
                       }}
-                      disabled={sending === ci.id}
+                      disabled={!!sending[ci.id]}
                     />
                   ) : null}
                 </>
@@ -476,11 +553,18 @@ const styles = themed(() => ({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  tableName: {
+  tableNameBox: {
     flex: 1,
+    paddingVertical: Spacing.one,
+  },
+  tableName: {
     color: Colors.text,
     fontSize: 15,
     fontWeight: '600',
+  },
+  tableDay: {
+    color: Colors.textSecondary,
+    fontSize: 12,
   },
   tableValue: {
     color: Colors.text,

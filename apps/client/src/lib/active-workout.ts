@@ -448,6 +448,8 @@ export function isNewBest(exercise: ActiveExercise, set: ActiveSet, unit: Weight
   const reps = setReps(set);
   if (kg === undefined || reps === undefined) return false;
   if (kg !== null && kg > 0) {
+    // A weight with 0 reps is a failed lift, not a best (as in the database).
+    if (reps === 0) return false;
     if (best.weightKg !== null && kg >= best.weightKg + 0.05) return true;
     const estimate = reps !== null ? estimatedOneRepMax(kg, reps) : null;
     return estimate !== null && best.e1rmKg !== null && estimate >= best.e1rmKg + 0.5;

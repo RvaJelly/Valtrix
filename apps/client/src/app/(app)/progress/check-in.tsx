@@ -12,7 +12,6 @@ import { useChatEvents } from '@/lib/chat-live';
 import { dayMonth } from '@/lib/days';
 import { saveError } from '@/lib/errors';
 import { shiftDay } from '@/lib/food';
-import { hasTrainer } from '@/lib/nutrition';
 import {
   CHECK_IN_QUESTIONS,
   checkInWeekKey,
@@ -28,9 +27,18 @@ import {
 import { serial } from '@/lib/serial';
 import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
+import { supabase } from '@/lib/supabase';
 import { formatWeight, fromKg, parseNumber, rangeLabel, toKg, weightInput, type WeightUnit } from '@/lib/units';
 
 const MAX_TEXT = 1000;
+
+// Whether the person has a trainer. Throws when it can't tell (no signal), so the screen keeps
+// its neutral wording instead of saying there's no trainer.
+async function hasTrainer(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('my_trainers');
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
+}
 
 type Answers = Record<CheckInQuestion, number | null>;
 

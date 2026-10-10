@@ -59,3 +59,16 @@ export function serial(load: (current: Current) => Promise<unknown>): (now?: boo
     return running;
   };
 }
+
+// Gives up on a request after `ms`. Supabase requests have no time limit of their own, and on a
+// weak gym connection one can hang for minutes; this makes it fail like a dropped connection,
+// so the screen falls back (to the copy on the phone, or "Check your connection").
+export function within<T>(request: PromiseLike<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}

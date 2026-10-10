@@ -48,7 +48,9 @@ export function RestTimer({ endsAt, total, sound, onAdd, onSkip, onToggleSound, 
     <View style={styles.bar} testID="rest-timer">
       <View style={styles.inner}>
         <View style={{ flex: 1, gap: Spacing.one }}>
-          <Text style={[styles.time, over && { color: Colors.accentText }]} accessibilityLiveRegion="polite">
+          {/* Not a live region: it changes every second, and a screen reader would read out
+              every tick. The end is announced once, by the screen (announceForAccessibility). */}
+          <Text style={[styles.time, over && { color: Colors.accentText }]}>
             {over ? 'Rest over' : `Rest ${clock(left)}`}
           </Text>
           <View style={styles.track}>

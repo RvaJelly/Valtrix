@@ -68,13 +68,14 @@ export function releaseRestBeep(): void {
 
 // iPhone Safari only plays a sound later if one was started during a tap, so the first tick
 // plays the beep silently. It plays to its end (under a second) rather than being paused
-// at once, which would make the browser drop the play request with an error. Phones don't
-// need this, and playing there would pause the person's music.
+// at once, which would make the browser drop the play request with an error. Muted, not
+// volume 0: iPhone browsers ignore the volume. Phones don't need this, and playing there
+// would pause the person's music.
 export function unlockRestBeep(): void {
   if (Platform.OS !== 'web' || unlocked || !beep) return;
   unlocked = true;
   try {
-    beep.volume = 0;
+    beep.muted = true;
     beep.play();
   } catch {
     unlocked = false;
@@ -97,7 +98,7 @@ export function playRestBeep(): void {
         );
       }
       await player.seekTo(0);
-      player.volume = 1;
+      player.muted = false;
       player.play();
     } catch {
       // No sound this time; the buzz and the banner still show.

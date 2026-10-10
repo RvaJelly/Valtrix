@@ -384,10 +384,11 @@ export async function photoUrls(paths: string[]): Promise<Map<string, SignedPhot
   return result;
 }
 
-// One link for the full-screen viewer, asked for again once the one kept is 9 minutes old.
-export async function freshPhotoUrl(path: string): Promise<SignedPhoto> {
+// One link, asked for again once the one kept is 9 minutes old. force: the kept one didn't
+// load (the client replaced the photo, or the link ran out), so sign a new one anyway.
+export async function freshPhotoUrl(path: string, force = false): Promise<SignedPhoto> {
   const kept = links.get(path);
-  if (stillGood(kept, 60_000)) return kept;
+  if (!force && stillGood(kept, 60_000)) return kept;
   const signedAt = Date.now();
   const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, PHOTO_LINK_SECONDS);
   if (error || !data?.signedUrl) throw error ?? new Error('No link');

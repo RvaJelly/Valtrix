@@ -49,9 +49,8 @@ export async function loadToday(userId: string, now = new Date()): Promise<Today
     loadSeenReply(userId),
     readActiveWorkout(userId),
   ]);
-  if (!plan && !plans && !diary && !habitDays && !targets && !checkIns) {
-    throw new Error('Could not load today.');
-  }
+  // Never throws, even when every server part failed: with no signal in the gym, the workout
+  // kept on the phone must still reach the card (Continue / Save now).
 
   let newReply: { trainer_name: string; at: string } | null = null;
   if (checkIns) {

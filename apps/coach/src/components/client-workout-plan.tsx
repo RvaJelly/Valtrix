@@ -15,6 +15,7 @@ import {
 
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import {
   daysLabel,
@@ -84,6 +85,15 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     }, [load]),
   );
   useRefreshOnReturn(load);
+  // A workout the client finished in Voltrix ticks the plan off too, so the week's count here
+  // keeps up with the workout log below it while the page stays open.
+  useChatEvents((event) => {
+    if (
+      (event.type === 'progress' && event.client_id === clientId && event.kind === 'workout') ||
+      event.type === 'reconnected'
+    )
+      load();
+  });
 
   async function add(workout: WorkoutChoice, weekdays: number[], note: string | null) {
     const position = (items ?? []).reduce((max, i) => Math.max(max, i.position + 1), 0);

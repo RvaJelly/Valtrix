@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { dayMonth } from '@/lib/days';
 import { freshPhotoUrl, POSES, type ProgressPhoto } from '@/lib/progress';
 
@@ -38,12 +38,14 @@ function ViewerBody({ photo, name, onClose }: Props & { photo: ProgressPhoto }) 
   const insets = useSafeAreaInsets();
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  // Try again: the link is signed afresh, in case the kept one is what failed.
+  const [attempt, setAttempt] = useState(0);
   const pose = POSES.find((p) => p.key === photo.pose)?.label ?? 'Photo';
   const title = `${pose} · ${dayMonth(photo.day)}`;
 
   useEffect(() => {
     let alive = true;
-    freshPhotoUrl(photo.path).then(
+    freshPhotoUrl(photo.path, attempt > 0).then(
       (link) => {
         if (alive) setUrl(link.url);
       },
@@ -54,7 +56,7 @@ function ViewerBody({ photo, name, onClose }: Props & { photo: ProgressPhoto }) 
     return () => {
       alive = false;
     };
-  }, [photo.path]);
+  }, [photo.path, attempt]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom + Spacing.three }}>
@@ -80,11 +82,27 @@ function ViewerBody({ photo, name, onClose }: Props & { photo: ProgressPhoto }) 
             style={styles.image}
             accessible
             accessibilityLabel={`${name}'s ${pose.toLowerCase()} photo, ${dayMonth(photo.day)}`}
+            // A dropped connection, or a photo the client has just replaced or removed.
+            onError={() => {
+              setUrl(null);
+              setError(true);
+            }}
           />
         ) : null}
         {!url && !error ? <ActivityIndicator color="#FFFFFF" /> : null}
         {error ? (
-          <Text style={styles.error}>Could not load this photo. Check your internet connection and try again.</Text>
+          <View style={styles.problem}>
+            <Text style={styles.error}>Could not load this photo. Check your internet connection and try again.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setError(false);
+                setAttempt((a) => a + 1);
+              }}
+              style={({ pressed }) => [styles.retry, pressed && { opacity: 0.6 }]}>
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
     </View>
@@ -124,10 +142,28 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  problem: {
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.four,
+  },
   error: {
     color: '#FFFFFF',
     fontSize: 16,
     textAlign: 'center',
-    padding: Spacing.four,
+  },
+  retry: {
+    minHeight: 48,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

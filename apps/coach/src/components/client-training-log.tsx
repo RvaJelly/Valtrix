@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { Body, Button, ErrorText } from '@/components/ui';
@@ -34,26 +34,32 @@ type Data = {
 
 const FIRST_PAGE = 5;
 const NEXT_PAGE = 10;
+// The most one request brings back.
+const MOST_PER_REQUEST = 100;
 const BESTS_SHOWN = 5;
 // New bests from the last two weeks.
 const RECENT_DAYS = 14;
 
-function load(clientId: string): Promise<Data> {
-  return Promise.all([
-    loadClientWorkoutLogs(clientId, null, FIRST_PAGE),
-    loadClientPersonalBests(clientId),
-    loadClientRecords(clientId, 50),
-  ]).then(([logs, bests, records]) => ({ logs, more: logs.length === FIRST_PAGE, bests, records }));
+// The newest `count` workouts, a page at a time.
+async function loadLogs(clientId: string, count: number): Promise<WorkoutLog[]> {
+  const logs: WorkoutLog[] = [];
+  while (logs.length < count) {
+    const want = Math.min(MOST_PER_REQUEST, count - logs.length);
+    const page = await loadClientWorkoutLogs(clientId, logs.at(-1)?.finished_at ?? null, want);
+    logs.push(...page);
+    if (page.length < want) break;
+  }
+  return logs;
 }
 
-// A reload brings the newest page again. Older workouts the trainer opened with "Show more"
-// stay under it, so the list doesn't shrink while they read it.
-function keepOlder(old: Data | null, next: Data): Data {
-  if (!old || !next.more) return next;
-  const ids = new Set(next.logs.map((l) => l.id));
-  const last = Date.parse(next.logs[next.logs.length - 1].finished_at);
-  const older = old.logs.filter((l) => !ids.has(l.id) && Date.parse(l.finished_at) < last);
-  return older.length ? { ...next, logs: [...next.logs, ...older], more: old.more } : next;
+// Every reload brings back as many workouts as are shown (more after "Show more"), so the
+// list doesn't shrink while the trainer reads it, and one the client deleted goes away.
+function load(clientId: string, count: number): Promise<Data> {
+  return Promise.all([
+    loadLogs(clientId, count),
+    loadClientPersonalBests(clientId),
+    loadClientRecords(clientId, 50),
+  ]).then(([logs, bests, records]) => ({ logs, more: logs.length === count, bests, records }));
 }
 
 const KINDS = ['workout'] as const;
@@ -63,29 +69,23 @@ const KINDS = ['workout'] as const;
 export function ClientTrainingLog({ client }: { client: Pick<Client, 'id' | 'first_name' | 'user_id'> }) {
   const { settings } = useSettings();
   const unit = settings.units;
-  const { data, setData, failed, again } = useClientData(client.id, load, KINDS, keepOlder);
+  // How many workouts to show. "Show more" raises it, and the part loads again with more.
+  const [count, setCount] = useState(FIRST_PAGE);
+  const loadShown = useCallback((clientId: string) => load(clientId, count), [count]);
+  const { data, failed, again } = useClientData(client.id, loadShown, KINDS);
   // Workouts opened to show their sets.
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [allBests, setAllBests] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [moreError, setMoreError] = useState<string | null>(null);
 
-  async function showMore() {
-    const last = data?.logs[data.logs.length - 1];
-    if (!last) return;
-    setMoreError(null);
-    setLoadingMore(true);
-    try {
-      const older = await loadClientWorkoutLogs(client.id, last.finished_at, NEXT_PAGE);
-      setData((d) => {
-        if (!d) return d;
-        const ids = new Set(d.logs.map((l) => l.id));
-        return { ...d, logs: [...d.logs, ...older.filter((l) => !ids.has(l.id))], more: older.length === NEXT_PAGE };
-      });
-    } catch {
-      setMoreError('Could not load more workouts. Check your internet connection and try again.');
-    }
-    setLoadingMore(false);
+  // Asked for more than is on screen and still waiting (or it failed).
+  const waitingForMore = !!data && data.more && data.logs.length < count;
+  const loadingMore = waitingForMore && !failed;
+  const moreError =
+    waitingForMore && failed ? 'Could not load more workouts. Check your internet connection and try again.' : null;
+
+  function showMore() {
+    if (waitingForMore) again();
+    else setCount((c) => c + NEXT_PAGE);
   }
 
   const since = dayKey(addDays(new Date(), -RECENT_DAYS));

@@ -265,21 +265,23 @@ function ActiveWorkoutBlock({
   );
 }
 
+// The name opens the workout and Start sits beside it, not inside it: a button inside a
+// button can't be reached with VoiceOver on iPhone.
 function WorkoutRow({ item, done, inProgress }: { item: PlanItem; done: boolean; inProgress: boolean }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${item.workout_name}${done ? ', done today' : ''}`}
-      onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } })}
-      style={({ pressed }) => [styles.workout, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={{ flex: 1, gap: 2 }}>
+    <View style={styles.workout}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.workout_name}, from ${trainerLabel(item)}${done ? ', done today' : ''}`}
+        onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } })}
+        style={({ pressed }) => [styles.workoutName, pressed && { opacity: 0.6 }]}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {item.workout_name}
         </Text>
         <Text style={styles.muted} numberOfLines={1}>
           From {trainerLabel(item)}
         </Text>
-      </View>
+      </Pressable>
       {done && !inProgress ? (
         <Text style={styles.done}>✓ Done</Text>
       ) : (
@@ -297,7 +299,7 @@ function WorkoutRow({ item, done, inProgress }: { item: PlanItem; done: boolean;
           <Text style={styles.startText}>{inProgress ? 'Continue' : 'Start'}</Text>
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -341,34 +343,38 @@ function HabitTile({
   goal?: string;
   share: number;
   label: string;
+  // A button of its own under the tile (the water quick add), outside the tile's button so
+  // VoiceOver can reach it.
   children?: ReactNode;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={() => router.push('/habits')}
-      style={({ pressed }) => [styles.tile, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={styles.tileTop}>
-        <Ionicons name={icon} size={16} color={Colors.accentText} />
-        <Text style={styles.tileTitle}>{title}</Text>
-      </View>
-      {/* The goal goes on its own line, so a narrow tile never breaks a number in two. */}
-      <View style={styles.tileNumbers}>
-        <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
-          {value}
-        </Text>
-        {goal ? (
-          <Text style={styles.tileGoal} numberOfLines={1}>
-            / {goal}
+    <View style={styles.tile}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={() => router.push('/habits')}
+        style={({ pressed }) => [styles.tileButton, pressed && { opacity: 0.6 }]}>
+        <View style={styles.tileTop}>
+          <Ionicons name={icon} size={16} color={Colors.accentText} />
+          <Text style={styles.tileTitle}>{title}</Text>
+        </View>
+        {/* The goal goes on its own line, so a narrow tile never breaks a number in two. */}
+        <View style={styles.tileNumbers}>
+          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+            {value}
           </Text>
-        ) : null}
-      </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.min(1, Math.max(0, share)) * 100}%` }]} />
-      </View>
+          {goal ? (
+            <Text style={styles.tileGoal} numberOfLines={1}>
+              / {goal}
+            </Text>
+          ) : null}
+        </View>
+        <View style={styles.track}>
+          <View style={[styles.fill, { width: `${Math.min(1, Math.max(0, share)) * 100}%` }]} />
+        </View>
+      </Pressable>
       {children}
-    </Pressable>
+    </View>
   );
 }
 
@@ -513,6 +519,12 @@ const styles = themed(() => ({
     borderRadius: Radius.medium,
     backgroundColor: Colors.background,
   },
+  workoutName: {
+    flex: 1,
+    gap: 2,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
   done: {
     color: Colors.accentText,
     fontSize: 15,
@@ -564,6 +576,9 @@ const styles = themed(() => ({
     padding: Spacing.two,
     borderRadius: Radius.medium,
     backgroundColor: Colors.background,
+  },
+  tileButton: {
+    gap: Spacing.one,
   },
   tileTop: {
     flexDirection: 'row',

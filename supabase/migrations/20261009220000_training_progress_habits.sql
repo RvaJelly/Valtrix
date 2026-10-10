@@ -440,10 +440,11 @@ create trigger check_ins_news after insert or update or delete on public.check_i
 -- ---------- Personal bests ----------
 
 -- Each exercise's best in each of a person's workouts: the heaviest set (with the most reps at
--- that weight), the best estimated one-rep max and the most reps in one set without weights
--- (so a light warm-up doesn't count as "most reps" on a weighted lift). The one-rep max uses
--- Epley's formula, weight × (1 + reps / 30), for 2 to 12 reps; a single is its own weight.
--- Only the functions below call it.
+-- that weight; a set of 0 reps is a failed lift and doesn't count, a weight with no reps, like
+-- a carry or a hold, does), the best estimated one-rep max and the most reps in one set
+-- without weights (so a light warm-up doesn't count as "most reps" on a weighted lift). The
+-- one-rep max uses Epley's formula, weight × (1 + reps / 30), for 2 to 12 reps; a single is
+-- its own weight. Only the functions below call it.
 create function public.exercise_bests(p_user uuid)
 returns table (
   exercise_key text,
@@ -476,8 +477,9 @@ as $$
   select s.exercise_key,
          (array_agg(s.exercise_name order by s.set_number))[1],
          s.log_id, s.day, s.finished_at,
-         max(s.weight_kg) filter (where s.weight_kg > 0),
-         (array_agg(s.reps order by s.weight_kg desc, s.reps desc nulls last) filter (where s.weight_kg > 0))[1],
+         max(s.weight_kg) filter (where s.weight_kg > 0 and (s.reps is null or s.reps > 0)),
+         (array_agg(s.reps order by s.weight_kg desc, s.reps desc nulls last)
+            filter (where s.weight_kg > 0 and (s.reps is null or s.reps > 0)))[1],
          max(s.e1rm),
          max(s.reps) filter (where s.reps > 0 and coalesce(s.weight_kg, 0) = 0)
     from sets s
@@ -660,7 +662,7 @@ revoke execute on function public.last_sets_for(uuid, text[]) from public, anon,
 --   { "log_id": "...", "ticked": true, "records": [{ "exercise_name", "kind", "value", "reps", "previous" }] }
 -- p_log is { "id", "plan_item_id", "workout_name", "day", "started_at", "finished_at", "note",
 --            "sets": [{ "position", "exercise_name", "set_number", "weight_kg", "reps" }] }
--- with 1 to 300 sets (weight_kg and reps may both be null: a set just done). Saving the same
+-- with 1 to 1500 sets (weight_kg and reps may both be null: a set just done). Saving the same
 -- id again (a retry) adds nothing and answers the same. The plan workout is ticked off for
 -- the day it was done, like the tick on the plan, while it is still in the person's plan and
 -- that day is today (a day either side for time zones); the workout is saved either way. At
@@ -732,8 +734,12 @@ begin
     if started is null or started > finished or finished - started > interval '24 hours' then
       raise exception 'The workout''s start time doesn''t look right.' using errcode = '22023';
     end if;
-    if jsonb_typeof(set_list) is distinct from 'array' or jsonb_array_length(set_list) not between 1 and 300 then
+    if jsonb_typeof(set_list) is distinct from 'array' or jsonb_array_length(set_list) = 0 then
       raise exception 'Tick off at least one set to save the workout.' using errcode = '22023';
+    end if;
+    -- 50 exercises of 30 sets, the most the sets table takes (and the app allows).
+    if jsonb_array_length(set_list) > 1500 then
+      raise exception 'That''s more sets than one workout can save.' using errcode = '22023';
     end if;
     if (select count(*) from public.workout_logs l
          where l.user_id = me and l.created_at > now() - interval '24 hours') >= 20 then

@@ -10,3 +10,9 @@ project_id = "voltrix"
 # turned off by hand.
 [functions.clean-expired-stories]
 verify_jwt = false
+
+# Calendar apps (Google, Apple, Outlook) fetch the link without logging in: the 64-character token
+# in the link is the key, and calendar_feed() checks it. `supabase functions deploy` reads this;
+# deploying another way (the dashboard or an MCP tool) needs JWT verification turned off by hand.
+[functions.calendar-feed]
+verify_jwt = false

@@ -379,19 +379,15 @@ $$;
 
 revoke execute on function public.invite_code_client(text) from public, anon, authenticated;
 
--- What the invite card shows for a code: the same columns as my_invites(), then the first name
--- the trainer gave this client, so someone who got a code meant for another person can tell
--- ("Invited as Lebo"). No row when the code doesn't open an invite (it counts as a wrong try).
+-- What the invite card shows for a code, as one value: the same fields as my_invites(), then the
+-- first name the trainer gave this client, so someone who got a code meant for another person can
+-- tell ("Invited as Lebo"). Null when the code doesn't open an invite (it counts as a wrong try);
+-- {"already_connected": true} when the person is already linked to that trainer.
+-- Always exactly one value and no error once a code is looked up: whatever a caller asks of the
+-- answer (one object, a row limit, a cap on rows affected), it can't make a wrong try roll back
+-- without also hiding whether the code worked.
 create function public.invite_by_code(p_code text)
-returns table (
-  client_id uuid,
-  trainer_id uuid,
-  trainer_name text,
-  business_name text,
-  trainer_avatar text,
-  invited_at timestamptz,
-  client_first_name text
-)
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -399,22 +395,29 @@ as $$
 declare
   me uuid := auth.uid();
   found_id uuid := public.invite_code_client(p_code);
-  trainer uuid;
+  card jsonb;
 begin
   if found_id is null then
-    return;
+    return null;
   end if;
-  select c.trainer_id into trainer from public.clients c where c.id = found_id;
-  if exists (
-    select 1 from public.clients l where l.trainer_id = trainer and l.user_id = me and l.status <> 'archived'
-  ) then
-    raise exception 'You''re already connected to this trainer.' using errcode = '22023';
-  end if;
-  return query
-    select c.id, c.trainer_id, p.full_name, p.business_name, p.avatar_url, c.invited_at, c.first_name
-      from public.clients c
-      join public.profiles p on p.id = c.trainer_id
-     where c.id = found_id;
+  select case
+           when exists (
+             select 1 from public.clients l where l.trainer_id = c.trainer_id and l.user_id = me and l.status <> 'archived'
+           ) then jsonb_build_object('already_connected', true)
+           else jsonb_build_object(
+             'client_id', c.id,
+             'trainer_id', c.trainer_id,
+             'trainer_name', p.full_name,
+             'business_name', p.business_name,
+             'trainer_avatar', p.avatar_url,
+             'invited_at', c.invited_at,
+             'client_first_name', c.first_name)
+         end
+    into card
+    from public.clients c
+    join public.profiles p on p.id = c.trainer_id
+   where c.id = found_id;
+  return card;
 end;
 $$;
 
@@ -423,7 +426,8 @@ grant execute on function public.invite_by_code(text) to authenticated;
 
 -- Accepts the invite a code opens: links the signed-in person to that client row (the round 1
 -- triggers keep the lock and tell both sides), and the code stops working. Returns the client
--- row, or null when the code doesn't open an invite.
+-- row, or null when the code doesn't open an invite or the person is already linked to that
+-- trainer (no error after the lookup, as for invite_by_code()).
 create function public.accept_invite_code(p_code text)
 returns uuid
 language plpgsql
@@ -433,22 +437,20 @@ as $$
 declare
   me uuid := auth.uid();
   found_id uuid := public.invite_code_client(p_code);
-  trainer uuid;
+  linked uuid;
 begin
   if found_id is null then
     return null;
   end if;
-  select c.trainer_id into trainer from public.clients c where c.id = found_id;
-  if exists (
-    select 1 from public.clients l where l.trainer_id = trainer and l.user_id = me and l.status <> 'archived'
-  ) then
-    raise exception 'You''re already connected to this trainer.' using errcode = '22023';
-  end if;
   update public.clients c
      set user_id = me, invite_status = 'joined', invite_answered_at = now(), invite_code = null
    where c.id = found_id
-     and c.user_id is null;
-  return found_id;
+     and c.user_id is null
+     and not exists (
+       select 1 from public.clients l where l.trainer_id = c.trainer_id and l.user_id = me and l.status <> 'archived'
+     )
+  returning c.id into linked;
+  return linked;
 end;
 $$;
 

@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 
 type Props<T extends string> = {
   options: Record<T, string>;
@@ -21,8 +22,14 @@ export function Chips<T extends string>({ options, value, onChange, allowClear, 
         accessibilityRole="button"
         accessibilityState={{ selected }}
         onPress={() => onChange(selected && allowClear ? null : key)}
-        style={[styles.chip, selected && styles.selected]}>
-        <Text style={[styles.text, selected && { color: Colors.onAccent }]}>{options[key]}</Text>
+        style={({ pressed }) => [
+          styles.chip,
+          pressed && { backgroundColor: Colors.tintPressed },
+          selected && styles.selected,
+        ]}>
+        <Text variant="callout" style={[styles.text, selected && { color: Colors.background }]}>
+          {options[key]}
+        </Text>
       </Pressable>
     );
   });
@@ -35,6 +42,7 @@ export function Chips<T extends string>({ options, value, onChange, allowClear, 
   );
 }
 
+// Selected chips are inverted (text-coloured), not orange: orange is for the one main action.
 const styles = themed(() => ({
   row: {
     gap: Spacing.two,
@@ -44,20 +52,18 @@ const styles = themed(() => ({
     flexWrap: 'wrap',
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : null),
   },
   selected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   text: {
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
 }));

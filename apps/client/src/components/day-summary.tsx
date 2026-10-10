@@ -1,7 +1,10 @@
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, Text, View, type ColorValue } from 'react-native';
+import { StyleSheet, View, type ColorValue } from 'react-native';
+import Animated from 'react-native-reanimated';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Card, ProgressBar, Text } from '@/components/ui';
+import { enterUp } from '@/constants/motion';
+import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
 import { formatGrams, formatKcal, formatNumber, type Targets, type Totals } from '@/lib/food';
 
 type Props = {
@@ -10,7 +13,8 @@ type Props = {
   targets: Targets | null;
 };
 
-// Calories eaten against the daily target in a ring, with protein, carbs and fat below.
+// Calories eaten against the daily target in a ring, with protein, carbs and fat below. The ring
+// is the screen's main progress, so it is the one orange mark; the macro bars are text-coloured.
 export function DaySummary({ totals, targets }: Props) {
   const target = targets?.kcal ?? null;
   const left = target === null ? null : Math.round(target) - Math.round(totals.kcal);
@@ -21,61 +25,80 @@ export function DaySummary({ totals, targets }: Props) {
       : `${formatKcal(totals.kcal)} eaten of ${formatKcal(target)}. ${formatKcal(Math.abs(left!))} ${over ? 'over' : 'left'}.`;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.top} accessible accessibilityLabel={summary}>
-        <Ring
-          size={128}
-          thickness={12}
-          progress={target ? totals.kcal / target : 0}
-          color={over ? Colors.danger : Colors.accent}
-          track={Colors.surfaceRaised}>
-          <Text style={styles.big}>{formatNumber(left === null ? totals.kcal : Math.abs(left))}</Text>
-          <Text style={styles.small}>{left === null ? 'kcal eaten' : over ? 'kcal over' : 'kcal left'}</Text>
-        </Ring>
-        <View style={{ flex: 1, gap: Spacing.three }}>
-          <View>
-            <Text style={styles.label}>Eaten</Text>
-            <Text style={styles.value}>{formatKcal(totals.kcal)}</Text>
-          </View>
-          <View>
-            <Text style={styles.label}>Daily target</Text>
-            <Text style={[styles.value, target === null && { color: Colors.textSecondary }]}>
-              {target === null ? 'Not set yet' : formatKcal(target)}
+    <Animated.View entering={enterUp(0)}>
+      <Card hero style={{ gap: Spacing.four }}>
+        <View style={styles.top} accessible accessibilityLabel={summary}>
+          <Ring
+            size={136}
+            thickness={10}
+            progress={target ? totals.kcal / target : 0}
+            color={over ? Colors.warning : Colors.accent}
+            track={Colors.track}>
+            <Text variant="stat" style={Tabular}>
+              {formatNumber(left === null ? totals.kcal : Math.abs(left))}
             </Text>
+            <Text variant="footnote" tone="secondary" style={{ marginTop: 2 }}>
+              {left === null ? 'kcal eaten' : over ? 'kcal over' : 'kcal left'}
+            </Text>
+          </Ring>
+          <View style={{ flex: 1, gap: Spacing.three }}>
+            {target !== null ? (
+              <View style={{ gap: 2 }}>
+                <Text variant="label" tone="secondary">
+                  Eaten
+                </Text>
+                <Text variant="headline" style={Tabular}>
+                  {formatKcal(totals.kcal)}
+                </Text>
+              </View>
+            ) : null}
+            <View style={{ gap: 2 }}>
+              <Text variant="label" tone="secondary">
+                Target
+              </Text>
+              {target === null ? (
+                <Text variant="callout" tone="secondary">
+                  Not set yet
+                </Text>
+              ) : (
+                <Text variant="headline" style={Tabular}>
+                  {formatKcal(target)}
+                </Text>
+              )}
+            </View>
           </View>
         </View>
-      </View>
-      <View style={styles.macros}>
-        <MacroBar label="Protein" grams={totals.protein} target={targets?.protein_g ?? null} />
-        <MacroBar label="Carbs" grams={totals.carbs} target={targets?.carbs_g ?? null} />
-        <MacroBar label="Fat" grams={totals.fat} target={targets?.fat_g ?? null} />
-      </View>
-    </View>
+        <View style={styles.macros}>
+          <MacroBar label="Protein" grams={totals.protein} target={targets?.protein_g ?? null} />
+          <MacroBar label="Carbs" grams={totals.carbs} target={targets?.carbs_g ?? null} />
+          <MacroBar label="Fat" grams={totals.fat} target={targets?.fat_g ?? null} />
+        </View>
+      </Card>
+    </Animated.View>
   );
 }
 
 function MacroBar({ label, grams, target }: { label: string; grams: number; target: number | null }) {
-  const share = target ? Math.min(1, grams / target) : 0;
   return (
     <View
-      style={{ flex: 1, gap: Spacing.one }}
+      style={{ flex: 1 }}
       accessible
       accessibilityLabel={`${label}: ${formatGrams(grams)}${target ? ` of ${target} g` : ''}`}>
-      <Text style={styles.label}>{label}</Text>
+      <Text variant="label" tone="secondary">
+        {label}
+      </Text>
       {/* On a narrow phone the target moves under the amount instead of being cut off. */}
       <View style={styles.macroValueRow}>
-        <Text style={styles.macroValue}>{formatGrams(grams).replace(' g', '')}</Text>
-        <Text style={styles.macroTarget}>{target ? `/ ${target} g` : 'g'}</Text>
+        <Text variant="rowTitle" style={Tabular}>
+          {formatGrams(grams).replace(' g', '')}
+        </Text>
+        <Text variant="footnote" tone="secondary" style={Tabular}>
+          {target ? `/ ${target} g` : 'g'}
+        </Text>
       </View>
       {target ? (
-        <View style={styles.bar}>
-          <View
-            style={[
-              styles.fill,
-              { width: `${share * 100}%` },
-              grams > target * 1.05 && { backgroundColor: Colors.danger },
-            ]}
-          />
+        <View style={{ marginTop: Spacing.two }}>
+          <ProgressBar progress={grams / target} color={grams > target * 1.05 ? Colors.warning : Colors.text} />
         </View>
       ) : null}
     </View>
@@ -145,12 +168,6 @@ function Ring({ size, thickness, progress, color, track, children }: RingProps) 
 }
 
 const styles = themed(() => ({
-  card: {
-    gap: Spacing.four,
-    padding: Spacing.four,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
   top: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -159,26 +176,6 @@ const styles = themed(() => ({
   center: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  big: {
-    color: Colors.text,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  small: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  value: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
   },
   macros: {
     flexDirection: 'row',
@@ -189,26 +186,6 @@ const styles = themed(() => ({
     flexWrap: 'wrap',
     alignItems: 'baseline',
     columnGap: 3,
-  },
-  macroValue: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  macroTarget: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  bar: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  fill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accent,
+    marginTop: Spacing.one,
   },
 }));

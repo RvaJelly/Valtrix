@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 
+import { longDate } from '@/lib/format';
+
 // Food facts and diary sums shared by Voltrix and Voltrix Coach (the same file is in both apps).
 // Products come from Open Food Facts (openfoodfacts.org), a free food database with many
 // South African products. Its data is open, and it asks apps to say where it came from.
@@ -242,7 +244,7 @@ export function dayTitle(key: string, today = new Date()) {
   if (key === todayKey) return 'Today';
   if (key === shiftDay(todayKey, -1)) return 'Yesterday';
   if (key === shiftDay(todayKey, 1)) return 'Tomorrow';
-  return fromDayKey(key).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  return longDate(fromDayKey(key), today);
 }
 
 // ---------- Open Food Facts ----------

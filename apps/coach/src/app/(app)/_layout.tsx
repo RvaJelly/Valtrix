@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { ChatProvider } from '@/lib/chat-live';
 import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
@@ -20,7 +20,7 @@ export default function AppLayout() {
         screenOptions={{
           headerStyle: { backgroundColor: Colors.background },
           headerTintColor: Colors.text,
-          headerTitleStyle: { fontWeight: '700' },
+          headerTitleStyle: { fontFamily: Fonts.textSemi, fontSize: 17 },
           headerShadowVisible: false,
           headerBackButtonDisplayMode: 'minimal',
           // Screen readers say "Back", not "(tabs), back" (the tabs group's name). The (tabs)

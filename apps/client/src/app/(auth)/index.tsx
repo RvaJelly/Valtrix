@@ -1,112 +1,126 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo } from '@/components/logo';
-import { Body, Button } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, Text } from '@/components/ui';
+import { VMark } from '@/components/v-mark';
+import { Colors, Fonts, Layout, Spacing, themed } from '@/constants/theme';
 
-const HIGHLIGHTS: { icon: ComponentProps<typeof Ionicons>['name']; title: string; text: string }[] = [
-  {
-    icon: 'calendar',
-    title: 'Your sessions',
-    text: 'See every session your trainer books for you, with a reminder before each one.',
-  },
-  { icon: 'barbell', title: 'Your training', text: 'Workouts from your trainer, ready when you are.' },
-  { icon: 'trending-up', title: 'Your progress', text: 'Watch your hard work add up, week after week.' },
+const HIGHLIGHTS = [
+  { title: 'Your sessions', text: 'Every booking, with a reminder before it starts.' },
+  { title: 'Your training', text: 'Workouts from your trainer, ready when you are.' },
+  { title: 'Your progress', text: 'Watch the work add up, week after week.' },
 ];
 
 export default function Welcome() {
+  const wide = useWindowDimensions().width >= Layout.wide;
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.container}>
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      {/* A faint Rising V behind everything: atmosphere without photos. */}
+      <VMark height={560} mono style={styles.watermark} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, wide && styles.contentWide]}>
+        <Logo style={styles.logo} />
         <View style={styles.hero}>
-          <Logo style={styles.logo} />
-          <Text style={styles.headline}>Train smarter.{'\n'}Get stronger.</Text>
-          <Body secondary style={styles.tagline}>
-            Your personal trainer, in your pocket. Free for clients.
-          </Body>
+          <Text variant="label" tone="secondary">
+            With your personal trainer
+          </Text>
+          <Text variant="display" accessibilityRole="header" style={{ marginTop: Spacing.tight }}>
+            Rise with{'\n'}your trainer.
+          </Text>
+          <Text tone="secondary" style={styles.tagline}>
+            Your sessions, workouts and food from your trainer, in one calm place.
+          </Text>
         </View>
 
-        <View style={{ gap: Spacing.three }}>
-          {HIGHLIGHTS.map((h) => (
-            <View key={h.title} style={styles.highlight}>
-              <View style={styles.highlightIcon}>
-                <Ionicons name={h.icon} size={22} color={Colors.onAccent} />
-              </View>
+        <View style={styles.list}>
+          {HIGHLIGHTS.map((h, i) => (
+            <View key={h.title} style={styles.item}>
+              <Text style={styles.number}>{String(i + 1).padStart(2, '0')}</Text>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.highlightTitle}>{h.title}</Text>
-                <Body secondary style={{ fontSize: 14, lineHeight: 20 }}>
+                <Text variant="rowTitle">{h.title}</Text>
+                <Text variant="callout" tone="secondary">
                   {h.text}
-                </Body>
+                </Text>
               </View>
             </View>
           ))}
         </View>
-
-        <View style={styles.actions}>
-          <Button title="Create my free account" onPress={() => router.push('/sign-up')} />
-          <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
-          <Body secondary style={{ fontSize: 14, textAlign: 'center' }}>
-            Personal trainers can sign in with their Voltrix Coach login.
-          </Body>
-        </View>
+        <Text variant="footnote" tone="secondary" style={{ marginTop: Spacing.four }}>
+          Personal trainers sign in with their Voltrix Coach login.
+        </Text>
       </ScrollView>
+
+      {/* The two ways in stay on screen, whatever the phone's height. */}
+      <View style={styles.footer}>
+        <Button title="Create your account" onPress={() => router.push('/sign-up')} />
+        <Button title="I already have an account" variant="secondary" onPress={() => router.push('/sign-in')} />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = themed(() => ({
-  container: {
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    overflow: 'hidden',
+  },
+  watermark: {
+    position: 'absolute',
+    right: -120,
+    top: 72,
+    opacity: Colors.scheme === 'light' ? 0.04 : 0.05,
+  },
+  content: {
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.four,
+  },
+  contentWide: {
     flexGrow: 1,
-    padding: Spacing.four,
-    gap: Spacing.five,
-    justifyContent: 'space-between',
-  },
-  hero: {
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingTop: Spacing.four,
-  },
-  logo: {
-    width: '70%',
-    maxWidth: 280,
-  },
-  headline: {
-    color: Colors.text,
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  tagline: {
-    textAlign: 'center',
-    maxWidth: 340,
-  },
-  highlight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  highlightIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  highlightTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  logo: {
+    width: 148,
+    alignSelf: 'flex-start',
   },
-  actions: {
+  hero: {
+    marginTop: 40,
+  },
+  tagline: {
+    marginTop: Spacing.three,
+    maxWidth: 340,
+  },
+  list: {
+    marginTop: Spacing.five,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  item: {
+    flexDirection: 'row',
     gap: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  number: {
+    width: 32,
+    fontFamily: Fonts.displaySemi,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.textTertiary,
+  },
+  footer: {
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    alignSelf: 'center',
+    gap: Spacing.tight,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.tight,
+    paddingBottom: Spacing.three,
   },
 }));

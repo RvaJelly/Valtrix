@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, Text } from '@/components/ui';
+import { BRAND, Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { currentCall, ringingCalls } from '@/lib/calls';
 import { trainerName, type Session } from '@/lib/sessions';
@@ -39,8 +40,8 @@ async function join(myId: string | undefined, params: { chat: string; video: str
   else router.push({ pathname: '/call', params });
 }
 
-// "Join video call" for an online session with a trainer, while it is on.
-// onAccent is for the orange "Next session" card.
+// "Join video call" for an online session with a trainer, while it is on: the view's one primary
+// (orange) button. onAccent is for a card that is orange itself, where the button turns black.
 export function JoinCall({
   session,
   onAccent,
@@ -56,24 +57,34 @@ export function JoinCall({
   if (!session.client_id || !canJoin(session, now)) return null;
   const name = trainerName(session);
   const params = { chat: session.client_id, video: '1', name, avatar: session.trainer_avatar ?? '' };
+  async function onPress() {
+    setJoining(true);
+    await join(signedIn?.user.id, params);
+    setJoining(false);
+  }
+  if (!onAccent) {
+    return (
+      <Button
+        title="Join video call"
+        icon="videocam-outline"
+        accessibilityLabel={`Join video call with ${name}`}
+        loading={joining}
+        onPress={onPress}
+        style={style}
+      />
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Join video call with ${name}`}
       disabled={joining}
-      onPress={async () => {
-        setJoining(true);
-        await join(signedIn?.user.id, params);
-        setJoining(false);
-      }}
-      style={({ pressed }) => [
-        styles.button,
-        { backgroundColor: onAccent ? Colors.onAccent : pressed ? Colors.accentPressed : Colors.accent },
-        pressed && onAccent && { opacity: 0.85 },
-        style,
-      ]}>
-      <Ionicons name="videocam" size={22} color={onAccent ? Colors.accent : Colors.onAccent} />
-      <Text style={[styles.text, { color: onAccent ? '#FFFFFF' : Colors.onAccent }]}>Join video call</Text>
+      onPress={onPress}
+      style={({ pressed }) => [styles.button, pressed && { opacity: 0.85 }, style]}>
+      <Ionicons name="videocam-outline" size={20} color={BRAND.white} />
+      <Text variant="button" style={{ color: BRAND.white }}>
+        Join video call
+      </Text>
     </Pressable>
   );
 }
@@ -87,9 +98,6 @@ const styles = themed(() => ({
     gap: Spacing.two,
     paddingHorizontal: Spacing.four,
     borderRadius: Radius.medium,
-  },
-  text: {
-    fontSize: 16,
-    fontWeight: '700',
+    backgroundColor: Colors.onAccent,
   },
 }));

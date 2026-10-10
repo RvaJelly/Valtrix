@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { longDate, time24 } from '@/lib/format';
 
 export type SessionStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
@@ -62,14 +63,16 @@ export function dayKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// '18:00', the same on every phone.
 export function formatTime(date: Date) {
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  return time24(date);
 }
 
+// 'Today', 'Tomorrow' or 'Monday 12 October'.
 export function formatDay(date: Date, today = new Date()) {
   if (sameDay(date, today)) return 'Today';
   if (sameDay(date, addDays(today, 1))) return 'Tomorrow';
-  return date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  return longDate(date, today);
 }
 
 export function endOf(s: Pick<Session, 'starts_at' | 'duration_minutes'>) {

@@ -1,31 +1,44 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform, RefreshControl, ScrollView, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
-import { JoinCall } from '@/components/join-call';
+import { canJoin, JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
 import { StoriesRow } from '@/components/stories-row';
 import { TrainerCircle } from '@/components/trainer-circle';
-import { Body, Button, Card, ErrorText, Title } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Group,
+  IconButton,
+  IconTile,
+  ListRow,
+  Notice,
+  PageHeader,
+  Section,
+  Skeleton,
+  SkeletonRows,
+  StatStrip,
+  StatusPill,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { enterUp } from '@/constants/motion';
+import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
+import { longDate, relative, timeRange } from '@/lib/format';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
 import { refreshReminders } from '@/lib/reminders';
 import { serial, type Current } from '@/lib/serial';
-import {
-  addDays,
-  endOf,
-  formatDay,
-  formatTime,
-  loadSessions,
-  ONLINE_LABEL,
-  trainerName,
-  type Session,
-} from '@/lib/sessions';
+import { addDays, endOf, formatDay, loadSessions, trainerName, type Session } from '@/lib/sessions';
 import {
   listTrainers,
   loadInvites,
@@ -41,17 +54,6 @@ function greeting() {
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
   return 'Good evening';
-}
-
-// "in 3 days", "in 2 hours", "now" (for a session that has started and not ended yet)
-function fromNow(date: Date, now = new Date()) {
-  const minutes = Math.round((date.getTime() - now.getTime()) / 60_000);
-  if (minutes <= 0) return 'now';
-  if (minutes < 60) return `in ${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? 'in 1 hour' : `in ${hours} hours`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'in 1 day' : `in ${days} days`;
 }
 
 type HomeData = {
@@ -88,7 +90,6 @@ function loadsInOrder(loadOnce: (current: Current) => Promise<boolean>) {
 
 export default function Home() {
   const { session, profile, refreshProfile } = useAuth();
-  const navigation = useNavigation();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,22 +100,7 @@ export default function Home() {
   const firstName = profile?.full_name?.split(' ')[0];
   const isTrainer = profile?.role === 'trainer';
   const isClient = profile?.role === 'client';
-
-  // Settings moved off the tab bar, so it lives behind the gear in Home's header.
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-          hitSlop={12}
-          onPress={() => router.push('/settings')}
-          style={{ marginRight: Spacing.three }}>
-          <Ionicons name="settings-outline" size={26} color={Colors.text} />
-        </Pressable>
-      ),
-    });
-  }, [navigation]);
+  const showSkeleton = useDelayed(300);
 
   const linkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -221,314 +207,322 @@ export default function Home() {
   // The trainers loaded but the sessions didn't: the Next session card says so instead.
   const sessionsMissing = !!data?.trainers && !upcoming;
 
+  const hasTrainers = !!data?.trainers && data.trainers.length > 0;
+  const waiting = !!data?.trainers && data.trainers.length === 0 && !data.invites.length;
+
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
-      <Title>
-        {greeting()}
-        {firstName ? `, ${firstName}` : ''}
-      </Title>
-
-      {data ? (
-        <StoriesRow
-          groups={data.stories}
-          seen={data.seen}
-          me={{ name: profile?.full_name ?? null, avatar: profile?.avatar_url ?? null }}
-        />
-      ) : null}
-
-      {/* A web page can't be pulled down to refresh, so there's always a button. */}
-      {error && !sessionsMissing ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
-        </View>
-      ) : null}
-      {data && !profile ? (
-        <Card>
-          <Body secondary>Your account details could not be loaded. Pull down to try again.</Body>
-        </Card>
-      ) : null}
-      {!data && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
-
-      {data?.invites.map((invite) => (
-        <InviteCard key={invite.client_id} invite={invite} onAnswered={answered} />
-      ))}
-
-      {data?.trainers && data.trainers.length === 0 && !data.invites.length && isTrainer ? (
-        <Card style={{ gap: Spacing.three }}>
-          <View style={styles.waitIcon}>
-            <Ionicons name="barbell" size={26} color={Colors.accentText} />
-          </View>
-          <Text style={styles.cardTitle}>You&apos;re in with your trainer account</Text>
-          <Body secondary>
-            Post stories and reels, and see Voltrix the way your clients do. Your clients and calendar stay in Voltrix
-            Coach.
-          </Body>
-          <Body secondary>
-            Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, their invite
-            shows up here for you to accept.
-          </Body>
-          <Button title="Check again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </Card>
-      ) : null}
-
-      {data?.trainers && data.trainers.length === 0 && !data.invites.length && isClient ? (
-        <Card style={{ gap: Spacing.three }}>
-          <View style={styles.waitIcon}>
-            <Ionicons name="link" size={26} color={Colors.accentText} />
-          </View>
-          <Text style={styles.cardTitle}>Connect to your trainer</Text>
-          <Body secondary>Ask your personal trainer to add you as a client in Voltrix Coach with this email:</Body>
-          <Text style={styles.email}>{session?.user.email}</Text>
-          <Body secondary>Their invite will show up here for you to accept. Tap the button below to check.</Body>
-          <Button title="Check again" onPress={refresh} loading={refreshing} />
-        </Card>
-      ) : null}
-
-      {data?.trainers && data.trainers.length > 0 ? (
-        <>
-          <View style={{ gap: Spacing.three }}>
-            <Text style={styles.section}>Next session</Text>
-            {!upcoming ? (
-              <Card style={{ gap: Spacing.three }}>
-                <Body secondary>Your sessions could not be loaded. Check your internet connection.</Body>
-                <Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />
-              </Card>
-            ) : next ? (
-              <View style={styles.next}>
-                <Text style={styles.nextWhen}>{fromNow(new Date(next.starts_at))}</Text>
-                <Text style={styles.nextDay}>{formatDay(new Date(next.starts_at))}</Text>
-                <Text style={styles.nextTime}>
-                  {formatTime(new Date(next.starts_at))} – {formatTime(endOf(next))}
-                </Text>
-                <View style={styles.nextMeta}>
-                  <Ionicons name="person" size={16} color={Colors.onAccent} />
-                  <Text style={styles.nextMetaText}>{trainerName(next)}</Text>
-                </View>
-                {next.online ? (
-                  <View style={styles.nextMeta}>
-                    <Ionicons name="videocam" size={16} color={Colors.onAccent} />
-                    <Text style={styles.nextMetaText}>{ONLINE_LABEL}</Text>
-                  </View>
-                ) : null}
-                {next.location ? (
-                  <View style={styles.nextMeta}>
-                    <Ionicons name="location" size={16} color={Colors.onAccent} />
-                    <Text style={styles.nextMetaText}>{next.location}</Text>
-                  </View>
-                ) : null}
-                <JoinCall session={next} onAccent style={{ marginTop: Spacing.two }} />
-              </View>
-            ) : (
-              <Card>
-                <Body secondary>No sessions booked yet. Your trainer will book them for you.</Body>
-              </Card>
-            )}
-          </View>
-
-          {later.length ? (
-            <View style={{ gap: Spacing.two }}>
-              <View style={styles.header}>
-                <Text style={[styles.section, { flex: 1 }]}>Coming up</Text>
-                <Pressable
-                  onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
-                  hitSlop={8}>
-                  <Text style={styles.link}>See all</Text>
-                </Pressable>
-              </View>
-              {later.map((s) => (
-                <SessionRow key={s.id} session={s} showDay />
-              ))}
-            </View>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />
+        }>
+        <View style={{ gap: Spacing.gutter }}>
+          {/* Settings moved off the tab bar, so it lives behind the gear at the top of Home. */}
+          <PageHeader
+            brand
+            eyebrow={longDate(now)}
+            title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
+            actions={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />}
+          />
+          {data ? (
+            <StoriesRow
+              groups={data.stories}
+              seen={data.seen}
+              me={{ name: profile?.full_name ?? null, avatar: profile?.avatar_url ?? null }}
+            />
           ) : null}
+        </View>
 
-          <View style={styles.stats}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{upcoming ? data.doneThisMonth : '–'}</Text>
-              <Body secondary style={{ fontSize: 14 }}>
-                Sessions done this month
-              </Body>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{upcoming ? upcoming.length : '–'}</Text>
-              <Body secondary style={{ fontSize: 14 }}>
-                Booked ahead
-              </Body>
-            </View>
+        {/* A web page can't be pulled down to refresh, so there's always a button. */}
+        {error && !sessionsMissing ? (
+          <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
+            {error}
+          </Notice>
+        ) : null}
+        {data && !profile ? <Notice>Your account details could not be loaded. Pull down to try again.</Notice> : null}
+        {!data && !error && showSkeleton ? (
+          <View style={{ gap: Spacing.tight }}>
+            <Skeleton height={200} radius={24} />
+            <SkeletonRows count={3} />
           </View>
+        ) : null}
 
-          <View style={{ gap: Spacing.two }}>
-            <Text style={styles.section}>{data.trainers.length === 1 ? 'Your trainer' : 'Your trainers'}</Text>
-            {data.trainers.map((t) => (
-              <Pressable
-                key={t.client_id}
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: t.trainer_id } })}
-                style={({ pressed }) => [styles.trainer, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-                <Avatar url={t.trainer_avatar} name={trainerTitle(t)} size={48} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.trainerName}>{trainerTitle(t)}</Text>
-                  {t.trainer_name && t.business_name ? (
-                    <Body secondary style={{ fontSize: 14 }}>
-                      {t.business_name}
-                    </Body>
-                  ) : null}
-                </View>
-                {t.client_status === 'paused' ? <Text style={styles.paused}>Paused</Text> : null}
-                <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: '/chat/[id]',
-                      params: { id: t.client_id, name: trainerTitle(t), avatar: t.trainer_avatar ?? '' },
-                    })
-                  }
-                  hitSlop={8}
-                  style={styles.chatButton}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Message ${t.trainer_name || t.business_name || 'your trainer'}`}>
-                  <Ionicons name="chatbubble-ellipses" size={20} color={Colors.onAccent} />
-                </Pressable>
-              </Pressable>
-            ))}
-          </View>
-        </>
-      ) : null}
+        {data?.invites.map((invite) => (
+          <InviteCard key={invite.client_id} invite={invite} onAnswered={answered} />
+        ))}
 
-      {data && data.everyone.length ? (
-        <View style={{ gap: Spacing.three }}>
-          <View style={styles.header}>
-            <Text style={[styles.section, { flex: 1 }]}>Trainers on Voltrix</Text>
-            <Pressable onPress={() => router.push('/trainers')} hitSlop={8}>
-              <Text style={styles.link}>See all</Text>
-            </Pressable>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.three }}>
-            {data.everyone.slice(0, 12).map((t) => (
-              <TrainerCircle key={t.id} trainer={t} />
-            ))}
-          </ScrollView>
+        {waiting && isTrainer ? (
+          <Card style={styles.connect}>
+            <Text variant="label" tone="secondary">
+              Trainer account
+            </Text>
+            <Text variant="headline">You&apos;re in with your trainer account</Text>
+            <Text variant="callout" tone="secondary">
+              Post stories and reels, and see Voltrix the way your clients do. Your clients and calendar stay in Voltrix
+              Coach.
+            </Text>
+            <Text variant="callout" tone="secondary">
+              Training with someone yourself? When a trainer adds you as a client with {session?.user.email}, their
+              invite shows up here for you to accept.
+            </Text>
+            <Button title="Check again" icon="refresh" variant="secondary" onPress={refresh} loading={refreshing} />
+          </Card>
+        ) : null}
+
+        {waiting && isClient ? (
+          <Card style={styles.connect}>
+            <Text variant="label" tone="secondary">
+              Get started
+            </Text>
+            <Text variant="headline">Connect with your trainer</Text>
+            <Text variant="callout" tone="secondary">
+              Ask your personal trainer to add you in Voltrix Coach with this email. Their invite shows up here.
+            </Text>
+            <EmailRow email={session?.user.email ?? ''} />
+            <Button title="Check again" icon="refresh" variant="secondary" onPress={refresh} loading={refreshing} />
+          </Card>
+        ) : null}
+
+        {data?.trainers && hasTrainers ? (
+          <>
+            {!upcoming ? (
+              <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
+                Your sessions could not be loaded.
+              </Notice>
+            ) : next ? (
+              <Animated.View entering={enterUp(0)}>
+                <NextSession session={next} now={now} />
+              </Animated.View>
+            ) : (
+              <EmptyState
+                compact
+                icon="calendar-clear-outline"
+                title="No session booked"
+                message="Your trainer books your sessions."
+              />
+            )}
+
+            {later.length ? (
+              <Section
+                title="Coming up"
+                action={{
+                  label: 'See all',
+                  onPress: () => router.navigate({ pathname: '/plan', params: { view: 'sessions' } }),
+                }}>
+                <Group>
+                  {later.map((s, i) => (
+                    <SessionRow
+                      key={s.id}
+                      session={s}
+                      showDay
+                      showTrainer={data.trainers!.length > 1}
+                      variant="grouped"
+                      last={i === later.length - 1}
+                    />
+                  ))}
+                </Group>
+              </Section>
+            ) : null}
+
+            {!upcoming || data.doneThisMonth > 0 || upcoming.length > 0 ? (
+              <StatStrip
+                items={[
+                  { value: upcoming ? data.doneThisMonth : null, label: 'Done this month' },
+                  { value: upcoming ? upcoming.length : null, label: 'Booked ahead' },
+                ]}
+              />
+            ) : null}
+
+            <Section title={data.trainers.length === 1 ? 'Your trainer' : 'Your trainers'}>
+              <Group>
+                {data.trainers.map((t, i) => (
+                  <ListRow
+                    key={t.client_id}
+                    title={trainerTitle(t)}
+                    subtitle={t.trainer_name && t.business_name ? t.business_name : undefined}
+                    leading={<Avatar url={t.trainer_avatar} name={trainerTitle(t)} size={44} />}
+                    trailing={
+                      <View style={styles.trainerActions}>
+                        {t.client_status === 'paused' ? <StatusPill tone="neutral" label="Paused" /> : null}
+                        <IconButton
+                          variant="tonal"
+                          icon="chatbubble-outline"
+                          label={`Message ${t.trainer_name || t.business_name || 'your trainer'}`}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/chat/[id]',
+                              params: { id: t.client_id, name: trainerTitle(t), avatar: t.trainer_avatar ?? '' },
+                            })
+                          }
+                        />
+                      </View>
+                    }
+                    chevron={false}
+                    onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: t.trainer_id } })}
+                    last={i === data.trainers!.length - 1}
+                  />
+                ))}
+              </Group>
+            </Section>
+
+            {/* Their trainer's face is already above, so other trainers are one row away. */}
+            <Group>
+              <ListRow
+                title="Explore trainers on Voltrix"
+                leading={<IconTile icon="compass-outline" />}
+                onPress={() => router.push('/trainers')}
+                last
+              />
+            </Group>
+          </>
+        ) : null}
+
+        {data && !hasTrainers && data.everyone.length ? (
+          <Section title="Trainers on Voltrix" action={{ label: 'See all', onPress: () => router.push('/trainers') }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.bleed}
+              contentContainerStyle={styles.carousel}>
+              {data.everyone.slice(0, 12).map((t) => (
+                <TrainerCircle key={t.id} trainer={t} />
+              ))}
+            </ScrollView>
+          </Section>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// The next session as a calm hero card: when, with whom, where, and Join while the call is on.
+function NextSession({ session, now }: { session: Session; now: Date }) {
+  const start = new Date(session.starts_at);
+  const end = endOf(session);
+  // One phrase: "in 25 min" when it is close, otherwise the day.
+  const soon = start.getTime() - now.getTime() < 2 * 3_600_000;
+  const when = soon ? relative(start, now) : formatDay(start, now);
+  const name = trainerName(session);
+  const place = session.online ? 'Video call' : session.location;
+  return (
+    <Card
+      hero
+      onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
+      accessibilityLabel={`Next session, ${when}, ${timeRange(start, end)} with ${name}${place ? `, ${place}` : ''}`}>
+      <View style={styles.heroTop}>
+        <Text variant="label" tone="secondary" style={{ flex: 1 }}>
+          Next session
+        </Text>
+        <Text variant="label" tone="secondary">
+          {when}
+        </Text>
+      </View>
+      <Text variant="stat" style={[Tabular, { marginTop: Spacing.two }]}>
+        {timeRange(start, end)}
+      </Text>
+      <View style={[styles.heroMeta, { marginTop: Spacing.three }]}>
+        <Avatar url={session.trainer_avatar} name={name} size={24} />
+        <Text variant="callout" numberOfLines={1} style={{ flex: 1 }}>
+          {name}
+        </Text>
+      </View>
+      {place ? (
+        <View style={[styles.heroMeta, { marginTop: Spacing.two }]}>
+          <Ionicons
+            name={session.online ? 'videocam-outline' : 'location-outline'}
+            size={16}
+            color={Colors.textSecondary}
+            style={{ width: 24, textAlign: 'center' }}
+          />
+          <Text variant="callout" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
+            {place}
+          </Text>
         </View>
       ) : null}
-    </ScrollView>
+      {canJoin(session, now.getTime()) ? <JoinCall session={session} style={{ marginTop: Spacing.gutter }} /> : null}
+    </Card>
+  );
+}
+
+// The client's email with a Copy button, so they can send it to their trainer.
+function EmailRow({ email }: { email: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return (
+    <View style={styles.email}>
+      <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+      <Text variant="rowTitle" numberOfLines={1} style={{ flex: 1 }} selectable>
+        {email}
+      </Text>
+      <Button
+        title={copied ? 'Copied' : 'Copy'}
+        icon={copied ? 'checkmark' : 'copy-outline'}
+        variant="ghost"
+        size="small"
+        accessibilityLabel={copied ? 'Email copied' : 'Copy your email'}
+        onPress={() => {
+          Clipboard.setStringAsync(email)
+            .then(() => setCopied(true))
+            .catch(() => {});
+        }}
+      />
+    </View>
   );
 }
 
 const styles = themed(() => ({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   content: {
-    padding: Spacing.four,
-    gap: Spacing.four,
+    width: '100%',
+    maxWidth: Layout.maxClient,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
   },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  link: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  cardTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  waitIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+  connect: {
+    gap: Spacing.tight,
   },
   email: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '700',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
+    minHeight: 52,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.one,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.tint,
   },
-  next: {
-    gap: Spacing.one,
-    padding: Spacing.four,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
-  },
-  nextWhen: {
-    color: Colors.onAccent,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    opacity: 0.8,
-  },
-  nextDay: {
-    color: Colors.onAccent,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  nextTime: {
-    color: Colors.onAccent,
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: Spacing.two,
-  },
-  nextMeta: {
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  nextMetaText: {
-    color: Colors.onAccent,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  stats: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  stat: {
-    flex: 1,
-    gap: Spacing.one,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  statNumber: {
-    color: Colors.text,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  trainer: {
+  heroMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
+    gap: Spacing.two,
   },
-  trainerName: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  paused: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  chatButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  trainerActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.accent,
+    gap: Spacing.two,
+  },
+  // The carousel runs to the screen's edges while its first trainer lines up with the page.
+  bleed: {
+    marginHorizontal: -Spacing.gutter,
+  },
+  carousel: {
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
   },
 }));

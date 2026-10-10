@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Body, Button, Card, ErrorText } from '@/components/ui';
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Button, Card, ErrorText, Text } from '@/components/ui';
+import { Spacing, themed } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
 import { confirm, notice } from '@/lib/confirm';
 import { refreshReminders } from '@/lib/reminders';
@@ -69,62 +69,66 @@ export function InviteCard({ invite, onAnswered }: { invite: Invite; onAnswered:
 
   return (
     <Card style={styles.card}>
-      <View style={styles.top}>
-        <Avatar url={invite.trainer_avatar} name={name} size={56} />
-        <Text style={styles.title}>
-          {name}
-          {business ? <Text style={styles.business}> ({business})</Text> : null} wants to be your trainer
+      <View
+        style={{ gap: Spacing.tight }}
+        accessible
+        accessibilityLabel={`${name}${business ? ` (${business})` : ''} wants to be your trainer`}>
+        <Text variant="label" tone="secondary">
+          Wants to be your trainer
         </Text>
+        <View style={styles.top}>
+          <Avatar url={invite.trainer_avatar} name={name} size={48} />
+          <View style={{ flex: 1 }}>
+            <Text variant="headline">{name}</Text>
+            {business ? (
+              <Text variant="footnote" tone="secondary">
+                {business}
+              </Text>
+            ) : null}
+          </View>
+        </View>
       </View>
-      <Body secondary style={styles.small}>
+      <Text variant="callout" tone="secondary">
         If you accept, {firstName} can see your food diary, the workouts you tick off and your chats, and you can
         message and call each other. You can leave any time in Settings.
-      </Body>
+      </Text>
       <View style={styles.buttons}>
-        <View style={{ flex: 1 }}>
-          <Button title="Accept" onPress={accept} loading={busy === 'accept'} disabled={!!busy} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button
-            title="Decline"
-            variant="secondary"
-            onPress={decline}
-            loading={busy === 'decline'}
-            disabled={!!busy}
-          />
-        </View>
+        <Button
+          title="Accept"
+          size="medium"
+          onPress={accept}
+          loading={busy === 'accept'}
+          disabled={!!busy}
+          style={{ flex: 1 }}
+        />
+        <Button
+          title="Decline"
+          size="medium"
+          variant="secondary"
+          onPress={decline}
+          loading={busy === 'decline'}
+          disabled={!!busy}
+          style={{ flex: 1 }}
+        />
       </View>
       <ErrorText>{error}</ErrorText>
     </Card>
   );
 }
 
+// The same card as the rest of Home, with no orange border: the Accept button is its one orange mark.
 const styles = themed(() => ({
   card: {
-    gap: Spacing.three,
-    borderWidth: 2,
-    borderColor: Colors.accent,
+    gap: Spacing.tight,
   },
   top: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-  },
-  title: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  business: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  small: {
-    fontSize: 14,
+    gap: Spacing.tight,
   },
   buttons: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    gap: Spacing.tight,
+    marginTop: Spacing.one,
   },
 }));

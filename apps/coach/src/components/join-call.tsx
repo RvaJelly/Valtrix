@@ -1,10 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 
-import { Body } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { currentCall, ringingCalls } from '@/lib/calls';
 import type { Session } from '@/lib/sessions';
@@ -40,18 +38,21 @@ async function join(myId: string | undefined, params: { chat: string; video: str
   else router.push({ pathname: '/call', params });
 }
 
-// "Join video call" for an online session with a client, while it is on.
+// "Join video call" for an online session with a client, while it is on. It is the view's
+// primary action, so it is the one orange button.
 export function JoinCall({
   session,
   name,
   avatar,
   onApp,
+  style,
 }: {
   session: Pick<Session, 'online' | 'status' | 'starts_at' | 'duration_minutes' | 'client_id'>;
   name: string;
   avatar?: string | null;
   // Whether the client accepted the invite in the Voltrix app, so there is someone to call.
   onApp: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const now = useNow();
   const { session: signedIn } = useAuth();
@@ -59,42 +60,24 @@ export function JoinCall({
   if (!session.client_id || !canJoin(session, now)) return null;
   if (!onApp) {
     return (
-      <Body secondary style={{ fontSize: 14 }}>
+      <Text variant="callout" tone="secondary" style={style}>
         You can call {name} here once they accept your invite in the Voltrix app.
-      </Body>
+      </Text>
     );
   }
   const params = { chat: session.client_id, video: '1', name, avatar: avatar ?? '' };
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
+      title="Join video call"
+      icon="videocam-outline"
       accessibilityLabel={`Join video call with ${name}`}
-      disabled={joining}
+      loading={joining}
       onPress={async () => {
         setJoining(true);
         await join(signedIn?.user.id, params);
         setJoining(false);
       }}
-      style={({ pressed }) => [styles.button, { backgroundColor: pressed ? Colors.accentPressed : Colors.accent }]}>
-      <Ionicons name="videocam" size={22} color={Colors.onAccent} />
-      <Text style={styles.text}>Join video call</Text>
-    </Pressable>
+      style={style}
+    />
   );
 }
-
-const styles = themed(() => ({
-  button: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: Radius.medium,
-  },
-  text: {
-    color: Colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-}));

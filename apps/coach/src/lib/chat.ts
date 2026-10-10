@@ -1,4 +1,5 @@
 import { CHAT_ROLE } from '@/lib/chat-role';
+import { dayMonthShort, shortDate, time24, weekdayLong } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
 // Chat between a trainer (Voltrix Coach) and their client (Voltrix), like WhatsApp.
@@ -241,14 +242,14 @@ export function previewOf(chat: ChatSummary, myId: string) {
 }
 
 export function timeOf(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return time24(new Date(iso));
 }
 
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-// "Today", "Yesterday", "Monday", or "3 Oct 2026".
+// "Today", "Yesterday", "Monday", or "Sat 3 Oct" (with the year when it isn't this year).
 export function dayLabel(iso: string, now = new Date()) {
   const day = new Date(iso);
   if (sameDay(day, now)) return 'Today';
@@ -256,8 +257,8 @@ export function dayLabel(iso: string, now = new Date()) {
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(day, yesterday)) return 'Yesterday';
   const days = (now.getTime() - day.getTime()) / 86_400_000;
-  if (days < 6) return day.toLocaleDateString([], { weekday: 'long' });
-  return day.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+  if (days < 6) return weekdayLong(day);
+  return shortDate(day, now);
 }
 
 // For the chat list: the time today, "Yesterday", the weekday, or the date.
@@ -265,5 +266,5 @@ export function shortWhen(iso: string, now = new Date()) {
   const label = dayLabel(iso, now);
   if (label === 'Today') return timeOf(iso);
   if (label === 'Yesterday' || !/\d/.test(label)) return label;
-  return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
+  return dayMonthShort(new Date(iso));
 }

@@ -5,13 +5,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { LikersSheet } from '@/components/likers-sheet';
 import { PostMenu } from '@/components/post-menu';
+import { Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import {
   authorName,
   loadSeen,
@@ -87,7 +89,7 @@ export default function StoryViewer() {
           () => {},
         );
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load stories.'));
+      .catch((e) => setError(plainError(e, 'Could not load stories.')));
   }, [author]);
 
   const group = groups?.[position.group];

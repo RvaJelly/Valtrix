@@ -8,6 +8,7 @@ import { Body, Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { useChat } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
 import { refreshReminders } from '@/lib/reminders';
 import { saveError } from '@/lib/save-error';
@@ -30,7 +31,7 @@ export default function SessionDetail() {
       .eq('id', id)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (error) setError(error.message);
+        if (error) setError(plainError(error));
         else if (!data) setError('This session could not be found.');
         else setSession(data as unknown as Session);
       });
@@ -43,7 +44,7 @@ export default function SessionDetail() {
     const { error } = await supabase.from('sessions').update({ status }).eq('id', id);
     if (error) {
       setBusy(null);
-      return setError(error.message);
+      return setError(plainError(error));
     }
     refreshReminders();
     goBack('/calendar');
@@ -56,7 +57,7 @@ export default function SessionDetail() {
     const { error } = await supabase.from('sessions').delete().eq('id', id);
     if (error) {
       setBusy(null);
-      return setError(error.message);
+      return setError(plainError(error));
     }
     refreshReminders();
     goBack('/calendar');
@@ -138,7 +139,7 @@ export default function SessionDetail() {
           )}
           <Button
             title="Delete session"
-            variant="ghost"
+            variant="destructive"
             onPress={remove}
             loading={busy === 'delete'}
             disabled={!!busy}

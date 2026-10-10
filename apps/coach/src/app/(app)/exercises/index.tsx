@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Platform, View } from 'react-native';
 import { Chips } from '@/components/chips';
 import { groupedItem, IconButton, ListRow, Notice, SearchField, StatusPill, Text } from '@/components/ui';
 import { Colors, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Exercise, type MuscleGroup } from '@/lib/workouts';
 
@@ -27,7 +28,7 @@ export default function ExerciseLibrary() {
         .select(EXERCISE_COLUMNS)
         .order('name')
         .then(({ data, error }) => {
-          if (error) setError(error.message);
+          if (error) setError(plainError(error));
           else setExercises(data as Exercise[]);
         });
     }, []),
@@ -57,7 +58,7 @@ export default function ExerciseLibrary() {
       position: (last?.position ?? -1) + 1,
     });
     setAdding(null);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     router.back();
   }
 
@@ -92,7 +93,7 @@ export default function ExerciseLibrary() {
         ListHeaderComponent={
           <View style={styles.header}>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search exercises" />
-            <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} allowClear />
+            <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} all="All" allowClear />
             {error ? <Notice tone="danger">{error}</Notice> : null}
           </View>
         }

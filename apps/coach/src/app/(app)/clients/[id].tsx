@@ -1,6 +1,6 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { AppStatusLabel } from '@/components/app-status';
 import { ClientForm } from '@/components/client-form';
@@ -9,9 +9,9 @@ import { ClientNutrition } from '@/components/client-nutrition';
 import { ClientProgress } from '@/components/client-progress';
 import { ClientTrainingLog } from '@/components/client-training-log';
 import { ClientWorkoutPlan } from '@/components/client-workout-plan';
-import { Body, Button, ErrorText } from '@/components/ui';
+import { Body, Button, ErrorText, Text } from '@/components/ui';
 import { SessionRow } from '@/components/session-row';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Colors, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
@@ -25,6 +25,7 @@ import {
   type Client,
   type ClientStatus,
 } from '@/lib/clients';
+import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
 import { useRefreshOnReturn } from '@/lib/refresh-on-return';
 import { saveError } from '@/lib/save-error';
@@ -91,7 +92,7 @@ export default function ClientDetail() {
           loaded.current = true;
           setClient(data as Client);
         } else if (!loaded.current) {
-          setError(error ? error.message : 'This client could not be found.');
+          setError(error ? plainError(error) : 'This client could not be found.');
         }
         // A failed reload keeps the page as it was.
       });
@@ -107,7 +108,7 @@ export default function ClientDetail() {
 
   async function setStatus(status: ClientStatus) {
     const { error } = await supabase.from('clients').update({ status }).eq('id', id);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     if (status === 'archived') goBack('/clients');
     else setClient((c) => (c ? { ...c, status } : c));
   }
@@ -217,7 +218,7 @@ export default function ClientDetail() {
           ) : (
             <Button title="Mark as active" variant="secondary" onPress={() => setStatus('active')} />
           )}
-          <Button title="Archive client" variant="ghost" onPress={archive} />
+          <Button title="Archive client" variant="destructive" onPress={archive} />
         </View>
       </ClientForm>
     </>
@@ -260,7 +261,7 @@ function AppLink({ client, onChanged }: { client: Client; onChanged: () => void 
       await inviteAgain(client.id);
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the invite. Try again.');
+      setError(plainError(e, 'Could not send the invite. Try again.'));
     }
     setBusy(false);
   }
@@ -285,10 +286,7 @@ const styles = themed(() => ({
     backgroundColor: Colors.surface,
   },
   section: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
 }));

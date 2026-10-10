@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Modal, Platform, Pressable, Text, View } from 'react-native';
+import { AppState, Modal, Platform, Pressable, View } from 'react-native';
 import { FullWindowOverlay } from 'react-native-screens';
 
 import { Logo } from '@/components/logo';
-import { Body, Button } from '@/components/ui';
+import { Body, Button, Text } from '@/components/ui';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';

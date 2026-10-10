@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, View } from 'react-native';
 
+import { Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { authorName, blockPerson, deletePost, REPORT_REASONS, reportPost, type ReportReason } from '@/lib/posts';
 
 type Post = { id: string; author_id: string; author_name: string | null; is_mine: boolean; media_path: string };
@@ -37,7 +39,7 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      setError(plainError(e, 'Something went wrong. Try again.'));
     }
     setBusy(false);
   }

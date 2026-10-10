@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { findMe, townAt, type Coords } from '@/lib/location';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { MAX_SPECIALTIES, SPECIALTIES } from '@/lib/specialties';
@@ -29,7 +31,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
   const [location, setLocation] = useState<Coords | null>(
     profile.latitude != null && profile.longitude != null
       ? { latitude: Number(profile.latitude), longitude: Number(profile.longitude) }
@@ -50,7 +52,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         await onSaved();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The photo could not be saved.');
+      setError(plainError(e, 'The photo could not be saved.'));
     }
     setPhotoBusy(false);
   }
@@ -58,7 +60,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   async function removePhoto() {
     setError(null);
     const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', profile.id);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     await removeProfilePhoto(profile.avatar_url);
     await onSaved();
   }
@@ -80,7 +82,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
       .update({ ...found.coords, ...(town ? { city: town } : {}) })
       .eq('id', profile.id);
     setLocating(false);
-    if (error) return setLocationError(error.message);
+    if (error) return setLocationError(plainError(error));
     setLocation(found.coords);
     if (town) setCity(town);
     await onSaved();
@@ -89,13 +91,12 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   async function removeLocation() {
     setLocationError(null);
     const { error } = await supabase.from('profiles').update({ latitude: null, longitude: null }).eq('id', profile.id);
-    if (error) return setLocationError(error.message);
+    if (error) return setLocationError(plainError(error));
     setLocation(null);
     await onSaved();
   }
 
   function toggle(specialty: string) {
-    setSaved(false);
     if (specialties.includes(specialty)) setSpecialties(specialties.filter((s) => s !== specialty));
     else if (specialties.length < MAX_SPECIALTIES) setSpecialties([...specialties, specialty]);
     else setError(`Pick up to ${MAX_SPECIALTIES} specialties.`);
@@ -103,7 +104,6 @@ export function ProfileEditor({ profile, onSaved }: Props) {
 
   async function save() {
     setError(null);
-    setSaved(false);
     if (!business.trim()) return setError('Enter a name for your business.');
     const yearsNumber = years.trim() ? Number(years.trim()) : null;
     if (yearsNumber !== null && (!Number.isInteger(yearsNumber) || yearsNumber < 0 || yearsNumber > 60)) {
@@ -122,8 +122,8 @@ export function ProfileEditor({ profile, onSaved }: Props) {
       })
       .eq('id', profile.id);
     setBusy(false);
-    if (error) return setError(error.message);
-    setSaved(true);
+    if (error) return setError(plainError(error));
+    toast('Profile saved');
     await onSaved();
   }
 
@@ -232,7 +232,6 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         style={{ minHeight: 110, paddingTop: Spacing.three, textAlignVertical: 'top' }}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.success }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} />
     </Card>
   );

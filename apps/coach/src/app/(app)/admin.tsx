@@ -1,16 +1,24 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, TextInput, View } from 'react-native';
 
-import { Body, ErrorText } from '@/components/ui';
+import { Body, ErrorText, Text, Toggle } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import type { Profile } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 type Trainer = Pick<
   Profile,
-  'id' | 'full_name' | 'business_name' | 'trial_ends_at' | 'subscription_status' | 'subscription_expires_at' | 'free_access' | 'is_admin'
+  | 'id'
+  | 'full_name'
+  | 'business_name'
+  | 'trial_ends_at'
+  | 'subscription_status'
+  | 'subscription_expires_at'
+  | 'free_access'
+  | 'is_admin'
 > & {
   email: string;
   created_at: string;
@@ -45,7 +53,7 @@ export default function AllTrainers() {
   useFocusEffect(
     useCallback(() => {
       supabase.rpc('admin_list_trainers').then(({ data, error }) => {
-        if (error) setError(error.message);
+        if (error) setError(plainError(error));
         else setTrainers(data as Trainer[]);
       });
     }, []),
@@ -63,7 +71,7 @@ export default function AllTrainers() {
     setTrainers((list) => list?.map((t) => (t.id === trainer.id ? { ...t, free_access: enabled } : t)) ?? null);
     const { error } = await supabase.rpc('admin_set_free_access', { trainer: trainer.id, enabled });
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
       setTrainers((list) => list?.map((t) => (t.id === trainer.id ? { ...t, free_access: !enabled } : t)) ?? null);
     }
   }
@@ -122,14 +130,10 @@ export default function AllTrainers() {
           </View>
           {item.is_admin ? null : (
             <View style={styles.toggle}>
-              <Switch
+              <Toggle
                 accessibilityLabel={`Free access for ${item.full_name ?? item.email}`}
                 value={item.free_access}
                 onValueChange={(v) => setFree(item, v)}
-                trackColor={{ true: Colors.accent, false: Colors.border }}
-                thumbColor={Colors.text}
-                // The web Switch tints the thumb teal unless told otherwise.
-                {...(Platform.OS === 'web' ? { activeThumbColor: Colors.text } : {})}
               />
               <Text style={styles.toggleLabel}>Free</Text>
             </View>
@@ -153,7 +157,8 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 const styles = themed(() => ({
   list: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
   },
   statsRow: {
     flexDirection: 'row',

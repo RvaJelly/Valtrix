@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState, type ComponentProps } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { Logo } from '@/components/logo';
-import { Body, Button, StatusPill } from '@/components/ui';
+import { Body, Button, StatusPill, Text } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { PRICE_LABEL, TRIAL_DAYS } from '@/lib/access';
+import { dayMonth } from '@/lib/format';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -19,28 +20,28 @@ const BENEFITS: { icon: IconName; text: string }[] = [
 ];
 
 type Props = {
-  // 'start' for a trainer who has never had a trial, 'ended' once it has run out.
+  // 'start' before or during the free trial, 'ended' once it has run out.
   mode: 'start' | 'ended';
+  // When the running trial ends, so the first charge shows the right day.
+  trialEndsAt?: Date;
   onSignOut?: () => void;
 };
 
-function formatDate(date: Date) {
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
-}
-
 // Trainers add a card here before they get into the app. Nothing is charged for the first TRIAL_DAYS (14) days;
 // after that the monthly plan starts on its own.
-export function SubscribeView({ mode, onSignOut }: Props) {
+export function SubscribeView({ mode, trialEndsAt, onSignOut }: Props) {
   const [notice, setNotice] = useState(false);
   const starting = mode === 'start';
-  const [chargeDate] = useState(() => formatDate(new Date(Date.now() + TRIAL_DAYS * 86_400_000)));
+  const [chargeDate] = useState(() => dayMonth(trialEndsAt ?? new Date(Date.now() + TRIAL_DAYS * 86_400_000)));
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Logo style={styles.logo} />
 
       <View style={{ gap: Spacing.two, alignItems: 'center' }}>
-        {starting ? <StatusPill tone="success" label={`${TRIAL_DAYS} days free`} /> : null}
+        {starting ? (
+          <StatusPill tone="success" label={trialEndsAt ? `Free until ${chargeDate}` : `${TRIAL_DAYS} days free`} />
+        ) : null}
         <Text style={styles.headline}>
           {starting ? 'Build the business you’ve been training for' : 'Welcome back, coach'}
         </Text>

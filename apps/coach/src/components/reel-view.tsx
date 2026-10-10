@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { authorName, mediaUrl, timeAgo, type Reel } from '@/lib/posts';
 import { compactCount } from '@/lib/social';

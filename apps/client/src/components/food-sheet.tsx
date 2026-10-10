@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { Sheet } from '@/components/sheet';
-import { Button, ErrorText, segmentOn } from '@/components/ui';
+import { Button, ErrorText, segmentOn, Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import {
   baseUnit,
   FOOD_CREDIT,
@@ -125,7 +126,7 @@ function FoodDetails({
     try {
       await onSubmit(amount, unit);
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : 'Could not save that. Try again.');
+      setError(plainError(e, 'Could not save that. Try again.'));
       setBusy(null);
     }
   }
@@ -137,7 +138,7 @@ function FoodDetails({
     try {
       await onRemove();
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : 'Could not remove that. Try again.');
+      setError(plainError(e, 'Could not remove that. Try again.'));
       setBusy(null);
     }
   }

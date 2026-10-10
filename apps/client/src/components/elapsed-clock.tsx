@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Fonts, Spacing, Tabular } from '@/constants/theme';
 
 function elapsed(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -23,13 +23,9 @@ export function ElapsedClock({ startedAt }: { startedAt: number }) {
   }, []);
   return (
     <Text
-      style={{
-        color: Colors.textSecondary,
-        fontSize: 16,
-        fontWeight: '700',
-        fontVariant: ['tabular-nums'],
-        marginRight: Spacing.two,
-      }}
+      variant="callout"
+      tone="secondary"
+      style={[Tabular, { fontFamily: Fonts.textMedium, marginRight: Spacing.two }]}
       accessibilityLabel="Time so far">
       {elapsed(now - startedAt)}
     </Text>

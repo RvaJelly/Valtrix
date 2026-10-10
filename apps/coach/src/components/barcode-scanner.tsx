@@ -2,20 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult, type BarcodeType } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Body, Button, ErrorText, TextField } from '@/components/ui';
+import { Body, Button, ErrorText, Text, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { isBarcode } from '@/lib/food';
 

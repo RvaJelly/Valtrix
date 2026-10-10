@@ -1,17 +1,25 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
-import { Button, ErrorText, TextField } from '@/components/ui';
+import { Button, ErrorText, Text, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
 import { addError, saveError } from '@/lib/save-error';
 import { supabase } from '@/lib/supabase';
 import { removeWorkoutVideos } from '@/lib/workout-videos';
-import { EQUIPMENT, EXERCISE_COLUMNS, MUSCLE_GROUPS, type Equipment, type Exercise, type MuscleGroup } from '@/lib/workouts';
+import {
+  EQUIPMENT,
+  EXERCISE_COLUMNS,
+  MUSCLE_GROUPS,
+  type Equipment,
+  type Exercise,
+  type MuscleGroup,
+} from '@/lib/workouts';
 
 // Create a custom exercise, or edit one when an id is passed.
 export default function ExerciseForm() {
@@ -36,7 +44,7 @@ export default function ExerciseForm() {
       .eq('id', id)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (error || !data) return setError(error?.message ?? 'This exercise could not be found.');
+        if (error || !data) return setError(error ? plainError(error) : 'This exercise could not be found.');
         const e = data as Exercise;
         setName(e.name);
         setGroup(e.muscle_group);
@@ -59,7 +67,7 @@ export default function ExerciseForm() {
   async function changeVideo(path: string | null) {
     if (id) {
       const { error } = await supabase.from('exercises').update({ video_path: path }).eq('id', id);
-      if (error) return error.message;
+      if (error) return plainError(error);
     } else {
       unsaved.current.path = path;
     }
@@ -92,20 +100,30 @@ export default function ExerciseForm() {
     if (!id || !(await confirm('Delete exercise?', 'It will be removed from your library.', 'Delete'))) return;
     const { error } = await supabase.from('exercises').delete().eq('id', id);
     // 23503: still used in a workout (foreign key).
-    if (error) return setError(error.code === '23503' ? 'Remove it from your workouts first.' : error.message);
+    if (error) return setError(error.code === '23503' ? 'Remove it from your workouts first.' : plainError(error));
     await removeWorkoutVideos([video]);
     goBack('/exercises');
   }
 
   if (!loaded) {
-    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />;
+    return error ? (
+      <ErrorText>{error}</ErrorText>
+    ) : (
+      <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
+    );
   }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: id ? 'Edit exercise' : 'New exercise' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextField label="Name" value={name} onChangeText={setName} placeholder="For example: Sled Push" autoCapitalize="words" />
+        <TextField
+          label="Name"
+          value={name}
+          onChangeText={setName}
+          placeholder="For example: Sled Push"
+          autoCapitalize="words"
+        />
         <View style={{ gap: Spacing.two }}>
           <Text style={styles.label}>Muscle group</Text>
           <Chips options={MUSCLE_GROUPS} value={group} onChange={setGroup} />
@@ -128,7 +146,7 @@ export default function ExerciseForm() {
         </View>
         <ErrorText>{error}</ErrorText>
         <Button title={id ? 'Save changes' : 'Add exercise'} onPress={save} loading={busy} />
-        {id ? <Button title="Delete exercise" variant="ghost" onPress={remove} /> : null}
+        {id ? <Button title="Delete exercise" variant="destructive" onPress={remove} /> : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );

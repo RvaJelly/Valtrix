@@ -6,6 +6,7 @@ import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 
 import { AppLock } from '@/components/app-lock';
+import { ToastProvider } from '@/components/toast';
 import { FONT_FILES } from '@/constants/fonts';
 import { Colors } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -65,7 +66,9 @@ export default function RootLayout() {
     <AuthProvider>
       <SettingsProvider>
         <ThemedStatusBar />
-        <RootNavigator />
+        <ToastProvider>
+          <RootNavigator />
+        </ToastProvider>
         <AppLock />
       </SettingsProvider>
     </AuthProvider>

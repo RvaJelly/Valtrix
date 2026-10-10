@@ -46,6 +46,11 @@ export function dayMonth(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+// 'October 2026'
+export function monthYear(d: Date): string {
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 // '18 Oct'
 export function dayMonthShort(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;

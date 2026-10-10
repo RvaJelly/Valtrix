@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/ui';
 import { Radius, Spacing, themed } from '@/constants/theme';
 import { dayMonth } from '@/lib/days';
 import { freshPhotoUrl, POSES, type ProgressPhoto } from '@/lib/progress';

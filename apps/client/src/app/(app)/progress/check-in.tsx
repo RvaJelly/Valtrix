@@ -1,16 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { ScaleChoice } from '@/components/scale-choice';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, Card, ErrorText, Notice, Section, Skeleton, Text, TextField, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { dayMonth } from '@/lib/days';
 import { saveError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { shiftDay } from '@/lib/food';
 import {
   CHECK_IN_QUESTIONS,
@@ -69,7 +69,7 @@ export default function CheckInScreen() {
         if (c) setCheckIns(c);
         if (t !== null) setTrainer(t);
         if (w) setWeights(w);
-        setError(c ? null : 'Could not load your check-ins. Check your internet connection.');
+        setError(c ? null : "Couldn't load your check-ins. Check your connection and try again.");
         const newest = (c ?? [])
           .flatMap((x) => x.replies)
           .map((r) => r.updated_at)
@@ -107,26 +107,22 @@ export default function CheckInScreen() {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
       {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </View>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: refresh, loading: refreshing }}>
+          {error}
+        </Notice>
       ) : null}
       {checkIns === null ? (
         !error ? (
-          <ActivityIndicator color={Colors.accentText} />
+          <Loading />
         ) : null
       ) : (
         <>
-          <Text style={styles.title}>Your week of {dayMonth(week)}</Text>
-          {sent ? (
-            <View style={styles.sent}>
-              <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
-              <Text style={styles.sentText}>{sent}</Text>
-            </View>
-          ) : null}
+          <Text variant="title" accessibilityRole="header">
+            Your week of {dayMonth(week)}
+          </Text>
+          {sent ? <Notice tone="success">{sent}</Notice> : null}
           <CheckInForm
             // A check-in that turns up (sent here or on another phone) fills the form again.
             key={`${existing?.id ?? 'new'}-${settings.units}`}
@@ -136,23 +132,23 @@ export default function CheckInScreen() {
             todayHasWeight={todayHasWeight}
             unit={settings.units}
             onSaved={(updated) => {
+              haptic.success();
               setSent(updated ? 'Check-in updated.' : 'Check-in sent.');
               load(true);
             }}
           />
-          <Body secondary style={styles.small}>
+          <Text variant="footnote" tone="secondary">
             {trainer === false
               ? "When you have a trainer, they'll see your check-ins."
               : 'Your trainers see your check-in and can reply.'}
-          </Body>
+          </Text>
 
           {checkIns.length ? (
-            <>
-              <Text style={styles.section}>Past check-ins</Text>
+            <Section title="Past check-ins" style={{ marginTop: Spacing.three }}>
               {checkIns.map((c) => (
                 <PastCheckIn key={c.id} checkIn={c} unit={settings.units} />
               ))}
-            </>
+            </Section>
           ) : null}
         </>
       )}
@@ -257,7 +253,8 @@ function CheckInForm({
         style={styles.multiline}
       />
       <TextField
-        label={`Weight (${unit}) (optional)`}
+        label={`Weight in ${unit}`}
+        optional
         value={weight}
         onChangeText={setWeight}
         keyboardType="decimal-pad"
@@ -277,44 +274,31 @@ function CheckInForm({
 function PastCheckIn({ checkIn, unit }: { checkIn: CheckIn; unit: WeightUnit }) {
   return (
     <Card style={{ gap: Spacing.two }}>
-      <Text style={styles.week}>Week of {dayMonth(checkIn.week_start)}</Text>
+      <Text variant="headline">Week of {dayMonth(checkIn.week_start)}</Text>
       {CHECK_IN_QUESTIONS.map((q) => (
-        <Body key={q.key} style={styles.small}>
-          <Text style={styles.answerLabel}>{q.short}: </Text>
+        <Answer key={q.key} label={q.short}>
           {q.words[checkIn[q.key] - 1] ?? '–'}
-        </Body>
+        </Answer>
       ))}
-      {checkIn.weight_kg !== null ? (
-        <Body style={styles.small}>
-          <Text style={styles.answerLabel}>Weight: </Text>
-          {formatWeight(checkIn.weight_kg, unit)}
-        </Body>
-      ) : null}
-      {checkIn.wins ? (
-        <Body style={styles.small}>
-          <Text style={styles.answerLabel}>Wins: </Text>
-          {checkIn.wins}
-        </Body>
-      ) : null}
-      {checkIn.struggles ? (
-        <Body style={styles.small}>
-          <Text style={styles.answerLabel}>Struggles: </Text>
-          {checkIn.struggles}
-        </Body>
-      ) : null}
+      {checkIn.weight_kg !== null ? <Answer label="Weight">{formatWeight(checkIn.weight_kg, unit)}</Answer> : null}
+      {checkIn.wins ? <Answer label="Wins">{checkIn.wins}</Answer> : null}
+      {checkIn.struggles ? <Answer label="Struggles">{checkIn.struggles}</Answer> : null}
       {checkIn.replies.map((r) => (
         <View key={`${r.trainer_id}-${r.updated_at}`} style={styles.reply}>
           <Avatar url={r.trainer_avatar} name={r.trainer_name} size={32} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.replyName}>
+            <Text variant="footnote" style={{ fontFamily: Fonts.textSemi }}>
               {r.trainer_name}
               {Number.isNaN(Date.parse(r.updated_at)) ? (
                 ''
               ) : (
-                <Text style={styles.replyDate}> · {dayMonth(dayKey(new Date(r.updated_at)))}</Text>
+                <Text tone="secondary" style={{ fontFamily: Fonts.text }}>
+                  {' '}
+                  · {dayMonth(dayKey(new Date(r.updated_at)))}
+                </Text>
               )}
             </Text>
-            <Body style={styles.small}>{r.body}</Body>
+            <Text variant="callout">{r.body}</Text>
           </View>
         </View>
       ))}
@@ -322,69 +306,49 @@ function PastCheckIn({ checkIn, unit }: { checkIn: CheckIn; unit: WeightUnit }) 
   );
 }
 
+// "Energy: Good", the label quieter than the answer.
+function Answer({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Text variant="callout">
+      <Text tone="secondary">{label}: </Text>
+      {children}
+    </Text>
+  );
+}
+
+// The form's shape while the check-ins load, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  if (!shown) return null;
+  return (
+    <View accessible accessibilityLabel="Loading" style={{ gap: Spacing.three }}>
+      <Skeleton width="70%" height={24} />
+      <Skeleton height={420} radius={Radius.large} />
+    </View>
+  );
+}
+
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.gutter,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 24,
-    fontWeight: '900',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: Spacing.two,
-  },
-  sent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  sentText: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   multiline: {
     minHeight: 88,
     textAlignVertical: 'top',
   },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  week: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  answerLabel: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
   reply: {
     flexDirection: 'row',
-    gap: Spacing.two,
-    padding: Spacing.two,
+    gap: Spacing.tight,
+    marginTop: Spacing.one,
+    padding: Spacing.tight,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-  },
-  replyName: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  replyDate: {
-    color: Colors.textSecondary,
-    fontWeight: '600',
+    borderCurve: 'continuous',
+    backgroundColor: Colors.tint,
   },
 }));

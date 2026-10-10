@@ -1,6 +1,8 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
 import type { CHECK_IN_QUESTIONS } from '@/lib/progress';
 
 type ScaleChoiceProps = {
@@ -11,11 +13,12 @@ type ScaleChoiceProps = {
 };
 
 // One check-in question: five equal buttons, the number large and its word underneath, so
-// every answer fits on a small phone.
+// every answer fits on a small phone. The chosen one fills with the text colour, like a selected
+// chip: a choice is not the screen's main action, so it is never orange.
 export function ScaleChoice({ question, value, onChange }: ScaleChoiceProps) {
   return (
     <View style={{ gap: Spacing.two }}>
-      <Text style={styles.label}>{question.label}</Text>
+      <Text variant="rowTitle">{question.label}</Text>
       <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={question.label}>
         {question.words.map((word, i) => {
           const n = i + 1;
@@ -27,14 +30,26 @@ export function ScaleChoice({ question, value, onChange }: ScaleChoiceProps) {
               accessibilityState={{ checked: selected }}
               accessibilityLabel={`${question.short}: ${n}, ${word.toLowerCase()}`}
               testID={`checkin-${question.key}-${n}`}
-              onPress={() => onChange(n)}
+              onPress={() => {
+                if (!selected) haptic.select();
+                onChange(n);
+              }}
               style={({ pressed }) => [
                 styles.option,
-                selected && styles.selected,
-                pressed && !selected && { backgroundColor: Colors.surfaceRaised },
+                selected ? styles.selected : pressed && { backgroundColor: Colors.tintPressed },
               ]}>
-              <Text style={[styles.number, selected && { color: Colors.onAccent }]}>{n}</Text>
-              <Text style={[styles.word, selected && { color: Colors.onAccent }]} numberOfLines={2}>
+              <Text
+                variant="headline"
+                style={[Tabular, { textAlign: 'center' }, selected && { color: Colors.background }]}
+                maxFontSizeMultiplier={1.3}>
+                {n}
+              </Text>
+              <Text
+                variant="footnote"
+                tone="secondary"
+                style={[styles.word, selected && { color: Colors.background }]}
+                numberOfLines={2}
+                maxFontSizeMultiplier={1.2}>
                 {word}
               </Text>
             </Pressable>
@@ -46,40 +61,28 @@ export function ScaleChoice({ question, value, onChange }: ScaleChoiceProps) {
 }
 
 const styles = themed(() => ({
-  label: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
   row: {
     flexDirection: 'row',
     gap: Spacing.one,
   },
   option: {
     flex: 1,
-    minHeight: 56,
+    minHeight: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.one,
+    paddingVertical: Spacing.two,
     paddingHorizontal: 2,
     borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.tint,
   },
   selected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  number: {
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
+    backgroundColor: Colors.text,
   },
   word: {
-    color: Colors.textSecondary,
     fontSize: 11,
-    fontWeight: '600',
+    lineHeight: 14,
+    fontFamily: Fonts.textMedium,
     textAlign: 'center',
   },
 }));

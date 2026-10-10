@@ -1,10 +1,10 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
-import { Body, Button, Card, StatusPill } from '@/components/ui';
+import { Body, Button, Card, StatusPill, Text } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';

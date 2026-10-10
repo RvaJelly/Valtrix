@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
+import { Text } from '@/components/ui';
 import { Colors, Fonts } from '@/constants/theme';
 
 export function initialsOf(name: string | null | undefined) {

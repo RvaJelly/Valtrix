@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { PlanVideo } from '@/components/plan-video';
-import { Body, Button, Card } from '@/components/ui';
+import { Body, Button, Card, Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import {
   isUnderway,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/active-workout';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import {
   daysLabel,
   EQUIPMENT,
@@ -83,7 +84,7 @@ export default function PlanWorkout() {
           if (userId) rememberPlanWorkout(userId, found, list);
         },
         (e: unknown) => {
-          if (alive) setError(e instanceof Error ? e.message : 'Could not load this workout.');
+          if (alive) setError(plainError(e, 'Could not load this workout.'));
         },
       );
       return () => {
@@ -309,7 +310,8 @@ function Stat({ label, value, also }: StatProps) {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     gap: Spacing.three,
   },
   title: {
@@ -409,7 +411,7 @@ const styles = themed(() => ({
   },
   footer: {
     gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.three,
     borderTopWidth: 1,
     borderTopColor: Colors.border,

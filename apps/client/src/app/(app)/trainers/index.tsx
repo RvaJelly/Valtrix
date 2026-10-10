@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, AppState, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { PickerSheet, type PickerOption } from '@/components/picker-sheet';
 import { TrainerCircle } from '@/components/trainer-circle';
-import { Body, Card, Notice, SearchField, Text as UIText } from '@/components/ui';
+import { Body, Card, Notice, SearchField, Text, Text as UIText } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { findMe } from '@/lib/location';
 import {
   displayName,
@@ -68,7 +69,7 @@ export default function Trainers() {
       setTrainers(await listTrainers());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load trainers.');
+      setError(plainError(e, 'Could not load trainers.'));
     }
   }, []);
 

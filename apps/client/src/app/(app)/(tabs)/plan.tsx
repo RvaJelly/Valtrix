@@ -1,14 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JoinCall } from '@/components/join-call';
 import { SessionRow } from '@/components/session-row';
-import { Body, Card, Group, Notice, PageHeader, Segmented, SkeletonRows, useDelayed } from '@/components/ui';
+import {
+  Body,
+  Card,
+  Group,
+  Notice,
+  PageHeader,
+  Section,
+  Segmented,
+  SkeletonRows,
+  Text,
+  useDelayed,
+} from '@/components/ui';
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
-import { longDate } from '@/lib/format';
+import { dayMonth } from '@/lib/format';
 import {
   daysLabel,
   dueOn,
@@ -130,16 +141,8 @@ export default function Plan() {
   );
 }
 
-// The workouts the client logged, with their personal bests.
-function HistoryLink() {
-  return (
-    <View style={styles.historyRow}>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/workouts/history')} hitSlop={8}>
-        <Text style={styles.link}>Workout history</Text>
-      </Pressable>
-    </View>
-  );
-}
+// The workouts the client logged, with their personal bests: a quiet action beside a section title.
+const HISTORY = { label: 'Workout history', onPress: () => router.push('/workouts/history') };
 
 function Workouts({ plan }: { plan: PlanItem[] }) {
   const today = new Date();
@@ -153,8 +156,7 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
 
   if (!plan.length) {
     return (
-      <>
-        <HistoryLink />
+      <Section title="Workouts" action={HISTORY}>
         <Card style={{ gap: Spacing.three, alignItems: 'center', paddingVertical: Spacing.five }}>
           <View style={styles.emptyIcon}>
             <Ionicons name="barbell-outline" size={28} color={Colors.textSecondary} />
@@ -164,18 +166,13 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
             When your trainer adds workouts to your plan, they show up here, day by day.
           </Body>
         </Card>
-      </>
+      </Section>
     );
   }
 
   return (
     <>
-      <HistoryLink />
-      <View style={{ gap: Spacing.two }}>
-        <View style={styles.header}>
-          <Text style={[styles.heading, { flex: 1 }]}>Today</Text>
-          <Text style={styles.date}>{longDate(today)}</Text>
-        </View>
+      <Section title={`Today · ${dayMonth(today)}`} action={HISTORY}>
         {due.length ? (
           due.map((item) => (
             <WorkoutCard
@@ -187,10 +184,10 @@ function Workouts({ plan }: { plan: PlanItem[] }) {
           ))
         ) : (
           <Card>
-            <Body secondary>Nothing planned for today. Enjoy your rest day!</Body>
+            <Body secondary>Nothing planned for today. Enjoy your rest day.</Body>
           </Card>
         )}
-      </View>
+      </Section>
 
       <View style={{ gap: Spacing.two }}>
         <View style={styles.header}>
@@ -377,16 +374,6 @@ const styles = themed(() => ({
     paddingBottom: Spacing.hero,
     gap: Spacing.four,
   },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: -Spacing.two,
-  },
-  link: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -394,10 +381,6 @@ const styles = themed(() => ({
   },
   heading: {
     ...Type.label,
-    color: Colors.textSecondary,
-  },
-  date: {
-    ...Type.footnote,
     color: Colors.textSecondary,
   },
   progress: {

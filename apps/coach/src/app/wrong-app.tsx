@@ -28,7 +28,8 @@ export default function WrongApp() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     paddingTop: Spacing.six,
     gap: Spacing.four,
   },

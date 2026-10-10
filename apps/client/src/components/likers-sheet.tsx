@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useEffectEvent, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
+import { Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { timeAgo } from '@/lib/posts';
 import { loadLikers, type Liker } from '@/lib/social';

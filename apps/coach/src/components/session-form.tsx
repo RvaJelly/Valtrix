@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
-import { Body, Button, ErrorText, TextField } from '@/components/ui';
+import { Body, Button, ErrorText, Text, TextField, Toggle } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { fullName, type Client } from '@/lib/clients';
 import {
@@ -94,7 +94,8 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
   const times = time && !START_TIMES.includes(time) ? [...START_TIMES, time].sort() : START_TIMES;
   const timeOptions = Object.fromEntries(times.map((t) => [t, t]));
 
-  const mine = time && duration ? { starts_at: combine(day, time).toISOString(), duration_minutes: Number(duration) } : null;
+  const mine =
+    time && duration ? { starts_at: combine(day, time).toISOString(), duration_minutes: Number(duration) } : null;
   const clash = mine ? (dayBookings.find((s) => overlaps(mine, s)) ?? null) : null;
 
   async function submit() {
@@ -144,11 +145,19 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
 
         <Text style={styles.label}>Day</Text>
         <View style={styles.dayRow}>
-          <Pressable accessibilityLabel="Previous day" hitSlop={8} onPress={() => setDay(addDays(day, -1))} style={styles.dayButton}>
+          <Pressable
+            accessibilityLabel="Previous day"
+            hitSlop={8}
+            onPress={() => setDay(addDays(day, -1))}
+            style={styles.dayButton}>
             <Ionicons name="chevron-back" size={20} color={Colors.text} />
           </Pressable>
           <Text style={styles.dayText}>{formatDay(day)}</Text>
-          <Pressable accessibilityLabel="Next day" hitSlop={8} onPress={() => setDay(addDays(day, 1))} style={styles.dayButton}>
+          <Pressable
+            accessibilityLabel="Next day"
+            hitSlop={8}
+            onPress={() => setDay(addDays(day, 1))}
+            style={styles.dayButton}>
             <Ionicons name="chevron-forward" size={20} color={Colors.text} />
           </Pressable>
         </View>
@@ -178,15 +187,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
                 You both get a “Join video call” button 15 minutes before it starts.
               </Body>
             </Pressable>
-            <Switch
-              accessibilityLabel="Online (video call)"
-              value={online}
-              onValueChange={setOnline}
-              trackColor={{ true: Colors.accent, false: Colors.border }}
-              thumbColor="#FFFFFF"
-              // The web Switch tints the thumb teal unless told otherwise.
-              {...(Platform.OS === 'web' ? { activeThumbColor: '#FFFFFF' } : {})}
-            />
+            <Toggle accessibilityLabel="Online (video call)" value={online} onValueChange={setOnline} />
           </View>
         ) : null}
 

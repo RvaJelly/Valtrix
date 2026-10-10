@@ -2,13 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
-import { Chips } from '@/components/chips';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { Sheet } from '@/components/sheet';
-import { Body, Button, Card, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Button, Card, ErrorText, Notice, Section, Segmented, Skeleton, Text, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
@@ -31,6 +30,7 @@ import { dayKey } from '@/lib/sessions';
 
 const PAGE = 30;
 const POSE_LABELS = Object.fromEntries(POSES.map((p) => [p.key, p.label])) as Record<Pose, string>;
+const POSE_OPTIONS = POSES.map((p) => ({ value: p.key, label: p.label }));
 
 const POSE_INDEX: Record<Pose, number> = { front: 0, side: 1, back: 2 };
 
@@ -97,7 +97,7 @@ export default function ProgressPhotos() {
         }
         if (first) setFirsts(first);
         if (signed) setLinks((old) => new Map([...old, ...signed]));
-        setError(page ? null : 'Could not load your photos. Check your internet connection.');
+        setError(page ? null : "Couldn't load your photos. Check your connection and try again.");
       }),
     [],
   );
@@ -133,7 +133,7 @@ export default function ProgressPhotos() {
       setBefore(next);
       if (signed) setLinks((old) => new Map([...old, ...signed]));
     } catch {
-      setProblem('Could not load more. Check your internet connection.');
+      setProblem("Couldn't load older photos. Check your connection and try again.");
     }
     setLoadingOlder(false);
   }
@@ -227,84 +227,88 @@ export default function ProgressPhotos() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
       {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </View>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: refresh, loading: refreshing }}>
+          {error}
+        </Notice>
       ) : null}
 
-      <Text style={styles.section}>Today</Text>
-      <View style={styles.row}>
-        {todays.map(({ pose, photo }) => {
-          const link = photo ? links.get(photo.path) : undefined;
-          const loading = uploading?.day === today && uploading.pose === pose.key;
-          return (
-            <Pressable
-              key={pose.key}
-              testID={`photo-slot-${pose.key}`}
-              accessibilityRole="button"
-              accessibilityLabel={
-                photo ? `${pose.label} photo, ${dayMonth(photo.day)}` : `Add ${pose.label.toLowerCase()} photo`
-              }
-              disabled={!photos || loading}
-              onPress={() => (photo ? setViewing(photo) : setTarget({ day: today, pose: pose.key, replacing: null }))}
-              style={styles.slotWrap}>
-              <View style={[styles.slot, !photo && styles.emptySlot]}>
-                {loading ? (
-                  <ActivityIndicator color={Colors.accentText} />
-                ) : photo && link ? (
-                  <Image source={{ uri: link.url, cacheKey: photo.path }} style={styles.fill} contentFit="cover" />
-                ) : photo ? (
-                  <Ionicons name="image-outline" size={28} color={Colors.textSecondary} />
-                ) : (
-                  <Ionicons name="add" size={32} color={Colors.accentText} />
-                )}
-              </View>
-              <Text style={styles.slotLabel}>{pose.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <ErrorText>{problem}</ErrorText>
+      <Section title="Today">
+        <View style={styles.row}>
+          {todays.map(({ pose, photo }) => {
+            const link = photo ? links.get(photo.path) : undefined;
+            const loading = uploading?.day === today && uploading.pose === pose.key;
+            return (
+              <Pressable
+                key={pose.key}
+                testID={`photo-slot-${pose.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  photo ? `${pose.label} photo, ${dayMonth(photo.day)}` : `Add ${pose.label.toLowerCase()} photo`
+                }
+                disabled={!photos || loading}
+                onPress={() => (photo ? setViewing(photo) : setTarget({ day: today, pose: pose.key, replacing: null }))}
+                style={styles.slotWrap}>
+                <View style={[styles.slot, !photo && styles.emptySlot]}>
+                  {loading ? (
+                    <ActivityIndicator color={Colors.textSecondary} />
+                  ) : photo && link ? (
+                    <Image source={{ uri: link.url, cacheKey: photo.path }} style={styles.fill} contentFit="cover" />
+                  ) : photo ? (
+                    <Ionicons name="image-outline" size={28} color={Colors.textSecondary} />
+                  ) : (
+                    <Ionicons name="add" size={28} color={Colors.text} />
+                  )}
+                </View>
+                <Text variant="footnote" tone="secondary" style={styles.slotLabel}>
+                  {pose.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <ErrorText>{problem}</ErrorText>
+      </Section>
 
       {photos === null ? (
         !error ? (
-          <ActivityIndicator color={Colors.accentText} />
+          <Loading />
         ) : null
       ) : (
         <>
-          <Text style={styles.section}>Compare</Text>
-          <Card style={{ gap: Spacing.three }}>
-            <Chips options={POSE_LABELS} value={compare} onChange={(p) => p && setCompare(p)} />
-            {latest && first && first.id !== latest.id ? (
-              <View style={styles.row}>
-                {[first, latest].map((photo, i) => (
-                  <Thumb
-                    key={photo.id}
-                    photo={photo}
-                    link={links.get(photo.path)}
-                    label={`${i === 0 ? 'First' : 'Latest'} · ${dayMonth(photo.day)}`}
-                    onPress={() => setViewing(photo)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <Body secondary style={styles.small}>
-                {latest
-                  ? `Add another ${POSE_LABELS[compare].toLowerCase()} photo on a later day to see the change.`
-                  : `No ${POSE_LABELS[compare].toLowerCase()} photos yet.`}
-              </Body>
-            )}
-          </Card>
+          <Section title="Compare">
+            <Card style={{ gap: Spacing.gutter }}>
+              <Segmented options={POSE_OPTIONS} value={compare} onChange={setCompare} />
+              {latest && first && first.id !== latest.id ? (
+                <View style={styles.row}>
+                  {[first, latest].map((photo, i) => (
+                    <Thumb
+                      key={photo.id}
+                      photo={photo}
+                      link={links.get(photo.path)}
+                      label={`${i === 0 ? 'First' : 'Latest'} · ${dayMonth(photo.day)}`}
+                      onPress={() => setViewing(photo)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text variant="callout" tone="secondary">
+                  {latest
+                    ? `Add another ${POSE_LABELS[compare].toLowerCase()} photo on a later day to see the change.`
+                    : `No ${POSE_LABELS[compare].toLowerCase()} photos yet.`}
+                </Text>
+              )}
+            </Card>
+          </Section>
 
           {days.length ? (
-            <>
-              <Text style={styles.section}>Earlier</Text>
+            <Section title="Earlier">
               {days.map(({ day, photos: dayPhotos }) => (
-                <View key={day} style={{ gap: Spacing.one }}>
-                  <Text style={styles.day}>{weekdayDayMonth(day)}</Text>
+                <View key={day} style={{ gap: Spacing.two, marginBottom: Spacing.two }}>
+                  <Text variant="footnote" style={{ fontFamily: Fonts.textSemi }}>
+                    {weekdayDayMonth(day)}
+                  </Text>
                   <View style={styles.row}>
                     {dayPhotos.map((photo) => (
                       <Thumb
@@ -325,14 +329,14 @@ export default function ProgressPhotos() {
               {before ? (
                 <Button title="Show older" variant="secondary" onPress={showOlder} loading={loadingOlder} />
               ) : null}
-            </>
+            </Section>
           ) : null}
         </>
       )}
 
-      <Body secondary style={styles.small}>
+      <Text variant="footnote" tone="secondary">
         Only you and your trainers can see these.
-      </Body>
+      </Text>
 
       <Sheet
         visible={!!target}
@@ -380,27 +384,28 @@ function Thumb({
           <Ionicons name="image-outline" size={28} color={Colors.textSecondary} />
         )}
       </View>
-      <Text style={styles.slotLabel}>{label}</Text>
+      <Text variant="footnote" tone="secondary" style={styles.slotLabel}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
+// The compare card's shape while the photos load, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  return shown ? <Skeleton height={280} radius={Radius.large} /> : null;
+}
+
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: Spacing.two,
   },
   row: {
     flexDirection: 'row',
@@ -408,39 +413,26 @@ const styles = themed(() => ({
   },
   slotWrap: {
     flex: 1,
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   slot: {
     aspectRatio: 3 / 4,
     borderRadius: Radius.medium,
+    borderCurve: 'continuous',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.surface,
   },
   emptySlot: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
   },
   fill: {
     width: '100%',
     height: '100%',
   },
   slotLabel: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
     textAlign: 'center',
-  },
-  day: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: Fonts.textMedium,
   },
 }));

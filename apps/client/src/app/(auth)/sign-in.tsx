@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/logo';
 import { Body, Button, ErrorText, TextField, TextLink, Title } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 export default function SignIn() {
@@ -24,7 +25,7 @@ export default function SignIn() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
     // On success the root layout moves to the app on its own.
-    if (error) setError(error.message);
+    if (error) setError(plainError(error));
   }
 
   return (

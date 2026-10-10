@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
+import { Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 
 export type PickerOption<T extends string> = {

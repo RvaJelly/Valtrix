@@ -1,10 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
-import { Body, Button, Card, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  Section,
+  Skeleton,
+  StatusPill,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
 import { clockTime, weekdayDayMonth } from '@/lib/days';
 import { saveError } from '@/lib/errors';
@@ -87,14 +99,20 @@ export default function WorkoutLogScreen() {
       <View style={styles.content}>
         <Stack.Screen options={{ title: 'Workout' }} />
         {failed ? (
-          <View style={{ gap: Spacing.three }}>
-            <ErrorText>Could not load this workout. Check your internet connection.</ErrorText>
-            <Button title="Try again" variant="secondary" onPress={() => setAttempt((a) => a + 1)} />
-          </View>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load this workout"
+            message="Check your connection and try again."
+            action={<Button title="Try again" variant="secondary" onPress={() => setAttempt((a) => a + 1)} />}
+          />
         ) : log === null ? (
-          <Body secondary>This workout could not be found.</Body>
+          <EmptyState
+            icon="time-outline"
+            title="Workout not found"
+            message="It may have been deleted. Your other workouts are in your history."
+          />
         ) : (
-          <ActivityIndicator color={Colors.accentText} />
+          <Loading />
         )}
       </View>
     );
@@ -112,118 +130,127 @@ export default function WorkoutLogScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: log.workout_name }} />
+      <Stack.Screen options={{ title: 'Workout' }} />
       <View style={{ gap: Spacing.one }}>
-        <Text style={styles.title}>{log.workout_name}</Text>
-        <Body secondary>
+        <Text variant="title" accessibilityRole="header">
+          {log.workout_name}
+        </Text>
+        <Text variant="callout" tone="secondary" style={Tabular}>
           {weekdayDayMonth(log.day)} · {clockTime(log.started_at)}–{clockTime(log.finished_at)} ·{' '}
           {durationLabel(log.started_at, log.finished_at)}
-        </Body>
+        </Text>
       </View>
       {log.note ? (
-        <View style={styles.noteBox}>
-          <Text style={styles.noteTitle}>Your note</Text>
-          <Body>{log.note}</Body>
+        <View style={styles.note}>
+          <Text variant="label" tone="secondary">
+            Your note
+          </Text>
+          <Text variant="callout">{log.note}</Text>
         </View>
       ) : null}
       {best.length ? (
-        <Card style={{ gap: Spacing.two }}>
-          <View style={styles.row}>
-            <Ionicons name="trophy" size={20} color={Colors.accentText} />
-            <Text style={styles.exercise}>New bests</Text>
-          </View>
-          {best.map((r) => (
-            <Body key={`${r.exercise_name}-${r.kind}`} secondary style={{ fontSize: 15 }}>
-              {r.exercise_name}: {recordLabel(r, unit)}
-            </Body>
-          ))}
-        </Card>
+        <Section title="New bests">
+          <Group>
+            {best.map((r, i) => (
+              <ListRow
+                key={`${r.exercise_name}-${r.kind}`}
+                title={r.exercise_name}
+                subtitle={
+                  <Text variant="footnote" tone="secondary">
+                    {recordLabel(r, unit)}
+                  </Text>
+                }
+                leading={<IconTile icon="trophy-outline" />}
+                last={i === best.length - 1}
+              />
+            ))}
+          </Group>
+        </Section>
       ) : null}
-      {exercises.map((ex) => (
-        <Card key={ex.position} style={{ gap: Spacing.two }}>
-          <View style={styles.row}>
-            <Text style={[styles.exercise, { flex: 1 }]}>{ex.name}</Text>
-            {withRecord.has(exerciseKey(ex.name)) ? (
-              <Ionicons name="trophy" size={18} color={Colors.accentText} accessibilityLabel="New best" />
-            ) : null}
-          </View>
-          {ex.sets.map((set) => {
-            const text = setText(set, unit);
-            return (
-              <View key={set.set_number} style={styles.setRow}>
-                {text ? (
-                  <>
-                    <Text style={styles.setNumber}>{set.set_number}</Text>
-                    <Text style={styles.setText}>{text}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.setText}>Set {set.set_number} ✓</Text>
-                )}
-              </View>
-            );
-          })}
-        </Card>
-      ))}
-      <ErrorText>{problem}</ErrorText>
-      <Button title="Delete workout" variant="ghost" onPress={remove} loading={deleting} />
+      <Section title="Sets">
+        {exercises.map((ex) => (
+          <Card key={ex.position} style={{ gap: Spacing.two }}>
+            <View style={styles.exerciseHeader}>
+              <Text variant="headline" style={{ flex: 1 }}>
+                {ex.name}
+              </Text>
+              {withRecord.has(exerciseKey(ex.name)) ? <StatusPill tone="success" label="New best" /> : null}
+            </View>
+            {ex.sets.map((set) => {
+              const text = setText(set, unit);
+              return (
+                <View key={set.set_number} style={styles.setRow}>
+                  {text ? (
+                    <>
+                      <Text variant="footnote" tone="secondary" style={[styles.setNumber, Tabular]}>
+                        {set.set_number}
+                      </Text>
+                      <Text variant="callout" style={Tabular}>
+                        {text}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text variant="callout">Set {set.set_number} ✓</Text>
+                  )}
+                </View>
+              );
+            })}
+          </Card>
+        ))}
+      </Section>
+      <View style={{ gap: Spacing.tight }}>
+        <ErrorText>{problem}</ErrorText>
+        <Button title="Delete workout" variant="destructive" onPress={remove} loading={deleting} />
+      </View>
     </ScrollView>
+  );
+}
+
+// A title, a line and two cards of sets, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  if (!shown) return null;
+  return (
+    <View accessible accessibilityLabel="Loading" style={{ gap: Spacing.three }}>
+      <Skeleton width="60%" height={22} />
+      <Skeleton width="80%" height={14} />
+      {[0, 1].map((i) => (
+        <Skeleton key={i} height={120} radius={Radius.large} />
+      ))}
+    </View>
   );
 }
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.five,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.section,
+    gap: Spacing.four,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
   },
-  title: {
-    color: Colors.text,
-    fontSize: 26,
-    fontWeight: '900',
-  },
-  noteBox: {
+  note: {
     gap: Spacing.one,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.accent,
-    backgroundColor: Colors.surface,
+    paddingLeft: Spacing.tight,
+    paddingVertical: Spacing.one,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.borderStrong,
   },
-  noteTitle: {
-    color: Colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  row: {
+  exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  exercise: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
   setRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 28,
+    alignItems: 'baseline',
+    gap: Spacing.tight,
+    minHeight: 24,
   },
   setNumber: {
     width: 20,
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: '800',
     textAlign: 'right',
-  },
-  setText: {
-    color: Colors.text,
-    fontSize: 16,
   },
 }));

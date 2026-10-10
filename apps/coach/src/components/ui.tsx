@@ -40,8 +40,12 @@ import {
   withAlpha,
   type TypeName,
 } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
+
+// The selected segment's pill sits this far inside the track.
+const SEGMENT_INSET = 3;
 
 // Pointer cursor and hover states only mean something in a browser.
 const WEB = Platform.OS === 'web';
@@ -97,6 +101,8 @@ function familyFor(weight: TextStyle['fontWeight']) {
 // Variants that use the display face or tiny sizes stop growing at 130 % text size.
 const CAPPED: TypeName[] = ['display', 'largeTitle', 'title', 'stat', 'label', 'tab'];
 
+const LOOSE_BODY: TextStyle = { fontFamily: Type.body.fontFamily, letterSpacing: Type.body.letterSpacing };
+
 // Text inside a Text inherits its parent's font and colour unless it asks for its own.
 const InsideText = createContext(false);
 
@@ -114,9 +120,12 @@ export function Text({
     const { fontWeight, ...others } = own;
     own = { ...others, fontFamily: familyFor(fontWeight) };
   }
+  // An older style with its own size and no line height keeps the font's natural spacing rather
+  // than body's 24, so small text doesn't spread out.
+  const type = variant ? Type[variant] : own?.fontSize != null && own.lineHeight == null ? LOOSE_BODY : Type.body;
   const base = nested
     ? [variant ? Type[variant] : null, tone ? { color: toneColor(tone) } : null]
-    : [Type[variant ?? 'body'], { color: toneColor(tone ?? 'primary') }];
+    : [type, { color: toneColor(tone ?? 'primary') }];
   const multiplier = maxFontSizeMultiplier ?? (variant && CAPPED.includes(variant) ? 1.3 : undefined);
   const text = <RNText {...rest} maxFontSizeMultiplier={multiplier} style={[...base, own]} />;
   return nested ? text : <InsideText.Provider value>{text}</InsideText.Provider>;
@@ -196,7 +205,11 @@ export function Button({
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: !!inactive, busy: !!loading }}
         testID={testID}
-        onPress={onPress}
+        onPress={() => {
+          // The one main action of a screen answers with a light tap on a phone.
+          if (variant === 'primary') haptic.tap();
+          onPress();
+        }}
         disabled={inactive}
         hitSlop={size === 'small' ? 4 : undefined}
         onPressIn={() => {
@@ -261,6 +274,7 @@ export function IconButton({
   label,
   onPress,
   variant = 'plain',
+  tone = 'primary',
   disabled,
   style,
 }: {
@@ -268,6 +282,8 @@ export function IconButton({
   label: string;
   onPress: () => void;
   variant?: 'plain' | 'tonal';
+  // Secondary for a row action repeated down a list, such as a bin on every row, so it recedes.
+  tone?: 'primary' | 'secondary';
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -291,7 +307,7 @@ export function IconButton({
         disabled && { opacity: 0.4 },
         style,
       ]}>
-      <Ionicons name={icon} size={tonal ? 20 : 24} color={Colors.text} />
+      <Ionicons name={icon} size={tonal ? 20 : 24} color={tone === 'secondary' ? Colors.textSecondary : Colors.text} />
     </Pressable>
   );
 }
@@ -391,7 +407,8 @@ export function segmentOn(): ViewStyle {
     : { backgroundColor: Colors.tintPressed };
 }
 
-// Two to four choices in one row: Workouts / Sessions, Navy / Light / Auto.
+// Two to four choices in one row: Workouts / Sessions, Navy / Light / Auto. The raised pill slides
+// to the new choice (instantly with reduced motion).
 export function Segmented<T extends string>({
   options,
   value,
@@ -403,8 +420,40 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   style?: StyleProp<ViewStyle>;
 }) {
+  const reduceMotion = useReducedMotion();
+  const index = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+  const [width, setWidth] = useState(0);
+  const [position] = useState(() => new Animated.Value(index));
+  useEffect(() => {
+    if (reduceMotion) position.setValue(index);
+    else Animated.spring(position, { toValue: index, ...Spring.move, useNativeDriver: NATIVE_DRIVER }).start();
+  }, [index, position, reduceMotion]);
+  // Until the row has been measured the selected segment draws its own pill.
+  const segment = width > 0 ? (width - 2 * SEGMENT_INSET) / options.length : 0;
+  const last = Math.max(1, options.length - 1);
   return (
-    <View style={[styles.segmented, style]} accessibilityRole="tablist">
+    <View
+      style={[styles.segmented, style]}
+      accessibilityRole="tablist"
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {segment > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.segmentPill,
+            segmentOn(),
+            {
+              width: segment,
+              transform: [
+                { translateX: position.interpolate({ inputRange: [0, last], outputRange: [0, last * segment] }) },
+              ],
+            },
+          ]}
+        />
+      ) : null}
       {options.map((o) => {
         const selected = o.value === value;
         return (
@@ -412,8 +461,12 @@ export function Segmented<T extends string>({
             key={o.value}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            onPress={() => onChange(o.value)}
-            style={[styles.segment, pointer, selected && segmentOn()]}>
+            onPress={() => {
+              if (selected) return;
+              haptic.select();
+              onChange(o.value);
+            }}
+            style={[styles.segment, pointer, selected && segment === 0 && segmentOn()]}>
             <Text
               variant="callout"
               tone={selected ? 'primary' : 'secondary'}
@@ -425,6 +478,64 @@ export function Segmented<T extends string>({
         );
       })}
     </View>
+  );
+}
+
+// An on / off switch: a monochrome track (text-coloured when on, never orange) and a white knob
+// that slides across. The label next to it should also toggle it, so pass the same handler there.
+export function Toggle({
+  value,
+  onValueChange,
+  accessibilityLabel,
+  disabled,
+  testID,
+  style,
+}: {
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  accessibilityLabel: string;
+  disabled?: boolean;
+  testID?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [knob] = useState(() => new Animated.Value(value ? 1 : 0));
+  useEffect(() => {
+    if (reduceMotion) knob.setValue(value ? 1 : 0);
+    else
+      Animated.timing(knob, {
+        toValue: value ? 1 : 0,
+        duration: 150,
+        easing: Ease.standard,
+        useNativeDriver: NATIVE_DRIVER,
+      }).start();
+  }, [knob, reduceMotion, value]);
+  // On a dark theme the "on" track is white, so its knob takes the page colour instead.
+  const knobColor = value && Colors.scheme === 'dark' ? Colors.background : BRAND.white;
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: value, disabled: !!disabled }}
+      testID={testID}
+      disabled={disabled}
+      onPress={() => {
+        haptic.select(!value);
+        onValueChange(!value);
+      }}
+      style={[styles.toggleTarget, pointer, disabled && { opacity: 0.4 }, style]}>
+      <View style={[styles.toggleTrack, { backgroundColor: value ? Colors.text : Colors.track }]}>
+        <Animated.View
+          style={[
+            styles.toggleKnob,
+            {
+              backgroundColor: knobColor,
+              transform: [{ translateX: knob.interpolate({ inputRange: [0, 1], outputRange: [0, 20] }) }],
+            },
+          ]}
+        />
+      </View>
+    </Pressable>
   );
 }
 
@@ -612,6 +723,7 @@ type ListRowProps = {
   accessibilityLabel?: string;
   accessibilityHint?: string;
   accessibilityState?: ComponentProps<typeof Pressable>['accessibilityState'];
+  testID?: string;
 };
 
 // A row in a Group: leading, title and subtitle, status, trailing, chevron. The hairline under it
@@ -632,6 +744,7 @@ export function ListRow({
   accessibilityLabel,
   accessibilityHint,
   accessibilityState,
+  testID,
 }: ListRowProps) {
   const { hovered, hover } = useHover();
   const large = useWindowDimensions().fontScale > 1.15;
@@ -663,13 +776,19 @@ export function ListRow({
       </View>
     </>
   );
-  if (!onPress) return <View style={styles.row}>{content}</View>;
+  if (!onPress)
+    return (
+      <View style={styles.row} testID={testID}>
+        {content}
+      </View>
+    );
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       accessibilityState={accessibilityState}
+      testID={testID}
       onPress={onPress}
       {...hover}
       style={({ pressed }) => [styles.row, pointer, (pressed || hovered) && { backgroundColor: Colors.tint }]}>
@@ -781,6 +900,54 @@ export function PageHeader({
       </View>
       {titleView}
     </View>
+  );
+}
+
+// A row of round shortcuts, each a tonal circle with an outline icon and a short label under it.
+export function Shortcuts({
+  items,
+}: {
+  items: { icon: IconName; label: string; onPress: () => void; accessibilityLabel?: string }[];
+}) {
+  return (
+    <View style={styles.shortcuts}>
+      {items.map((item) => (
+        <Shortcut key={item.label} {...item} />
+      ))}
+    </View>
+  );
+}
+
+function Shortcut({
+  icon,
+  label,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  const { hovered, hover } = useHover();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      {...hover}
+      style={[styles.shortcut, pointer]}>
+      {({ pressed }) => (
+        <>
+          <View style={[styles.shortcutCircle, (pressed || hovered) && { backgroundColor: Colors.tintPressed }]}>
+            <Ionicons name={icon} size={22} color={Colors.text} />
+          </View>
+          <Text variant="footnote" numberOfLines={2} style={styles.shortcutLabel}>
+            {label}
+          </Text>
+        </>
+      )}
+    </Pressable>
   );
 }
 
@@ -1148,9 +1315,16 @@ const styles = themed(() => ({
   segmented: {
     flexDirection: 'row',
     minHeight: 40,
-    padding: 3,
+    padding: SEGMENT_INSET,
     borderRadius: Radius.medium,
     backgroundColor: Colors.tint,
+  },
+  segmentPill: {
+    position: 'absolute',
+    top: SEGMENT_INSET,
+    bottom: SEGMENT_INSET,
+    left: SEGMENT_INSET,
+    borderRadius: 10,
   },
   segment: {
     flex: 1,
@@ -1159,6 +1333,24 @@ const styles = themed(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
+  },
+  // 44 high for the finger around a 50 x 30 track.
+  toggleTarget: {
+    minHeight: 44,
+    minWidth: 50,
+    justifyContent: 'center',
+  },
+  toggleTrack: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    padding: 2,
+  },
+  toggleKnob: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
   },
   errorRow: {
     flexDirection: 'row',
@@ -1278,6 +1470,28 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  shortcuts: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  shortcut: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 44,
+  },
+  shortcutCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.tint,
+  },
+  shortcutLabel: {
+    fontFamily: Fonts.textMedium,
+    textAlign: 'center',
   },
   statusDotRow: {
     flexDirection: 'row',

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { Text } from '@/components/ui';
 import { Colors, Spacing, themed } from '@/constants/theme';
 import { authorName, type Reel } from '@/lib/posts';
 

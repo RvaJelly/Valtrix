@@ -10,6 +10,11 @@ type Access =
   | { kind: 'trial'; endsAt: Date; daysLeft: number }
   | { kind: 'none' };
 
+// True once the trainer's free trial has run out (not while it is still going).
+export function trialEnded(profile: Profile | null, now = new Date()): boolean {
+  return !!profile?.trial_ends_at && new Date(profile.trial_ends_at) <= now;
+}
+
 // Mirrors public.has_coach_access() in the database.
 export function coachAccess(profile: Profile | null, now = new Date()): Access {
   if (!profile) return { kind: 'none' };

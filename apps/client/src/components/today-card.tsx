@@ -1,10 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  Notice,
+  ProgressBar,
+  Section,
+  Shortcuts,
+  StatusPill,
+  Text,
+} from '@/components/ui';
+import { Colors, Fonts, Spacing, Tabular, themed } from '@/constants/theme';
 import {
   canStillSave,
   clearActiveWorkout,
@@ -17,6 +31,7 @@ import {
 import { confirm } from '@/lib/confirm';
 import { weekdayDayMonth } from '@/lib/days';
 import { saveError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { DEFAULT_TARGETS, logHabit, newer, type HabitDay } from '@/lib/habits';
 import { isoWeekday, trainerLabel, type PlanItem } from '@/lib/plan';
 import { dayKey, formatDay, formatTime, trainerName, type Session } from '@/lib/sessions';
@@ -55,15 +70,22 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
   const active = today.active;
   const due = today.plan?.due ?? [];
   const weekday = isoWeekday(new Date());
+  const underway = !!active && isUnderway(active);
+  // A lone Start is the card's one main action; next to other workouts, or a workout already
+  // going, each Start is a quiet one.
+  const open = due.filter((item) => !item.done_on.includes(today.day));
+  const startIsMain = !underway && due.length === 1 && open.length === 1;
 
   // Taken at tap time, so Home left open past midnight logs on the right day. The adding
   // happens on the server, so the button never waits and two quick taps both count.
   function addWater() {
     const day = dayKey(new Date());
+    const before = day === today.day ? (habits?.water_ml ?? 0) : 0;
     setWaterError(null);
     logHabit(day, 'water', waterStep(unit)).then(
       (row) => {
         setAdded((prev) => (prev && prev.day === row.day ? newer(prev, row) : row));
+        if (before < targets.water_ml && row.water_ml >= targets.water_ml) haptic.success();
         if (day !== today.day) onChanged();
       },
       () => setWaterError("Couldn't add water. Check your connection."),
@@ -77,60 +99,64 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
   const sleepMinutes = habits?.sleep_minutes ?? null;
   const sleep = sleepMinutes !== null ? formatSleep(sleepMinutes) : '–';
   const sleepGoal = formatSleep(targets.sleep_minutes);
-  const step = waterStep(unit);
   const stepLabel = unit === 'lb' ? '8 oz' : '250 ml';
+  const checkIn = hasTrainers && today.checkIns?.checkedIn === false && (weekday >= 5 || weekday === 1);
+  const reply = today.checkIns?.newReply ?? null;
 
   return (
-    <View style={{ gap: Spacing.two }}>
-      <Text style={styles.section}>Today</Text>
-      <View style={styles.card} testID="today-card">
+    <View testID="today-card">
+      <Section title="Today">
         {active ? <ActiveWorkoutBlock workout={active} userId={userId} onChanged={onChanged} /> : null}
 
         {today.plan === null ? (
-          <Text style={styles.muted}>Couldn&apos;t load today&apos;s workouts.</Text>
+          <Notice>Couldn&apos;t load today&apos;s workouts.</Notice>
         ) : due.length ? (
-          <View style={{ gap: Spacing.two }}>
-            {due.slice(0, MAX_ROWS).map((item) => (
+          <Group>
+            {due.slice(0, MAX_ROWS).map((item, i) => (
               <WorkoutRow
                 key={item.plan_item_id}
                 item={item}
                 done={item.done_on.includes(today.day)}
-                inProgress={!!active && isUnderway(active) && active.planItemId === item.plan_item_id}
+                inProgress={underway && active?.planItemId === item.plan_item_id}
+                main={startIsMain}
+                last={i === Math.min(due.length, MAX_ROWS) - 1 && due.length <= MAX_ROWS}
               />
             ))}
             {due.length > MAX_ROWS ? (
-              <Pressable accessibilityRole="button" onPress={() => router.navigate('/plan')} hitSlop={8}>
-                <Text style={styles.link}>See all</Text>
-              </Pressable>
+              <ListRow
+                title={`See all ${due.length} workouts`}
+                compact
+                titleTone="secondary"
+                onPress={() => router.navigate('/plan')}
+                last
+              />
             ) : null}
-          </View>
+          </Group>
         ) : today.plan.hasPlan ? (
-          <Text style={styles.muted}>Nothing planned for today. Enjoy your rest day!</Text>
+          <EmptyState compact icon="cafe-outline" title="Rest day" message="Nothing planned for today." />
         ) : null}
 
-        {today.nutrition?.target ? <Calories target={today.nutrition.target} eaten={today.nutrition.eaten} /> : null}
-
-        <View style={{ gap: Spacing.one }}>
+        <Card style={styles.numbers}>
+          {today.nutrition?.target ? <Calories target={today.nutrition.target} eaten={today.nutrition.eaten} /> : null}
           <View style={styles.tiles}>
             <HabitTile
-              icon="water"
+              icon="water-outline"
               title="Water"
               value={water}
               goal={waterGoal}
               share={habits ? habits.water_ml / targets.water_ml : 0}
               label={`Water, ${water} of ${waterGoal}`}>
-              <Pressable
-                accessibilityRole="button"
+              <Button
+                title={`+${stepLabel}`}
+                variant="secondary"
+                size="small"
+                onPress={addWater}
                 accessibilityLabel={`Add ${stepLabel} of water`}
                 testID="water-quick-add"
-                onPress={addWater}
-                hitSlop={6}
-                style={({ pressed }) => [styles.quickAdd, pressed && { backgroundColor: Colors.accentPressed }]}>
-                <Text style={styles.quickAddText}>+{unit === 'lb' ? '8 oz' : `${step} ml`}</Text>
-              </Pressable>
+              />
             </HabitTile>
             <HabitTile
-              icon="footsteps"
+              icon="footsteps-outline"
               title="Steps"
               value={steps}
               goal={formatNumber(targets.steps)}
@@ -138,7 +164,7 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
               label={`Steps, ${steps} of ${formatNumber(targets.steps)}`}
             />
             <HabitTile
-              icon="moon"
+              icon="moon-outline"
               title="Sleep"
               value={sleep}
               goal={sleepGoal}
@@ -147,33 +173,42 @@ export function TodayCard({ today, userId, nextSession, hasTrainers, onChanged }
             />
           </View>
           <ErrorText>{waterError}</ErrorText>
-        </View>
+        </Card>
 
-        {nextSession ? <NextSessionRow session={nextSession} /> : null}
-
-        {hasTrainers && today.checkIns?.checkedIn === false && (weekday >= 5 || weekday === 1) ? (
-          <LinkRow
-            icon="clipboard-outline"
-            title="Weekly check-in"
-            detail="How did your week go?"
-            onPress={() => router.push('/progress/check-in')}
-          />
-        ) : null}
-        {today.checkIns?.newReply ? (
-          <LinkRow
-            icon="chatbubble-ellipses-outline"
-            title={`New reply from ${today.checkIns.newReply.trainer_name}`}
-            detail="On your weekly check-in"
-            onPress={() => router.push('/progress/check-in')}
-          />
+        {nextSession || checkIn || reply ? (
+          <Group>
+            {nextSession ? <NextSessionRow session={nextSession} last={!checkIn && !reply} /> : null}
+            {checkIn ? (
+              <ListRow
+                title="Weekly check-in"
+                subtitle="How did your week go?"
+                leading={<IconTile icon="clipboard-outline" />}
+                onPress={() => router.push('/progress/check-in')}
+                last={!reply}
+              />
+            ) : null}
+            {reply ? (
+              <ListRow
+                title={`New reply from ${reply.trainer_name}`}
+                subtitle="On your weekly check-in"
+                leading={<IconTile icon="chatbubble-ellipses-outline" />}
+                onPress={() => router.push('/progress/check-in')}
+                last
+              />
+            ) : null}
+          </Group>
         ) : null}
 
         <View style={styles.shortcuts}>
-          <Shortcut icon="trending-up" label="Progress" onPress={() => router.push('/progress')} />
-          <Shortcut icon="water" label="Habits" onPress={() => router.push('/habits')} />
-          <Shortcut icon="time" label="History" onPress={() => router.push('/workouts/history')} />
+          <Shortcuts
+            items={[
+              { icon: 'trending-up-outline', label: 'Progress', onPress: () => router.push('/progress') },
+              { icon: 'water-outline', label: 'Habits', onPress: () => router.push('/habits') },
+              { icon: 'time-outline', label: 'History', onPress: () => router.push('/workouts/history') },
+            ]}
+          />
         </View>
-      </View>
+      </Section>
     </View>
   );
 }
@@ -192,14 +227,7 @@ function ActiveWorkoutBlock({
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
-  if (saved === workout.id) {
-    return (
-      <View style={styles.savedRow}>
-        <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
-        <Text style={styles.rowTitle}>Workout saved</Text>
-      </View>
-    );
-  }
+  if (saved === workout.id) return <Notice tone="success">Workout saved</Notice>;
   // Opened and left untouched: nothing to continue.
   if (!isUnderway(workout)) return null;
   const { done, total } = setCounts(workout);
@@ -222,6 +250,7 @@ function ActiveWorkoutBlock({
     try {
       await finishWorkout(finishPayload(workout));
       await clearActiveWorkout(userId, workout.id);
+      haptic.success();
       setSaved(workout.id);
       setTimeout(onChanged, 4000);
     } catch (e) {
@@ -232,101 +261,126 @@ function ActiveWorkoutBlock({
 
   if (!canStillSave(workout)) {
     return (
-      <View style={styles.block}>
-        <Text style={styles.rowTitle}>This workout from {weekdayDayMonth(workout.day)} is too old to save.</Text>
-        <Button title="Discard" variant="secondary" onPress={discard} />
-      </View>
+      <Card style={styles.block}>
+        <Text variant="headline">Too old to save</Text>
+        <Text variant="callout" tone="secondary">
+          This workout from {weekdayDayMonth(workout.day)} is too old to save.
+        </Text>
+        <Button title="Discard" variant="destructive" onPress={discard} style={styles.blockAction} />
+      </Card>
     );
   }
 
   if (workout.finishedAt !== null) {
     return (
-      <View style={styles.block}>
-        <Text style={styles.rowTitle}>Workout not saved yet</Text>
-        <Text style={styles.muted}>
+      <Card style={styles.block}>
+        <Text variant="headline">Workout not saved yet</Text>
+        <Text variant="callout" tone="secondary">
           {workout.name} · {done === 1 ? '1 set' : `${done} sets`}
         </Text>
-        <Button title="Save now" onPress={saveNow} loading={saving} testID="today-save-now" />
+        <Button
+          title="Save now"
+          onPress={saveNow}
+          loading={saving}
+          testID="today-save-now"
+          style={styles.blockAction}
+        />
         <ErrorText>{problem}</ErrorText>
-      </View>
+      </Card>
     );
   }
 
   return (
-    <View style={styles.inProgress}>
-      <Text style={styles.inProgressTitle}>Workout in progress</Text>
-      <Text style={styles.inProgressText}>
-        {workout.name} · {done} of {total} sets
+    <Card
+      hero
+      footer={<Button title="Continue" onPress={() => router.push('/workouts/live')} testID="today-continue" />}>
+      <Text variant="label" tone="secondary">
+        Workout in progress
       </Text>
-      <Pressable
-        accessibilityRole="button"
-        testID="today-continue"
-        onPress={() => router.push('/workouts/live')}
-        style={({ pressed }) => [styles.continue, pressed && { opacity: 0.8 }]}>
-        <Text style={styles.continueText}>Continue</Text>
-      </Pressable>
-    </View>
+      <Text variant="title" numberOfLines={2} style={{ marginTop: Spacing.two }}>
+        {workout.name}
+      </Text>
+      <Text variant="footnote" tone="secondary" style={[Tabular, { marginTop: Spacing.one }]}>
+        {done} of {total} sets
+      </Text>
+    </Card>
   );
 }
 
 // The name opens the workout and Start sits beside it, not inside it: a button inside a
 // button can't be reached with VoiceOver on iPhone.
-function WorkoutRow({ item, done, inProgress }: { item: PlanItem; done: boolean; inProgress: boolean }) {
+function WorkoutRow({
+  item,
+  done,
+  inProgress,
+  main,
+  last,
+}: {
+  item: PlanItem;
+  done: boolean;
+  inProgress: boolean;
+  main: boolean;
+  last: boolean;
+}) {
+  const [pressed, setPressed] = useState(false);
   return (
-    <View style={styles.workout}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${item.workout_name}, from ${trainerLabel(item)}${done ? ', done today' : ''}`}
-        onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } })}
-        style={({ pressed }) => [styles.workoutName, pressed && { opacity: 0.6 }]}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {item.workout_name}
-        </Text>
-        <Text style={styles.muted} numberOfLines={1}>
-          From {trainerLabel(item)}
-        </Text>
-      </Pressable>
-      {done && !inProgress ? (
-        <Text style={styles.done}>✓ Done</Text>
-      ) : (
+    <View style={[styles.row, pressed && { backgroundColor: Colors.tint }]}>
+      <View style={[styles.rowBody, !last && styles.rowLine]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${inProgress ? 'Continue' : 'Start'} ${item.workout_name}`}
-          testID={inProgress ? undefined : `today-start-${item.plan_item_id}`}
-          onPress={() =>
-            inProgress
-              ? router.push('/workouts/live')
-              : router.push({ pathname: '/workouts/live', params: { plan: item.plan_item_id } })
-          }
-          hitSlop={4}
-          style={({ pressed }) => [styles.start, pressed && { backgroundColor: Colors.accentPressed }]}>
-          <Text style={styles.startText}>{inProgress ? 'Continue' : 'Start'}</Text>
+          accessibilityLabel={`${item.workout_name}, from ${trainerLabel(item)}${done ? ', done today' : ''}`}
+          onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.plan_item_id } })}
+          onPressIn={() => setPressed(true)}
+          onPressOut={() => setPressed(false)}
+          style={styles.rowName}>
+          <Text variant="rowTitle" numberOfLines={1}>
+            {item.workout_name}
+          </Text>
+          <Text variant="footnote" tone="secondary" numberOfLines={1}>
+            From {trainerLabel(item)}
+          </Text>
         </Pressable>
-      )}
+        {inProgress ? (
+          <StatusPill tone="neutral" label="In progress" />
+        ) : done ? (
+          <StatusPill tone="success" label="Done" />
+        ) : (
+          <Button
+            title="Start"
+            size="small"
+            variant={main ? 'primary' : 'secondary'}
+            accessibilityLabel={`Start ${item.workout_name}`}
+            testID={`today-start-${item.plan_item_id}`}
+            onPress={() => router.push({ pathname: '/workouts/live', params: { plan: item.plan_item_id } })}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
-// Calories left today against the trainer's plan. Neutral either way: no red, no shaming.
+// Calories left today against the trainer's plan. Neutral either way: no red, no shaming. The bar
+// is in the text colour; the orange ring belongs to Nutrition.
 function Calories({ target, eaten }: { target: number; eaten: number }) {
   const left = Math.round(target - eaten);
   const text = left >= 0 ? `${formatNumber(left)} kcal left` : `${formatNumber(-left)} kcal over`;
-  const share = target > 0 ? Math.min(1, Math.max(0, eaten / target)) : 0;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Calories: ${text} of ${formatNumber(target)}`}
       testID="today-kcal"
       onPress={() => router.navigate('/nutrition')}
-      style={({ pressed }) => [styles.kcal, pressed && { backgroundColor: Colors.surfaceRaised }]}>
+      style={({ pressed }) => [styles.kcal, pressed && { opacity: 0.6 }]}>
       <View style={styles.kcalTop}>
-        <Ionicons name="restaurant-outline" size={18} color={Colors.textSecondary} />
-        <Text style={[styles.rowTitle, { flex: 1 }]}>{text}</Text>
-        <Text style={styles.muted}>of {formatNumber(target)}</Text>
+        <Ionicons name="restaurant-outline" size={16} color={Colors.textSecondary} />
+        <Text variant="rowTitle" style={[Tabular, { flex: 1 }]} numberOfLines={1}>
+          {text}
+        </Text>
+        <Text variant="footnote" tone="secondary" style={Tabular}>
+          of {formatNumber(target)}
+        </Text>
       </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${share * 100}%` }]} />
-      </View>
+      <ProgressBar progress={target > 0 ? eaten / target : 0} color={left < 0 ? Colors.warning : undefined} />
     </Pressable>
   );
 }
@@ -359,295 +413,107 @@ function HabitTile({
         onPress={() => router.push('/habits')}
         style={({ pressed }) => [styles.tileButton, pressed && { opacity: 0.6 }]}>
         <View style={styles.tileTop}>
-          <Ionicons name={icon} size={16} color={Colors.accentText} />
-          <Text style={styles.tileTitle}>{title}</Text>
+          <Ionicons name={icon} size={14} color={Colors.textSecondary} />
+          <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }} numberOfLines={1}>
+            {title}
+          </Text>
         </View>
         {/* The goal goes on its own line, so a narrow tile never breaks a number in two. */}
         <View style={styles.tileNumbers}>
-          <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+          <Text variant="rowTitle" style={Tabular} numberOfLines={1} adjustsFontSizeToFit>
             {value}
           </Text>
           {goal ? (
-            <Text style={styles.tileGoal} numberOfLines={1}>
+            <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
               / {goal}
             </Text>
           ) : null}
         </View>
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.min(1, Math.max(0, share)) * 100}%` }]} />
-        </View>
+        <ProgressBar progress={share} />
       </Pressable>
       {children}
     </View>
   );
 }
 
-function NextSessionRow({ session }: { session: Session }) {
+function NextSessionRow({ session, last }: { session: Session; last: boolean }) {
   const start = new Date(session.starts_at);
-  const text = `Next session · ${formatDay(start)} ${formatTime(start)} · ${trainerName(session)}`;
+  const when = `${formatDay(start)} ${formatTime(start)} · ${trainerName(session)}`;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={session.online ? `${text}, video call` : text}
+    <ListRow
+      title="Next session"
+      subtitle={session.online ? `${when} · Video call` : when}
+      leading={<IconTile icon={session.online ? 'videocam-outline' : 'calendar-outline'} />}
+      accessibilityLabel={`Next session, ${when}${session.online ? ', video call' : ''}`}
       testID="today-next-session"
       onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
-      style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name="calendar-outline" size={20} color={Colors.accentText} />
-      <Text style={[styles.rowText, { flex: 1 }]} numberOfLines={2}>
-        {text}
-      </Text>
-      {session.online ? <Ionicons name="videocam" size={18} color={Colors.accentText} /> : null}
-    </Pressable>
-  );
-}
-
-function LinkRow({
-  icon,
-  title,
-  detail,
-  onPress,
-}: {
-  icon: IconName;
-  title: string;
-  detail: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.linkRow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={20} color={Colors.accentText} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.muted}>{detail}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-    </Pressable>
-  );
-}
-
-function Shortcut({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.shortcut, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={20} color={Colors.accentText} />
-      <Text style={styles.shortcutText}>{label}</Text>
-    </Pressable>
+      last={last}
+    />
   );
 }
 
 const styles = themed(() => ({
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  card: {
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
   block: {
     gap: Spacing.two,
   },
-  savedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  rowTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  rowText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  muted: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-  },
-  link: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  inProgress: {
-    gap: Spacing.one,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
-  },
-  inProgressTitle: {
-    color: Colors.onAccent,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  inProgressText: {
-    color: Colors.onAccent,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  continue: {
+  blockAction: {
     marginTop: Spacing.two,
-    minHeight: 48,
-    borderRadius: Radius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.onAccent,
   },
-  continueText: {
-    color: Colors.accent,
-    fontSize: 16,
-    fontWeight: '800',
+  row: {
+    paddingLeft: Spacing.gutter,
   },
-  workout: {
+  rowBody: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 56,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
+    gap: Spacing.tight,
+    minHeight: 64,
+    paddingVertical: 10,
+    paddingRight: Spacing.gutter,
   },
-  workoutName: {
+  rowLine: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  rowName: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
     justifyContent: 'center',
     minHeight: 44,
   },
-  done: {
-    color: Colors.accentText,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  start: {
-    minHeight: 44,
-    minWidth: 80,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.accent,
-  },
-  startText: {
-    color: Colors.onAccent,
-    fontSize: 15,
-    fontWeight: '800',
+  numbers: {
+    gap: Spacing.gutter,
   },
   kcal: {
-    gap: Spacing.two,
-    padding: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
+    gap: Spacing.tight,
   },
   kcalTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  track: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  fill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accent,
-  },
   tiles: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   tile: {
     flex: 1,
-    gap: Spacing.one,
-    padding: Spacing.two,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
+    minWidth: 0,
+    gap: Spacing.tight,
   },
   tileButton: {
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   tileTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
   },
-  tileTitle: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   // Room for the value and its goal, so the three bars line up.
   tileNumbers: {
-    minHeight: 38,
-  },
-  tileValue: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  tileGoal: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickAdd: {
-    marginTop: Spacing.one,
-    minHeight: 44,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.accent,
-  },
-  quickAddText: {
-    color: Colors.onAccent,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    minHeight: 48,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
+    minHeight: 40,
   },
   shortcuts: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  shortcut: {
-    flex: 1,
-    alignItems: 'center',
-    gap: Spacing.one,
-    minHeight: 56,
-    justifyContent: 'center',
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  shortcutText: {
-    color: Colors.text,
-    fontSize: 13,
-    fontWeight: '700',
+    marginTop: Spacing.two,
   },
 }));

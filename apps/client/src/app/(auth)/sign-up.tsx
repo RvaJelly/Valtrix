@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/logo';
 import { Body, Button, Card, ErrorText, TextField, TextLink, Title } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -35,7 +36,7 @@ export default function SignUp() {
     });
     setBusy(false);
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
     } else if (data.user && !data.user.identities?.length) {
       // Supabase answers this way when the email already has an account, for example a trainer's.
       setError('This email already has a Voltrix account. Sign in with it instead, including a Voltrix Coach login.');

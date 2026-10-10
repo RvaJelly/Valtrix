@@ -1,16 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { DaySwitcher } from '@/components/day-switcher';
 import { Sheet } from '@/components/sheet';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Card,
+  ErrorText,
+  IconTile,
+  Notice,
+  ProgressBar,
+  Section,
+  Skeleton,
+  Text,
+  TextField,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { weekdayLetter } from '@/lib/days';
 import { saveError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { shiftDay } from '@/lib/food';
 import {
   DEFAULT_TARGETS,
@@ -65,6 +78,14 @@ function spokenWater(ml: number, unit: WeightUnit) {
   return ml < 1000 ? `${formatNumber(ml)} millilitres` : `${formatNumber(ml / 1000, 1)} litres`;
 }
 
+function amountOf(habit: Habit, day: HabitDay) {
+  return habit === 'water' ? day.water_ml : habit === 'steps' ? day.steps : (day.sleep_minutes ?? 0);
+}
+
+function targetOf(habit: Habit, targets: HabitTargets) {
+  return habit === 'water' ? targets.water_ml : habit === 'steps' ? targets.steps : targets.sleep_minutes;
+}
+
 function spokenSleep(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const rest = Math.round(minutes % 60);
@@ -107,7 +128,7 @@ export default function Habits() {
         if (!current()) return;
         if (found) merge(found);
         if (saved) setTargets(saved);
-        setError(found && saved ? null : 'Could not load your habits. Check your internet connection.');
+        setError(found && saved ? null : "Couldn't load your habits. Check your connection and try again.");
       }),
     [merge],
   );
@@ -128,12 +149,19 @@ export default function Habits() {
     setRefreshing(false);
   }
 
+  const goals = targets ?? DEFAULT_TARGETS;
+
   // Two quick taps both count: the adding happens on the server. Gives the message when it
-  // didn't save, for the sheet it came from to show.
+  // didn't save, for the sheet it came from to show. Reaching the day's target answers with a
+  // success buzz on a phone.
   async function log(habit: Habit, amount: number, add = true): Promise<string | null> {
     setProblem(null);
+    const before = amountOf(habit, days?.[day] ?? emptyDay(day));
     try {
-      merge([await logHabit(day, habit, amount, add)]);
+      const saved = await logHabit(day, habit, amount, add);
+      merge([saved]);
+      const target = targetOf(habit, goals);
+      if (before < target && amountOf(habit, saved) >= target) haptic.success();
       return null;
     } catch (e) {
       return saveError(e);
@@ -155,7 +183,6 @@ export default function Habits() {
 
   const loaded = days !== null && targets !== null;
   const current = days?.[day] ?? emptyDay(day);
-  const goals = targets ?? DEFAULT_TARGETS;
   const week = Array.from({ length: 7 }, (_, i) => shiftDay(day, i - 6)).map((d) => days?.[d] ?? emptyDay(d));
   const step = waterStep(unit);
   const wUnit = waterUnit(unit);
@@ -165,12 +192,11 @@ export default function Habits() {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
       {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </View>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: refresh, loading: refreshing }}>
+          {error}
+        </Notice>
       ) : null}
       <DaySwitcher
         day={day}
@@ -182,97 +208,108 @@ export default function Habits() {
         testIDPrefix="habit-day"
       />
       <ErrorText>{problem}</ErrorText>
-      {!loaded && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
+      {!loaded && !error ? (
+        <Loading />
+      ) : (
+        <>
+          <HabitCard
+            icon="water-outline"
+            title="Water"
+            value={water}
+            share={current.water_ml / goals.water_ml}
+            label={`Water, ${formatNumber(waterValue(current.water_ml, unit))} of ${formatNumber(waterValue(goals.water_ml, unit))} ${wUnit}`}>
+            <View style={styles.buttons}>
+              <SmallButton
+                title={`+${formatNumber(waterValue(step, unit))} ${wUnit}`}
+                label={`Add ${formatNumber(waterValue(step, unit))} ${wUnit} of water`}
+                onPress={() => quickAdd('water', step)}
+              />
+              <SmallButton
+                title={`+${formatNumber(waterValue(step * 2, unit))} ${wUnit}`}
+                label={`Add ${formatNumber(waterValue(step * 2, unit))} ${wUnit} of water`}
+                onPress={() => quickAdd('water', step * 2)}
+              />
+              <SmallButton
+                title={`−${formatNumber(waterValue(step, unit))} ${wUnit}`}
+                label={`Take off ${formatNumber(waterValue(step, unit))} ${wUnit} of water`}
+                onPress={() => quickAdd('water', -step)}
+                disabled={current.water_ml <= 0}
+              />
+            </View>
+          </HabitCard>
 
-      <HabitCard
-        icon="water"
-        title="Water"
-        value={water}
-        share={current.water_ml / goals.water_ml}
-        label={`Water, ${formatNumber(waterValue(current.water_ml, unit))} of ${formatNumber(waterValue(goals.water_ml, unit))} ${wUnit}`}>
-        <View style={styles.buttons}>
-          <SmallButton
-            title={`+${formatNumber(waterValue(step, unit))} ${wUnit}`}
-            label={`Add ${formatNumber(waterValue(step, unit))} ${wUnit} of water`}
-            onPress={() => quickAdd('water', step)}
-          />
-          <SmallButton
-            title={`+${formatNumber(waterValue(step * 2, unit))} ${wUnit}`}
-            label={`Add ${formatNumber(waterValue(step * 2, unit))} ${wUnit} of water`}
-            onPress={() => quickAdd('water', step * 2)}
-          />
-          <SmallButton
-            title={`−${formatNumber(waterValue(step, unit))} ${wUnit}`}
-            label={`Take off ${formatNumber(waterValue(step, unit))} ${wUnit} of water`}
-            onPress={() => quickAdd('water', -step)}
-            disabled={current.water_ml <= 0}
-          />
-        </View>
-      </HabitCard>
+          <HabitCard
+            icon="footsteps-outline"
+            title="Steps"
+            value={`${formatSteps(current.steps)} / ${formatSteps(goals.steps)}`}
+            share={current.steps / goals.steps}
+            label={`Steps, ${formatSteps(current.steps)} of ${formatSteps(goals.steps)}`}>
+            <View style={styles.buttons}>
+              <SmallButton
+                title={`+${formatNumber(1000)}`}
+                label="Add 1 000 steps"
+                onPress={() => quickAdd('steps', 1000)}
+              />
+              <SmallButton title="Set steps" onPress={() => open('steps')} testID="set-steps" />
+            </View>
+          </HabitCard>
 
-      <HabitCard
-        icon="footsteps"
-        title="Steps"
-        value={`${formatSteps(current.steps)} / ${formatSteps(goals.steps)}`}
-        share={current.steps / goals.steps}
-        label={`Steps, ${formatSteps(current.steps)} of ${formatSteps(goals.steps)}`}>
-        <View style={styles.buttons}>
-          <SmallButton
-            title={`+${formatNumber(1000)}`}
-            label="Add 1 000 steps"
-            onPress={() => quickAdd('steps', 1000)}
-          />
-          <SmallButton title="Set steps" onPress={() => open('steps')} testID="set-steps" />
-        </View>
-      </HabitCard>
+          <HabitCard
+            icon="moon-outline"
+            title="Sleep"
+            subtitle="Last night"
+            value={`${formatSleep(current.sleep_minutes)} / ${formatSleep(goals.sleep_minutes)}`}
+            share={(current.sleep_minutes ?? 0) / goals.sleep_minutes}
+            label={`Sleep last night, ${current.sleep_minutes === null ? 'not logged' : spokenSleep(current.sleep_minutes)}`}>
+            <View style={styles.buttons}>
+              <SmallButton title="Set sleep" onPress={() => open('sleep')} testID="set-sleep" />
+            </View>
+          </HabitCard>
 
-      <HabitCard
-        icon="moon"
-        title="Sleep"
-        subtitle="Last night"
-        value={`${formatSleep(current.sleep_minutes)} / ${formatSleep(goals.sleep_minutes)}`}
-        share={(current.sleep_minutes ?? 0) / goals.sleep_minutes}
-        label={`Sleep last night, ${current.sleep_minutes === null ? 'not logged' : spokenSleep(current.sleep_minutes)}`}>
-        <View style={styles.buttons}>
-          <SmallButton title="Set sleep" onPress={() => open('sleep')} testID="set-sleep" />
-        </View>
-      </HabitCard>
+          <Section title="Last 7 days">
+            <Card style={{ gap: Spacing.four }}>
+              <WeekBars
+                title="Water"
+                days={week}
+                chosen={day}
+                value={(d) => d.water_ml}
+                target={goals.water_ml}
+                average={(avg) => `Avg ${formatWater(avg, unit)}`}
+                spoken={(avg) => spokenWater(avg, unit)}
+              />
+              <WeekBars
+                title="Steps"
+                days={week}
+                chosen={day}
+                value={(d) => d.steps}
+                target={goals.steps}
+                average={(avg) => `Avg ${formatSteps(Math.round(avg / 100) * 100)}`}
+                spoken={(avg) => `${formatSteps(Math.round(avg / 100) * 100)} steps`}
+              />
+              <WeekBars
+                title="Sleep"
+                days={week}
+                chosen={day}
+                value={(d) => d.sleep_minutes}
+                target={goals.sleep_minutes}
+                average={(avg) => `Avg ${formatSleep(Math.round(avg / 10) * 10)}`}
+                spoken={(avg) => spokenSleep(Math.round(avg / 10) * 10)}
+              />
+            </Card>
+          </Section>
+        </>
+      )}
 
-      <Text style={styles.section}>Last 7 days</Text>
-      <Card style={{ gap: Spacing.four }}>
-        <WeekBars
-          title="Water"
-          days={week}
-          chosen={day}
-          value={(d) => d.water_ml}
-          target={goals.water_ml}
-          average={(avg) => `Avg ${formatWater(avg, unit)}`}
-          spoken={(avg) => spokenWater(avg, unit)}
-        />
-        <WeekBars
-          title="Steps"
-          days={week}
-          chosen={day}
-          value={(d) => d.steps}
-          target={goals.steps}
-          average={(avg) => `Avg ${formatSteps(Math.round(avg / 100) * 100)}`}
-          spoken={(avg) => `${formatSteps(Math.round(avg / 100) * 100)} steps`}
-        />
-        <WeekBars
-          title="Sleep"
-          days={week}
-          chosen={day}
-          value={(d) => d.sleep_minutes}
-          target={goals.sleep_minutes}
-          average={(avg) => `Avg ${formatSleep(Math.round(avg / 10) * 10)}`}
-          spoken={(avg) => spokenSleep(Math.round(avg / 10) * 10)}
-        />
-      </Card>
-
-      <Button title="Targets" variant="secondary" onPress={() => open('targets')} testID="habit-targets" />
-      <Body secondary style={styles.small}>
+      <Button
+        title="Targets"
+        variant="secondary"
+        icon="options-outline"
+        onPress={() => open('targets')}
+        testID="habit-targets"
+      />
+      <Text variant="footnote" tone="secondary">
         Your trainers can see this.
-      </Body>
+      </Text>
 
       <Sheet visible={sheet.open === 'steps'} onClose={close} title="Set steps">
         <StepsForm
@@ -320,7 +357,7 @@ function HabitCard({
   label,
   children,
 }: {
-  icon: 'water' | 'footsteps' | 'moon';
+  icon: 'water-outline' | 'footsteps-outline' | 'moon-outline';
   title: string;
   subtitle?: string;
   value: string;
@@ -328,21 +365,32 @@ function HabitCard({
   label: string;
   children: ReactNode;
 }) {
-  const width = `${Math.round(Math.min(1, Math.max(0, Number.isFinite(share) ? share : 0)) * 100)}%` as const;
+  // "750 / 2 500 ml": the amount large, the target quieter beside it.
+  const [amount, ...goal] = value.split(' / ');
   return (
-    <Card style={{ gap: Spacing.three }}>
-      <View style={styles.cardTop} accessible accessibilityLabel={label}>
-        <View style={styles.icon}>
-          <Ionicons name={icon} size={20} color={Colors.accentText} />
+    <Card style={{ gap: Spacing.gutter }}>
+      <View style={{ gap: Spacing.tight }} accessible accessibilityLabel={label}>
+        <View style={styles.cardTop}>
+          <IconTile icon={icon} color={Colors.text} />
+          <View style={{ flex: 1 }}>
+            <Text variant="headline">{title}</Text>
+            {subtitle ? (
+              <Text variant="footnote" tone="secondary">
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-        </View>
-        <Text style={styles.value}>{value}</Text>
-      </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width }]} />
+        <Text variant="stat" style={Tabular} maxFontSizeMultiplier={1.3}>
+          {amount}
+          {goal.length ? (
+            <Text variant="callout" tone="secondary" style={[Tabular, { fontFamily: Fonts.textMedium }]}>
+              {' / '}
+              {goal.join(' / ')}
+            </Text>
+          ) : null}
+        </Text>
+        <ProgressBar progress={share} />
       </View>
       {children}
     </Card>
@@ -363,16 +411,29 @@ function SmallButton({
   testID?: string;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
+      title={title}
+      variant="secondary"
+      size="small"
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
       onPress={onPress}
+      disabled={disabled}
       testID={testID}
-      style={({ pressed }) => [styles.smallButton, (pressed || disabled) && { opacity: 0.5 }]}>
-      <Text style={styles.smallButtonText}>{title}</Text>
-    </Pressable>
+      style={styles.smallButton}
+    />
+  );
+}
+
+// Placeholders shaped like the three habit cards, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  if (!shown) return null;
+  return (
+    <View accessible accessibilityLabel="Loading" style={{ gap: Spacing.three }}>
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} height={168} radius={Radius.large} />
+      ))}
+    </View>
   );
 }
 
@@ -401,8 +462,10 @@ function WeekBars({
   return (
     <View style={{ gap: Spacing.two }} accessible accessibilityLabel={label}>
       <View style={styles.weekTop}>
-        <Text style={styles.weekTitle}>{title}</Text>
-        <Text style={styles.weekAvg}>{avg === null ? 'Nothing logged' : average(avg)}</Text>
+        <Text variant="rowTitle">{title}</Text>
+        <Text variant="footnote" tone="secondary" style={Tabular}>
+          {avg === null ? 'Nothing logged' : average(avg)}
+        </Text>
       </View>
       <View style={styles.bars} importantForAccessibility="no-hide-descendants">
         {days.map((d) => {
@@ -413,12 +476,17 @@ function WeekBars({
           return (
             <View key={d.day} style={styles.barColumn}>
               <View style={styles.check}>
-                {hit ? <Ionicons name="checkmark" size={14} color={Colors.accentText} /> : null}
+                {hit ? <Ionicons name="checkmark" size={14} color={Colors.success} /> : null}
               </View>
               <View style={styles.barTrack}>
                 <View style={[styles.barFill, { height }]} />
               </View>
-              <Text style={[styles.letter, d.day === chosen && styles.letterChosen]}>{weekdayLetter(d.day)}</Text>
+              <Text
+                variant="footnote"
+                tone={d.day === chosen ? 'primary' : 'tertiary'}
+                style={d.day === chosen && { fontFamily: Fonts.textSemi }}>
+                {weekdayLetter(d.day)}
+              </Text>
             </View>
           );
         })}
@@ -571,65 +639,18 @@ function TargetsForm({
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.hero,
     gap: Spacing.three,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: Spacing.two,
-  },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-  },
-  icon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  cardTitle: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  subtitle: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  value: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  track: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  fill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: Colors.accent,
+    gap: Spacing.tight,
   },
   buttons: {
     flexDirection: 'row',
@@ -638,34 +659,13 @@ const styles = themed(() => ({
   },
   smallButton: {
     flexGrow: 1,
-    minHeight: 44,
     minWidth: 88,
-    paddingHorizontal: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.surfaceRaised,
-  },
-  smallButtonText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '800',
   },
   weekTop: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: Spacing.two,
-  },
-  weekTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  weekAvg: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '700',
   },
   bars: {
     flexDirection: 'row',
@@ -681,25 +681,16 @@ const styles = themed(() => ({
   },
   barTrack: {
     width: '100%',
-    maxWidth: 28,
+    maxWidth: 24,
     height: 64,
     borderRadius: 6,
     overflow: 'hidden',
     justifyContent: 'flex-end',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.track,
   },
   barFill: {
     width: '100%',
-    backgroundColor: Colors.accent,
-  },
-  letter: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  letterChosen: {
-    color: Colors.text,
-    fontWeight: '900',
+    backgroundColor: Colors.text,
   },
   fields: {
     flexDirection: 'row',

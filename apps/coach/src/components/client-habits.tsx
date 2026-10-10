@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Body, Button, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Notice, Skeleton, Text, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useClientData } from '@/lib/client-data';
 import type { Client } from '@/lib/clients';
-import { weekdayShort } from '@/lib/days';
+import { weekdayOf } from '@/lib/days';
 import { shiftDay } from '@/lib/food';
 import { loadClientHabits, loadClientHabitTargets, type HabitDay, type HabitTargets } from '@/lib/progress';
 import { addDays, dayKey } from '@/lib/sessions';
@@ -101,18 +101,19 @@ export function ClientHabits({ client }: { client: Pick<Client, 'id' | 'first_na
 
   return (
     <View testID="client-habits" style={styles.part}>
-      <Text style={styles.section}>Habits</Text>
-      {!data && !failed ? <ActivityIndicator color={Colors.accentText} /> : null}
+      <Text variant="label" tone="secondary" accessibilityRole="header">
+        Habits
+      </Text>
+      {!data && !failed ? <Loading height={300} /> : null}
       {!data && failed ? (
-        <>
-          <ErrorText>Could not load {client.first_name}’s habits. Check your internet connection.</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={again} />
-        </>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: again }}>
+          Couldn’t load {client.first_name}’s habits. Check your connection and try again.
+        </Notice>
       ) : null}
       {data && !logged ? (
-        <Body secondary style={styles.small}>
+        <Text variant="callout" tone="secondary">
           No habits logged in the last 7 days.
-        </Body>
+        </Text>
       ) : null}
       {data && logged ? (
         <View style={styles.card}>
@@ -123,6 +124,12 @@ export function ClientHabits({ client }: { client: Pick<Client, 'id' | 'first_na
       ) : null}
     </View>
   );
+}
+
+// A card-shaped placeholder, after a short wait so fast loads show nothing.
+function Loading({ height }: { height: number }) {
+  const shown = useDelayed();
+  return shown ? <Skeleton height={height} radius={Radius.large} /> : null;
 }
 
 function HabitRow({
@@ -162,12 +169,12 @@ function HabitRow({
           return (
             <View key={day} style={styles.barColumn}>
               <View style={styles.check}>
-                {met ? <Ionicons name="checkmark" size={12} color={Colors.accentText} /> : null}
+                {met ? <Ionicons name="checkmark" size={12} color={Colors.success} /> : null}
               </View>
               <View style={styles.track}>
                 <View style={[styles.fill, { height: `${Math.round(share * 100)}%` }]} />
               </View>
-              <Text style={styles.weekday}>{weekdayShort(day)}</Text>
+              <Text style={styles.weekday}>{weekdayOf(day)}</Text>
             </View>
           );
         })}
@@ -181,30 +188,21 @@ function HabitRow({
 
 const styles = themed(() => ({
   part: {
-    gap: Spacing.three,
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
+    gap: Spacing.tight,
   },
   card: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   row: {
-    gap: Spacing.two,
+    gap: Spacing.tight,
     paddingVertical: Spacing.two,
   },
   rowLine: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     marginTop: Spacing.two,
     paddingTop: Spacing.three,
@@ -216,14 +214,13 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   rowTitle: {
+    ...Type.rowTitle,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
   },
   onTarget: {
+    ...Type.footnote,
+    ...Tabular,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
   },
   // Phone-sized, also in a wide browser window.
   bars: {
@@ -243,25 +240,25 @@ const styles = themed(() => ({
   },
   track: {
     width: '100%',
-    maxWidth: 28,
+    maxWidth: 24,
     height: 56,
-    borderRadius: Radius.small,
+    borderRadius: 6,
     justifyContent: 'flex-end',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.track,
   },
   fill: {
     width: '100%',
-    borderRadius: Radius.small,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   weekday: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
+    color: Colors.textTertiary,
   },
   meta: {
+    ...Type.footnote,
+    ...Tabular,
     color: Colors.textSecondary,
-    fontSize: 13,
   },
 }));

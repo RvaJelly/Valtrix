@@ -2,16 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
-import { Body, Button, Card, ErrorText, TextField, Segmented as SegmentedControl } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import { Body, Button, Card, ErrorText, Segmented as SegmentedControl, Text, TextField, Toggle } from '@/components/ui';
 import { ACCENTS, Colors, Fonts, Radius, Spacing, themed, Type, type AccentName } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
@@ -210,7 +212,7 @@ function ProfilePhoto({
         await onSaved();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The photo could not be saved.');
+      setError(plainError(e, 'The photo could not be saved.'));
     }
     setBusy(false);
   }
@@ -219,7 +221,7 @@ function ProfilePhoto({
     if (!userId) return;
     setError(null);
     const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     await removeProfilePhoto(url);
     await onSaved();
   }
@@ -308,7 +310,7 @@ function MyTrainers() {
       refreshReminders();
       await load(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not leave. Check your connection and try again.');
+      setError(plainError(e, 'Could not leave. Check your connection and try again.'));
     }
     setLeaving(null);
   }
@@ -387,7 +389,7 @@ function BlockedList() {
       await unblockPerson(person.blocked_id);
       setBlocked((current) => current?.filter((b) => b.blocked_id !== person.blocked_id) ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not unblock. Try again.');
+      setError(plainError(e, 'Could not unblock. Try again.'));
     }
   }
 
@@ -432,19 +434,18 @@ function ProfileForm({
   const [name, setName] = useState(initialName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
   const changed = name.trim() !== initialName;
 
   async function save() {
     if (!userId) return;
     setError(null);
-    setSaved(false);
     if (!name.trim()) return setError('Enter your name.');
     setBusy(true);
     const { error } = await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', userId);
     setBusy(false);
-    if (error) return setError(error.message);
-    setSaved(true);
+    if (error) return setError(plainError(error));
+    toast('Profile saved');
     await onSaved();
   }
 
@@ -452,7 +453,6 @@ function ProfileForm({
     <Card style={{ gap: Spacing.three }}>
       <TextField label="Your name" value={name} onChangeText={setName} autoCapitalize="words" />
       <ErrorText>{error}</ErrorText>
-      {saved && !changed ? <Body style={{ color: Colors.success }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} disabled={!changed} />
     </Card>
   );
@@ -462,18 +462,17 @@ function PasswordForm() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const toast = useToast();
 
   async function save() {
     setError(null);
-    setSaved(false);
     if (password.length < 8) return setError('Use at least 8 characters.');
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     setPassword('');
-    setSaved(true);
+    toast('Password changed');
   }
 
   return (
@@ -488,7 +487,6 @@ function PasswordForm() {
         onSubmitEditing={save}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.success }}>Password changed</Body> : null}
       <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
     </Card>
   );
@@ -519,7 +517,7 @@ function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () =
     if (userId) await removeAllMyFiles(userId).catch(() => {});
     const { error } = await supabase.rpc('delete_my_client_account');
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     await onDeleted();
   }
 
@@ -558,13 +556,7 @@ function BiometricLock() {
     <Card style={{ gap: Spacing.two }}>
       <View style={styles.switchRow}>
         <Text style={styles.switchLabel}>Unlock with {name}</Text>
-        <Switch
-          accessibilityLabel={`Unlock with ${name}`}
-          value={settings.biometric}
-          onValueChange={toggle}
-          trackColor={{ true: Colors.accent, false: Colors.border }}
-          thumbColor={Colors.text}
-        />
+        <Toggle accessibilityLabel={`Unlock with ${name}`} value={settings.biometric} onValueChange={toggle} />
       </View>
       <Body secondary style={styles.small}>
         Ask for {name} each time the app opens, so nobody else can get in on this phone.

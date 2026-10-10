@@ -46,7 +46,8 @@ export default function NewWorkout() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     gap: Spacing.three,
   },
 }));

@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Spacing, themed } from '@/constants/theme';
 import { relativeDay } from '@/lib/days';
 import { shiftDay } from '@/lib/food';
 import { dayKey } from '@/lib/sessions';
@@ -30,7 +31,7 @@ export function DaySwitcher({ day, onChange, daysBack, testIDPrefix }: DaySwitch
         onPress={() => onChange(shiftDay(day, -1))}
         testID={testIDPrefix ? `${testIDPrefix}-prev` : undefined}
       />
-      <Text style={styles.day} accessibilityRole="header">
+      <Text variant="headline" style={styles.day} accessibilityRole="header">
         {relativeDay(day)}
       </Text>
       <Arrow
@@ -65,8 +66,12 @@ function Arrow({
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.arrow, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <Ionicons name={icon} size={24} color={disabled ? Colors.border : Colors.text} />
+      style={({ pressed }) => [
+        styles.arrow,
+        pressed && { backgroundColor: Colors.tintPressed },
+        disabled && { opacity: 0.4 },
+      ]}>
+      <Ionicons name={icon} size={20} color={Colors.text} />
     </Pressable>
   );
 }
@@ -79,17 +84,14 @@ const styles = themed(() => ({
   },
   day: {
     flex: 1,
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
     textAlign: 'center',
   },
   arrow: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.medium,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
   },
 }));

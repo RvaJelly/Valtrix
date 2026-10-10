@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { videoLink } from '@/lib/workout-videos';
 
 type Props = {
@@ -46,7 +48,7 @@ function ViewerBody({ path, title, onClose, children }: Props & { path: string }
     let live = true;
     videoLink(path)
       .then((link) => live && setUrl(link))
-      .catch((e: Error) => live && setError(e.message));
+      .catch((e: unknown) => live && setError(plainError(e)));
     return () => {
       live = false;
     };

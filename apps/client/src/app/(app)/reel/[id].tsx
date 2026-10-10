@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CommentsSheet } from '@/components/comments-sheet';
 import { PostMenu } from '@/components/post-menu';
 import { ReelView } from '@/components/reel-view';
 import { ShareSheet } from '@/components/share-sheet';
+import { Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useGoBack } from '@/lib/nav';
 import { setLiked, type Reel } from '@/lib/posts';

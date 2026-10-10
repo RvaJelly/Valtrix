@@ -8,15 +8,15 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
+import { Colors, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import {
   daysLabel,
   doneThisWeek,
@@ -54,7 +54,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
       .eq('client_id', clientId)
       .order('position')
       .order('created_at');
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     const list = (data ?? []) as unknown as PlanItem[];
     const week = startOfWeek(new Date());
     const done = list.length
@@ -108,7 +108,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
 
   async function save(item: PlanItem, weekdays: number[], note: string | null) {
     const { error } = await supabase.from('plan_items').update({ weekdays, note }).eq('id', item.id);
-    if (error) return error.message;
+    if (error) return plainError(error);
     setItems((list) => list?.map((i) => (i.id === item.id ? { ...i, weekdays, note } : i)) ?? null);
     setSheet(null);
     return null;
@@ -119,7 +119,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     if (!(await confirm('Remove from plan?', `${name} comes off ${clientName}’s plan.`, 'Remove'))) return false;
     const { error } = await supabase.from('plan_items').delete().eq('id', item.id);
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
       return false;
     }
     setItems((list) => list?.filter((i) => i.id !== item.id) ?? null);
@@ -146,7 +146,7 @@ export function ClientWorkoutPlan({ clientId, clientName }: { clientId: string; 
     if (failed) {
       // Show the order that was really saved.
       await load();
-      setError(failed.error!.message);
+      setError(plainError(failed.error));
     }
   }
 
@@ -306,7 +306,7 @@ function WorkoutPicker({
       .select('id, name')
       .order('name')
       .then(({ data, error }) => {
-        if (error) setError(error.message);
+        if (error) setError(plainError(error));
         else setWorkouts((data ?? []) as WorkoutChoice[]);
       });
   }, []);
@@ -417,7 +417,7 @@ function DaysForm({
       <ErrorText>{error}</ErrorText>
       <Button title={item ? 'Save' : 'Add to plan'} onPress={submit} loading={busy} />
       <Button title={item ? 'Cancel' : 'Back'} variant="secondary" onPress={onBack} disabled={busy} />
-      {onRemove ? <Button title="Remove from plan" variant="ghost" onPress={onRemove} disabled={busy} /> : null}
+      {onRemove ? <Button title="Remove from plan" variant="destructive" onPress={onRemove} disabled={busy} /> : null}
     </View>
   );
 }
@@ -478,11 +478,8 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   section: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   progress: {
     color: Colors.accentText,

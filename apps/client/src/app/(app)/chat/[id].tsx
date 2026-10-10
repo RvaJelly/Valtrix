@@ -14,7 +14,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
   type NativeSyntheticEvent,
@@ -24,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { ReelCard } from '@/components/reel-card';
+import { Text } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {

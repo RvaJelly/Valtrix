@@ -4,13 +4,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
-  ActivityIndicator,
   AppState,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
+  StyleSheet,
   View,
   type AppStateStatus,
 } from 'react-native';
@@ -20,8 +19,23 @@ import { ElapsedClock } from '@/components/elapsed-clock';
 import { ExerciseCard } from '@/components/exercise-card';
 import { RestTimer } from '@/components/rest-timer';
 import { Sheet } from '@/components/sheet';
-import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Body,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  Section,
+  Skeleton,
+  StatStrip,
+  Text,
+  TextField,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Radius, Spacing, themed, withAlpha } from '@/constants/theme';
 import {
   canStillSave,
   clearActiveWorkout,
@@ -46,6 +60,7 @@ import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { weekdayDayMonth } from '@/lib/days';
 import { saveError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { useGoBack } from '@/lib/nav';
 import { cancelRestAlert, scheduleRestAlert } from '@/lib/notify';
 import { loadPlan, loadPlanWorkout, type PlanExercise, type PlanItem } from '@/lib/plan';
@@ -90,7 +105,7 @@ type Phase =
 
 type Saved = {
   name: string;
-  duration: string;
+  minutes: number;
   sets: number;
   volumeKg: number;
   ticked: boolean;
@@ -130,6 +145,24 @@ function begunNow(workout: ActiveWorkout): ActiveWorkout {
     restTotal: null,
     lastTickAt: null,
   };
+}
+
+// The set the person is on: the next open set of the exercise they ticked last, else the first open
+// set of the workout. Null once every set is ticked.
+function currentSet(workout: ActiveWorkout): { exercise: number; set: number } | null {
+  let latest = -1;
+  let at = 0;
+  workout.exercises.forEach((exercise, i) => {
+    if (exercise.sets.every((s) => s.done)) return;
+    const ticked = Math.max(0, ...exercise.sets.map((s) => s.doneAt ?? 0));
+    if (ticked > at) {
+      at = ticked;
+      latest = i;
+    }
+  });
+  const exercise = latest >= 0 ? latest : workout.exercises.findIndex((e) => e.sets.some((s) => !s.done));
+  if (exercise < 0) return null;
+  return { exercise, set: workout.exercises[exercise].sets.findIndex((s) => !s.done) };
 }
 
 type Fresh =
@@ -298,9 +331,10 @@ export default function LiveWorkout() {
     setProblem(null);
     try {
       const result = await finishWorkout(payload);
+      haptic.success();
       setSaved({
         name: next.name,
-        duration: durationLabel(payload.started_at, payload.finished_at),
+        minutes: Math.max(0, Math.round((Date.parse(payload.finished_at) - Date.parse(payload.started_at)) / 60_000)),
         sets: payload.sets.length,
         volumeKg: volumeKg(payload.sets),
         ticked: result.ticked,
@@ -460,44 +494,63 @@ export default function LiveWorkout() {
     return (
       <ScrollView contentContainerStyle={[styles.content, styles.savedContent]}>
         {header}
-        <View style={styles.bigCheck}>
-          <Ionicons name="checkmark" size={56} color={Colors.onAccent} />
-        </View>
-        <Text style={styles.savedTitle}>Workout saved</Text>
-        <Body secondary style={{ textAlign: 'center' }}>
-          {[
-            saved.duration,
-            saved.sets === 1 ? '1 set' : `${saved.sets} sets`,
-            volume > 0 ? `${formatNumber(volume)} ${unit} lifted` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </Body>
-        {saved.ticked ? (
-          <View style={styles.tickedRow}>
-            <Ionicons name="checkmark-circle" size={20} color={Colors.accentText} />
-            <Text style={styles.tickedText}>Ticked off in your plan</Text>
+        <View style={styles.savedTop}>
+          <View style={styles.bigCheck}>
+            <Ionicons name="checkmark" size={36} color={Colors.success} />
           </View>
-        ) : null}
-        {saved.records.length ? (
-          <Card style={{ gap: Spacing.two, alignSelf: 'stretch' }}>
+          <Text variant="title" accessibilityRole="header" style={{ textAlign: 'center' }}>
+            Workout saved
+          </Text>
+          {saved.ticked ? (
             <View style={styles.tickedRow}>
-              <Ionicons name="trophy" size={20} color={Colors.accentText} />
-              <Text style={styles.bestsTitle}>New bests</Text>
+              <Ionicons name="checkmark-circle-outline" size={18} color={Colors.success} />
+              <Text variant="callout" tone="secondary">
+                Ticked off in your plan
+              </Text>
             </View>
-            {saved.records.map((r) => (
-              <View key={`${r.exercise_name}-${r.kind}`} style={{ gap: 2 }}>
-                <Text style={styles.recordName}>{r.exercise_name}</Text>
-                <Body secondary style={{ fontSize: 15 }}>
-                  {recordLabel(r, unit)}
-                </Body>
-              </View>
-            ))}
-          </Card>
-        ) : null}
-        <View style={{ alignSelf: 'stretch' }}>
-          <Button title="Done" onPress={() => goBack('/plan')} />
+          ) : null}
         </View>
+        <StatStrip
+          items={[
+            saved.minutes < 60
+              ? { value: saved.minutes, label: saved.minutes === 1 ? 'Minute' : 'Minutes' }
+              : {
+                  value: `${Math.floor(saved.minutes / 60)}:${String(saved.minutes % 60).padStart(2, '0')}`,
+                  label: 'Hours',
+                  spoken: durationLabel(new Date(0).toISOString(), new Date(saved.minutes * 60_000).toISOString()),
+                },
+            { value: saved.sets, label: saved.sets === 1 ? 'Set' : 'Sets' },
+            ...(volume > 0
+              ? [
+                  {
+                    value: formatNumber(volume),
+                    label: `${unit} lifted`,
+                    spoken: `${formatNumber(volume)} ${unit} lifted`,
+                  },
+                ]
+              : []),
+          ]}
+        />
+        {saved.records.length ? (
+          <Section title="New bests">
+            <Group>
+              {saved.records.map((r, i) => (
+                <ListRow
+                  key={`${r.exercise_name}-${r.kind}`}
+                  title={r.exercise_name}
+                  subtitle={
+                    <Text variant="footnote" tone="secondary">
+                      {recordLabel(r, unit)}
+                    </Text>
+                  }
+                  leading={<IconTile icon="trophy-outline" color={Colors.text} />}
+                  last={i === saved.records.length - 1}
+                />
+              ))}
+            </Group>
+          </Section>
+        ) : null}
+        <Button title="Done" onPress={() => goBack('/plan')} />
       </ScrollView>
     );
   }
@@ -506,7 +559,7 @@ export default function LiveWorkout() {
     return (
       <View style={styles.content}>
         {header}
-        <ActivityIndicator color={Colors.accentText} />
+        <LoadingWorkout />
       </View>
     );
   }
@@ -517,38 +570,59 @@ export default function LiveWorkout() {
         {header}
         {phase.kind === 'empty' ? (
           <EmptyState
-            icon="barbell"
+            icon="barbell-outline"
             title="No workout in progress"
             message="Start one from your plan."
             action={<Button title="Go to your plan" onPress={() => router.navigate('/plan')} />}
           />
         ) : null}
         {phase.kind === 'error' ? (
-          <View style={{ gap: Spacing.three }}>
-            <ErrorText>Could not load this workout. Check your internet connection.</ErrorText>
-            <Button
-              title="Try again"
-              variant="secondary"
-              onPress={() => {
-                setPhase({ kind: 'loading' });
-                setAttempt((a) => a + 1);
-              }}
-            />
-          </View>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title="Couldn't load this workout"
+            message="Check your connection and try again."
+            action={
+              <Button
+                title="Try again"
+                variant="secondary"
+                onPress={() => {
+                  setPhase({ kind: 'loading' });
+                  setAttempt((a) => a + 1);
+                }}
+              />
+            }
+          />
         ) : null}
-        {phase.kind === 'gone' ? <Body secondary>This workout is no longer in your plan.</Body> : null}
+        {phase.kind === 'gone' ? (
+          <EmptyState
+            icon="calendar-outline"
+            title="Not in your plan any more"
+            message="Your trainer has taken this workout out of your plan."
+            action={<Button title="Go to your plan" variant="secondary" onPress={() => router.navigate('/plan')} />}
+          />
+        ) : null}
         {phase.kind === 'noExercises' ? (
-          <Body secondary>Your trainer hasn&apos;t added exercises to this workout yet.</Body>
+          <EmptyState
+            icon="barbell-outline"
+            title="No exercises yet"
+            message="Your trainer hasn't added exercises to this workout yet."
+          />
         ) : null}
         {phase.kind === 'conflict' ? (
-          <Card style={{ gap: Spacing.three }}>
-            <Text style={styles.conflictTitle}>You have a workout in progress: {phase.stored.name}</Text>
-            <Button title="Continue it" onPress={() => router.setParams({ plan: phase.stored.planItemId ?? '' })} />
-            <Button
-              title={`Discard it and start ${phase.nextName ?? 'this workout'}`}
-              variant="secondary"
-              onPress={() => discardAndStart(phase.stored)}
-            />
+          <Card style={{ gap: Spacing.tight }}>
+            <Text variant="label" tone="secondary">
+              Workout in progress
+            </Text>
+            <Text variant="headline">{phase.stored.name}</Text>
+            <Body secondary>Finish or discard it before you start another one.</Body>
+            <View style={{ gap: Spacing.tight, marginTop: Spacing.two }}>
+              <Button title="Continue it" onPress={() => router.setParams({ plan: phase.stored.planItemId ?? '' })} />
+              <Button
+                title={`Discard it and start ${phase.nextName ?? 'this workout'}`}
+                variant="secondary"
+                onPress={() => discardAndStart(phase.stored)}
+              />
+            </View>
           </Card>
         ) : null}
       </ScrollView>
@@ -559,9 +633,12 @@ export default function LiveWorkout() {
     return (
       <View style={styles.content}>
         {header}
-        <Card style={{ gap: Spacing.three }}>
-          <Body>This workout from {weekdayDayMonth(workout.day)} is too old to save.</Body>
-          <Button title="Discard" variant="secondary" onPress={discard} />
+        <Card style={{ gap: Spacing.tight }}>
+          <Text variant="headline">Too old to save</Text>
+          <Body secondary>
+            This workout from {weekdayDayMonth(workout.day)} is more than a week old, so it can&apos;t be saved.
+          </Body>
+          <Button title="Discard" variant="destructive" onPress={discard} style={{ marginTop: Spacing.two }} />
         </Card>
       </View>
     );
@@ -570,6 +647,7 @@ export default function LiveWorkout() {
   const { done, total } = setCounts(workout);
   const unticked = total - done;
   const locked = workout.finishedAt !== null;
+  const current = locked ? null : currentSet(workout);
   const soFar = durationLabel(
     new Date(workout.startedAt).toISOString(),
     new Date(workout.finishedAt ?? Math.max(finishOpenedAt, workout.startedAt)).toISOString(),
@@ -579,11 +657,17 @@ export default function LiveWorkout() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {header}
       <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {fromPhone ? <Body secondary>Using the workout saved on this phone.</Body> : null}
+        {fromPhone ? (
+          <Text variant="footnote" tone="secondary">
+            Using the copy of this workout saved on this phone.
+          </Text>
+        ) : null}
         {workout.planNote ? (
-          <View style={styles.noteBox}>
-            <Text style={styles.noteTitle}>Note from {workout.trainerName ?? 'your trainer'}</Text>
-            <Body>{workout.planNote}</Body>
+          <View style={styles.note}>
+            <Text variant="label" tone="secondary">
+              Note from {workout.trainerName ?? 'your trainer'}
+            </Text>
+            <Text variant="callout">{workout.planNote}</Text>
           </View>
         ) : null}
         {workout.exercises.map((exercise, index) => (
@@ -593,12 +677,19 @@ export default function LiveWorkout() {
             index={index}
             unit={workout.unit}
             locked={locked}
+            current={current?.exercise === index ? current.set : null}
             onChange={onChange}
             onTick={onTick}
             onLayoutY={onLayoutY}
           />
         ))}
-        <Button title="Discard workout" variant="ghost" onPress={discard} testID="discard-workout" />
+        <Button
+          title="Discard workout"
+          variant="destructive"
+          onPress={discard}
+          testID="discard-workout"
+          style={{ alignSelf: 'center' }}
+        />
       </ScrollView>
 
       {workout.restEndsAt !== null ? (
@@ -615,7 +706,7 @@ export default function LiveWorkout() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.three }]}>
         {locked ? (
           <View style={[styles.footerInner, { gap: Spacing.two }]} testID="workout-not-saved">
-            <Text style={styles.unsavedTitle}>Your workout isn&apos;t saved yet.</Text>
+            <Text variant="headline">Your workout isn&apos;t saved yet.</Text>
             <ErrorText>{problem}</ErrorText>
             <Button
               title="Save workout"
@@ -635,8 +726,10 @@ export default function LiveWorkout() {
           </View>
         ) : (
           <View style={styles.footerInner}>
+            {/* Secondary while sets are left (Log set is the orange button), primary once all are ticked. */}
             <Button
               title="Finish workout"
+              variant={current ? 'secondary' : 'primary'}
               testID="finish-workout"
               onPress={() => {
                 Keyboard.dismiss();
@@ -650,7 +743,7 @@ export default function LiveWorkout() {
       </View>
 
       <Sheet visible={finishing} onClose={() => setFinishing(false)} title="Finish workout">
-        <Body>
+        <Body secondary>
           {done} of {total} sets ticked · {soFar}
         </Body>
         <TextField
@@ -660,14 +753,14 @@ export default function LiveWorkout() {
           editable={!locked}
           multiline
           maxLength={1000}
-          style={{ minHeight: 88, paddingTop: Spacing.three, textAlignVertical: 'top' }}
+          style={{ minHeight: 88, paddingTop: Spacing.tight, textAlignVertical: 'top' }}
         />
         {unticked > 0 ? (
-          <Body secondary style={{ fontSize: 14 }}>
+          <Text variant="footnote" tone="secondary">
             {unticked === 1
               ? "1 set isn't ticked off. It won't be saved."
               : `${unticked} sets aren't ticked off. They won't be saved.`}
-          </Body>
+          </Text>
         ) : null}
         <ErrorText>{problem}</ErrorText>
         <Button title="Save workout" testID="save-workout" onPress={() => save()} loading={saving} disabled={saving} />
@@ -685,87 +778,82 @@ export default function LiveWorkout() {
   );
 }
 
+// The shape of an exercise card while the workout loads: a name, a line, and three set rows.
+function LoadingWorkout() {
+  const shown = useDelayed();
+  if (!shown) return null;
+  return (
+    <View accessible accessibilityLabel="Loading" style={{ gap: Spacing.three }}>
+      {[0, 1].map((i) => (
+        <View key={i} style={styles.skeletonCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.tight }}>
+            <Skeleton width={28} height={28} radius={14} />
+            <Skeleton width="50%" height={16} />
+          </View>
+          <Skeleton width="70%" height={12} />
+          {[0, 1, 2].map((j) => (
+            <Skeleton key={j} height={44} radius={10} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = themed(() => ({
   content: {
-    padding: Spacing.three,
-    paddingBottom: Spacing.five,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.section,
     gap: Spacing.three,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
   },
   savedContent: {
+    paddingTop: Spacing.hero,
+    gap: Spacing.section,
+  },
+  savedTop: {
     alignItems: 'center',
-    paddingTop: Spacing.five,
+    gap: Spacing.tight,
   },
   bigCheck: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.accent,
-  },
-  savedTitle: {
-    color: Colors.text,
-    fontSize: 28,
-    fontWeight: '900',
+    backgroundColor: withAlpha(Colors.success, 0.12),
   },
   tickedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  tickedText: {
-    color: Colors.accentText,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  bestsTitle: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  recordName: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  unsavedTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  conflictTitle: {
-    color: Colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  noteBox: {
+  note: {
     gap: Spacing.one,
-    padding: Spacing.three,
+    paddingLeft: Spacing.tight,
+    paddingVertical: Spacing.one,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.borderStrong,
+  },
+  skeletonCard: {
+    gap: Spacing.tight,
+    padding: Spacing.gutter,
     borderRadius: Radius.large,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.accent,
     backgroundColor: Colors.surface,
   },
-  noteTitle: {
-    color: Colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   footer: {
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    borderTopWidth: 1,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.tight,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
     backgroundColor: Colors.background,
   },
   footerInner: {
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
   },
 }));

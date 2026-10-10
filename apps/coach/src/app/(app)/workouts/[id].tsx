@@ -1,12 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 
-import { Body, Button, Card, EmptyState, ErrorText, TextField } from '@/components/ui';
+import { Body, Button, Card, EmptyState, ErrorText, Text, TextField } from '@/components/ui';
 import { WorkoutVideo } from '@/components/workout-video';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { useGoBack } from '@/lib/nav';
 import { useSettings } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
@@ -39,7 +48,7 @@ export default function WorkoutEditor() {
       supabase.from('workouts').select(WORKOUT_COLUMNS).eq('id', id).maybeSingle(),
       supabase.from('workout_exercises').select(WORKOUT_EXERCISE_COLUMNS).eq('workout_id', id).order('position'),
     ]);
-    if (w.error || rows.error) return setError((w.error ?? rows.error)!.message);
+    if (w.error || rows.error) return setError(plainError(w.error ?? rows.error));
     if (!w.data) return setError('This workout could not be found.');
     setWorkout(w.data as Workout);
     setName((current) => current || w.data!.name);
@@ -57,20 +66,20 @@ export default function WorkoutEditor() {
     const trimmed = name.trim();
     if (!workout || !trimmed || trimmed === workout.name) return;
     const { error } = await supabase.from('workouts').update({ name: trimmed }).eq('id', id);
-    if (error) setError(error.message);
+    if (error) setError(plainError(error));
     else setWorkout({ ...workout, name: trimmed });
   }
 
   async function saveWorkoutVideo(path: string | null) {
     const { error } = await supabase.from('workouts').update({ video_path: path }).eq('id', id);
-    if (error) return error.message;
+    if (error) return plainError(error);
     setWorkout((w) => (w ? { ...w, video_path: path } : w));
     return null;
   }
 
   async function saveItemVideo(itemId: string, path: string | null) {
     const { error } = await supabase.from('workout_exercises').update({ video_path: path }).eq('id', itemId);
-    if (error) return error.message;
+    if (error) return plainError(error);
     setItems((list) => list.map((it) => (it.id === itemId ? { ...it, video_path: path } : it)));
     return null;
   }
@@ -78,7 +87,7 @@ export default function WorkoutEditor() {
   async function saveItem(itemId: string, changes: Partial<Editable>) {
     setItems((list) => list.map((it) => (it.id === itemId ? { ...it, ...changes } : it)));
     const { error } = await supabase.from('workout_exercises').update(changes).eq('id', itemId);
-    if (error) setError(error.message);
+    if (error) setError(plainError(error));
   }
 
   async function move(index: number, direction: -1 | 1) {
@@ -95,7 +104,7 @@ export default function WorkoutEditor() {
       supabase.from('workout_exercises').update({ position: a.position }).eq('id', b.id),
     ]);
     const failed = results.find((r) => r.error);
-    if (failed) setError(failed.error!.message);
+    if (failed) setError(plainError(failed.error));
   }
 
   async function remove(itemId: string) {
@@ -106,7 +115,7 @@ export default function WorkoutEditor() {
     if (!(await confirm('Remove exercise?', message, 'Remove'))) return;
     setItems((list) => list.filter((it) => it.id !== itemId));
     const { error } = await supabase.from('workout_exercises').delete().eq('id', itemId);
-    if (error) setError(error.message);
+    if (error) setError(plainError(error));
     else await removeWorkoutVideos([video]);
   }
 
@@ -114,7 +123,7 @@ export default function WorkoutEditor() {
     const message = 'It also comes off any client plans it is in. This cannot be undone.';
     if (!(await confirm('Delete workout?', message, 'Delete'))) return;
     const { error } = await supabase.from('workouts').delete().eq('id', id);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     await removeWorkoutVideos([workout?.video_path, ...items.map((it) => it.video_path)]);
     goBack('/programs');
   }
@@ -130,17 +139,20 @@ export default function WorkoutEditor() {
   }
 
   const addButton = (
-    <Button
-      title="Add exercise"
-      onPress={() => router.push({ pathname: '/exercises', params: { workoutId: id } })}
-    />
+    <Button title="Add exercise" onPress={() => router.push({ pathname: '/exercises', params: { workoutId: id } })} />
   );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: workout.name }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <TextField label="Workout name" value={name} onChangeText={setName} onBlur={saveName} onSubmitEditing={saveName} />
+        <TextField
+          label="Workout name"
+          value={name}
+          onChangeText={setName}
+          onBlur={saveName}
+          onSubmitEditing={saveName}
+        />
         <WorkoutVideo
           label="Workout video"
           path={workout.video_path}
@@ -232,7 +244,7 @@ export default function WorkoutEditor() {
         )}
 
         {addButton}
-        <Button title="Delete workout" variant="ghost" onPress={deleteWorkout} />
+        <Button title="Delete workout" variant="destructive" onPress={deleteWorkout} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -301,7 +313,8 @@ function SmallField({
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
     gap: Spacing.three,
   },
   cardHeader: {

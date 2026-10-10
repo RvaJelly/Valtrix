@@ -22,6 +22,7 @@ import {
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { APP_STATUS_LABELS, appStatusOf, CLIENT_COLUMNS, fullName, STATUS_LABELS, type Client } from '@/lib/clients';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 const addClient = () => router.push('/clients/new');
@@ -40,7 +41,7 @@ export default function Clients() {
       .neq('status', 'archived')
       .order('first_name');
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
     } else {
       setError(null);
       setClients(data as Client[]);

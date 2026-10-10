@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  Text,
   TextInput,
   useWindowDimensions,
   View,
@@ -19,10 +18,12 @@ import {
 } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { Text } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { newId } from '@/lib/chat';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import { authorName, blockPerson, REPORT_REASONS, timeAgo, type ReportReason } from '@/lib/posts';
 import {
   addComment,
@@ -256,7 +257,7 @@ export function CommentsSheet({
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      setError(plainError(e, 'Something went wrong. Try again.'));
     }
     setBusy(false);
   }

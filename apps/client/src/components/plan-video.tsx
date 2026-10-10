@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 
+import { Text } from '@/components/ui';
 import { VideoViewer } from '@/components/video-viewer';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { saveVideo } from '@/lib/save-video';

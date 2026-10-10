@@ -7,13 +7,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 
 import { FoodRow, FoodSheet } from '@/components/food-sheet';
-import { Body, ErrorText } from '@/components/ui';
+import { Body, ErrorText, Text } from '@/components/ui';
 import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { FOOD_CREDIT, FoodError, fullProduct, searchFoods, type Food } from '@/lib/food';
 
@@ -133,7 +132,8 @@ export default function CheckFood() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
     paddingBottom: Spacing.six,
     gap: Spacing.three,
     width: '100%',

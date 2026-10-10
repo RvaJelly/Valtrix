@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/logo';
 import { Body, Button, Card, ErrorText, TextField, TextLink, Title } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -35,7 +36,7 @@ export default function SignUp() {
     });
     setBusy(false);
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
     } else if (!data.session) {
       // Email confirmation is switched on for this project.
       setCheckEmail(true);
@@ -49,9 +50,7 @@ export default function SignUp() {
           <Logo style={styles.logo} />
           <Title>Check your email</Title>
           <Card>
-            <Body>
-              We sent a confirmation link to {email.trim()}. Open it to confirm your account, then sign in.
-            </Body>
+            <Body>We sent a confirmation link to {email.trim()}. Open it to confirm your account, then sign in.</Body>
           </Card>
           <Button title="Go to sign in" onPress={() => router.replace('/sign-in')} />
         </ScrollView>

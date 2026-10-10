@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { Colors, Spacing, themed } from '@/constants/theme';
+import { Text } from '@/components/ui';
+import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
+import { dayMonthShort } from '@/lib/format';
 
 // A small line chart drawn with plain Views (lines are thin rotated boxes), so it works the
-// same on Android, iPhone and the web without a drawing library.
+// same on Android, iPhone and the web without a drawing library. The line and its dots are in the
+// text colour: the accent belongs to the one main action on the screen.
 
 export type LinePoint = { day: string; value: number }; // value already in the unit shown
 
@@ -22,16 +25,15 @@ type LineChartProps = {
 
 const GUTTER = 44;
 const INSET = 4;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // Noon UTC, so a day is the same moment wherever the phone is.
 function dayTime(day: string) {
   return Date.parse(`${day}T12:00:00Z`);
 }
 
+// '9 Oct', from the day itself (local noon), whatever the phone's time zone.
 function shortDate(day: string) {
-  const date = new Date(dayTime(day));
-  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
+  return dayMonthShort(new Date(`${day}T12:00:00`));
 }
 
 function isoDay(time: number) {
@@ -103,7 +105,12 @@ export function LineChart({ points, height = 160, format, target, accessibilityL
         <View style={styles.gutter}>
           {shown.length
             ? grid.map((g, i) => (
-                <Text key={`label-${i}`} style={[styles.label, { top: g.y - 8 }]} numberOfLines={1}>
+                <Text
+                  key={`label-${i}`}
+                  tone="secondary"
+                  style={[styles.label, { top: g.y - 8 }]}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.2}>
                   {format(g.value)}
                 </Text>
               ))
@@ -145,14 +152,22 @@ export function LineChart({ points, height = 160, format, target, accessibilityL
               )}
             </>
           ) : null}
-          {!shown.length ? <Text style={styles.empty}>Nothing logged yet.</Text> : null}
+          {!shown.length ? (
+            <Text variant="footnote" tone="secondary" style={styles.empty}>
+              Nothing logged yet.
+            </Text>
+          ) : null}
         </View>
       </View>
       {shown.length ? (
         <View style={styles.dates} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-          <Text style={styles.date}>{shortDate(shown[0].day)}</Text>
+          <Text variant="footnote" tone="secondary" maxFontSizeMultiplier={1.3}>
+            {shortDate(shown[0].day)}
+          </Text>
           {shown.length > 1 && last !== first ? (
-            <Text style={styles.date}>{shortDate(shown[shown.length - 1].day)}</Text>
+            <Text variant="footnote" tone="secondary" maxFontSizeMultiplier={1.3}>
+              {shortDate(shown[shown.length - 1].day)}
+            </Text>
           ) : null}
         </View>
       ) : null}
@@ -168,10 +183,10 @@ const styles = themed(() => ({
     width: GUTTER,
   },
   label: {
+    ...Tabular,
     position: 'absolute',
     left: 0,
     right: Spacing.one,
-    color: Colors.textSecondary,
     fontSize: 11,
     lineHeight: 16,
     textAlign: 'right',
@@ -191,34 +206,28 @@ const styles = themed(() => ({
     position: 'absolute',
     width: 6,
     height: 2,
-    backgroundColor: Colors.textSecondary,
+    backgroundColor: Colors.textTertiary,
   },
   line: {
     position: 'absolute',
     height: 2,
     borderRadius: 1,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   dot: {
     position: 'absolute',
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   empty: {
     marginTop: Spacing.five,
-    color: Colors.textSecondary,
-    fontSize: 14,
     textAlign: 'center',
   },
   dates: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingLeft: GUTTER,
-  },
-  date: {
-    color: Colors.textSecondary,
-    fontSize: 12,
   },
 }));

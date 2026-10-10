@@ -6,6 +6,7 @@ import { Logo } from '@/components/logo';
 import { Body, Button, ErrorText, TextField, TextLink, Title } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 export default function BusinessSetup() {
@@ -24,12 +25,9 @@ export default function BusinessSetup() {
     }
     if (!session) return;
     setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ business_name: trimmed })
-      .eq('id', session.user.id);
+    const { error } = await supabase.from('profiles').update({ business_name: trimmed }).eq('id', session.user.id);
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
       setBusy(false);
       return;
     }

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Logo } from '@/components/logo';
 import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -27,7 +28,7 @@ export default function ForgotPassword() {
     setBusy(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: emailRedirect() });
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     setSent(true);
   }
 

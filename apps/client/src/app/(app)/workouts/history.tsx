@@ -1,11 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { Chips } from '@/components/chips';
-import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  EmptyState,
+  Group,
+  IconTile,
+  ListRow,
+  Notice,
+  Section,
+  Segmented,
+  SkeletonRows,
+  StatusPill,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { dayMonth, weekdayDayMonth } from '@/lib/days';
 import { serial } from '@/lib/serial';
@@ -25,7 +36,10 @@ import {
 
 type Tab = 'workouts' | 'bests';
 
-const VIEWS: Record<Tab, string> = { workouts: 'Workouts', bests: 'Personal bests' };
+const VIEWS: { value: Tab; label: string }[] = [
+  { value: 'workouts', label: 'Workouts' },
+  { value: 'bests', label: 'Personal bests' },
+];
 const PAGE = 20;
 
 // The client's saved workouts, newest first, and their personal bests.
@@ -59,7 +73,7 @@ export default function WorkoutHistory() {
         if (allBests) setBests(allBests);
         if (allRecords) setRecords(allRecords);
         setError(
-          first && allBests && allRecords ? null : 'Could not load your workouts. Check your internet connection.',
+          first && allBests && allRecords ? null : "Couldn't load your workouts. Check your connection and try again.",
         );
       }),
     [],
@@ -93,7 +107,7 @@ export default function WorkoutHistory() {
       });
       setMore(page.length === PAGE);
     } catch {
-      setError('Could not load more. Check your internet connection.');
+      setError("Couldn't load older workouts. Check your connection and try again.");
     }
     setLoadingMore(false);
   }
@@ -106,182 +120,160 @@ export default function WorkoutHistory() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
-      <Chips options={VIEWS} value={view} onChange={(v) => v && setView(v)} />
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
+      <Segmented options={VIEWS} value={view} onChange={setView} />
       {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </View>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: refresh, loading: refreshing }}>
+          {error}
+        </Notice>
       ) : null}
 
       {view === 'workouts' ? (
         logs === null ? (
           !error ? (
-            <ActivityIndicator color={Colors.accentText} />
+            <Loading />
           ) : null
         ) : logs.length === 0 ? (
-          <EmptyState icon="time" title="No workouts yet" message="Start one from your plan and it shows up here." />
+          <EmptyState
+            icon="time-outline"
+            title="No workouts yet"
+            message="Start one from your plan and it shows up here."
+          />
         ) : (
-          <View style={{ gap: Spacing.two }}>
-            {logs.map((log) => (
-              <LogCard key={log.id} log={log} newBests={bestsPerLog.get(log.id) ?? 0} />
-            ))}
+          <View style={{ gap: Spacing.tight }}>
+            <Group>
+              {logs.map((log, i) => (
+                <LogRow key={log.id} log={log} newBests={bestsPerLog.get(log.id) ?? 0} last={i === logs.length - 1} />
+              ))}
+            </Group>
             {more ? <Button title="Load more" variant="secondary" onPress={loadMore} loading={loadingMore} /> : null}
           </View>
         )
       ) : bests === null ? (
         !error ? (
-          <ActivityIndicator color={Colors.accentText} />
+          <Loading />
         ) : null
       ) : bests.length === 0 ? (
         <EmptyState
-          icon="trophy"
+          icon="trophy-outline"
           title="No personal bests yet"
           message="Finish a workout and your bests show up here."
         />
       ) : (
-        <View style={{ gap: Spacing.three }}>
+        <>
           {top.length ? (
-            <View style={{ gap: Spacing.two }}>
-              <Text style={styles.section}>Recent new bests</Text>
-              {top.slice(0, 10).map((r) => (
-                <Pressable
-                  key={`${r.log_id}-${r.exercise_name}-${r.kind}`}
-                  accessibilityRole="button"
-                  onPress={() => router.push({ pathname: '/workouts/log/[id]', params: { id: r.log_id } })}
-                  style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-                  <Ionicons name="trophy" size={20} color={Colors.accentText} />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.name}>{r.exercise_name}</Text>
-                    <Body secondary style={styles.small}>
-                      {recordLabel(r, unit)}
-                    </Body>
-                  </View>
-                  <Text style={styles.date}>{dayMonth(r.day)}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Section title="Recent new bests">
+              <Group>
+                {top.slice(0, 10).map((r, i, list) => (
+                  <ListRow
+                    key={`${r.log_id}-${r.exercise_name}-${r.kind}`}
+                    title={r.exercise_name}
+                    subtitle={
+                      <Text variant="footnote" tone="secondary">
+                        {recordLabel(r, unit)}
+                      </Text>
+                    }
+                    leading={<IconTile icon="trophy-outline" />}
+                    trailing={
+                      <Text variant="footnote" tone="secondary" style={Tabular}>
+                        {dayMonth(r.day)}
+                      </Text>
+                    }
+                    onPress={() => router.push({ pathname: '/workouts/log/[id]', params: { id: r.log_id } })}
+                    last={i === list.length - 1}
+                  />
+                ))}
+              </Group>
+            </Section>
           ) : null}
-          <View style={{ gap: Spacing.two }}>
-            <Text style={styles.section}>Every exercise</Text>
-            {bests.map((b) => (
-              <View key={b.exercise_name} style={[styles.row, { alignItems: 'flex-start' }]}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.name}>{b.exercise_name}</Text>
-                  {b.best_weight_kg !== null ? (
-                    <Body style={styles.small}>
-                      Heaviest {formatWeight(b.best_weight_kg, unit)}
-                      {b.best_weight_reps ? ` × ${b.best_weight_reps}` : ''}
-                      {b.best_weight_on ? ` · ${dayMonth(b.best_weight_on)}` : ''}
-                    </Body>
-                  ) : null}
-                  {b.best_e1rm_kg !== null ? (
-                    <Body style={styles.small}>
-                      Best one-rep max (estimated) {formatEstimate(b.best_e1rm_kg, unit)}
-                    </Body>
-                  ) : null}
-                  {b.most_reps !== null ? (
-                    <Body style={styles.small}>Most reps {formatNumber(b.most_reps)}</Body>
-                  ) : null}
-                  <Body secondary style={styles.small}>
-                    Done {b.times_done === 1 ? 'once' : `${b.times_done} times`}
-                    {b.last_done_on ? ` · last ${dayMonth(b.last_done_on)}` : ''}
-                  </Body>
-                </View>
-              </View>
-            ))}
-            <Body secondary style={styles.small}>
-              What you could likely lift once, worked out from your sets.
-            </Body>
-          </View>
-        </View>
+          <Section title="Every exercise">
+            <Group>
+              {bests.map((b, i) => (
+                <ListRow
+                  key={b.exercise_name}
+                  title={b.exercise_name}
+                  titleLines={2}
+                  subtitle={
+                    <View style={{ gap: 2, paddingTop: 2 }}>
+                      {b.best_weight_kg !== null ? (
+                        <Text variant="footnote">
+                          Heaviest {formatWeight(b.best_weight_kg, unit)}
+                          {b.best_weight_reps ? ` × ${b.best_weight_reps}` : ''}
+                          {b.best_weight_on ? ` · ${dayMonth(b.best_weight_on)}` : ''}
+                        </Text>
+                      ) : null}
+                      {b.best_e1rm_kg !== null ? (
+                        <Text variant="footnote">
+                          Best one-rep max (estimated) {formatEstimate(b.best_e1rm_kg, unit)}
+                        </Text>
+                      ) : null}
+                      {b.most_reps !== null ? (
+                        <Text variant="footnote">Most reps {formatNumber(b.most_reps)}</Text>
+                      ) : null}
+                      <Text variant="footnote" tone="secondary">
+                        Done {b.times_done === 1 ? 'once' : `${b.times_done} times`}
+                        {b.last_done_on ? ` · last ${dayMonth(b.last_done_on)}` : ''}
+                      </Text>
+                    </View>
+                  }
+                  last={i === bests.length - 1}
+                />
+              ))}
+            </Group>
+            <Text variant="footnote" tone="secondary">
+              The one-rep max is what you could likely lift once, worked out from your sets.
+            </Text>
+          </Section>
+        </>
       )}
-      <Body secondary style={styles.small}>
+      <Text variant="footnote" tone="secondary">
         Your trainers can see this.
-      </Body>
+      </Text>
     </ScrollView>
   );
 }
 
-function LogCard({ log, newBests }: { log: WorkoutLog; newBests: number }) {
+// Rows shaped like the list, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  return shown ? <SkeletonRows count={4} avatar /> : null;
+}
+
+function LogRow({ log, newBests, last }: { log: WorkoutLog; newBests: number; last: boolean }) {
   const sets = log.sets.length;
   return (
-    <Pressable
-      accessibilityRole="button"
+    <ListRow
+      title={log.workout_name}
+      subtitle={
+        // Two lines, so a new-best pill never cuts off the sets; each part stays whole when it wraps.
+        <Text variant="footnote" tone="secondary" numberOfLines={2}>
+          {[
+            weekdayDayMonth(log.day),
+            durationLabel(log.started_at, log.finished_at),
+            sets === 1 ? '1 set' : `${sets} sets`,
+          ]
+            .map((part) => part.replace(/ /g, '\u00a0'))
+            .join(' · ')}
+        </Text>
+      }
+      leading={<IconTile icon="barbell-outline" />}
+      status={
+        newBests ? <StatusPill tone="success" label={newBests === 1 ? '1 new best' : `${newBests} new bests`} /> : null
+      }
       onPress={() => router.push({ pathname: '/workouts/log/[id]', params: { id: log.id } })}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={styles.icon}>
-        <Ionicons name="barbell" size={20} color={Colors.accentText} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.name}>{log.workout_name}</Text>
-        <Body secondary style={styles.small}>
-          {weekdayDayMonth(log.day)} · {durationLabel(log.started_at, log.finished_at)} ·{' '}
-          {sets === 1 ? '1 set' : `${sets} sets`}
-        </Body>
-        {newBests ? (
-          <Text style={styles.bests}>
-            <Ionicons name="trophy" size={13} color={Colors.accentText} />{' '}
-            {newBests === 1 ? '1 new best' : `${newBests} new bests`}
-          </Text>
-        ) : null}
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-    </Pressable>
+      last={last}
+    />
   );
 }
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.five,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.section,
+    gap: Spacing.four,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 56,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  icon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  date: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  bests: {
-    color: Colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
   },
 }));

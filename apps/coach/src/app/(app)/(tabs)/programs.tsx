@@ -19,6 +19,7 @@ import {
   useDelayed,
 } from '@/components/ui';
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { Workout } from '@/lib/workouts';
 
@@ -38,7 +39,7 @@ export default function Programs() {
       .select('id, name, notes, updated_at, workout_exercises(count)')
       .order('updated_at', { ascending: false });
     if (error) {
-      setError(error.message);
+      setError(plainError(error));
     } else {
       setError(null);
       setWorkouts(data as WorkoutRow[]);

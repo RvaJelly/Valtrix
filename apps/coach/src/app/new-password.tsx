@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, ErrorText, TextField, Title } from '@/components/ui';
 import { Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 // Shown after a trainer opens the reset link from their email.
@@ -20,7 +21,7 @@ export default function NewPassword() {
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(plainError(error));
     // The root layout then opens the app.
     finishRecovery();
   }
@@ -52,7 +53,8 @@ export default function NewPassword() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     paddingTop: Spacing.six,
     gap: Spacing.three,
   },

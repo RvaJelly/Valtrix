@@ -16,6 +16,8 @@ import {
   useDelayed,
 } from '@/components/ui';
 import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
+import { longDate, monthYear, weekdayShort } from '@/lib/format';
 import {
   addDays,
   dayKey,
@@ -67,7 +69,7 @@ export default function CalendarScreen() {
         .order('starts_at')
         .then(({ data, error }) => {
           if (!current) return;
-          if (error) return setError(error.message);
+          if (error) return setError(plainError(error));
           setError(null);
           setLoaded({ week: weekKey, list: data as unknown as Session[] });
         });
@@ -80,7 +82,7 @@ export default function CalendarScreen() {
   const dayList = (sessions ?? []).filter((s) => sameDay(new Date(s.starts_at), selected));
   const booked = (sessions ?? []).filter((s) => s.status === 'scheduled' || s.status === 'completed');
   const done = (sessions ?? []).filter((s) => s.status === 'completed').length;
-  const monthLabel = selected.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const monthLabel = monthYear(selected);
   const isToday = sameDay(selected, today);
 
   return (
@@ -121,11 +123,9 @@ export default function CalendarScreen() {
                 <Pressable
                   key={d.toISOString()}
                   accessibilityRole="tab"
-                  accessibilityLabel={`${dayIsToday ? 'Today, ' : ''}${d.toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                  })}${count ? `, ${count === 1 ? '1 session' : `${count} sessions`}` : ''}`}
+                  accessibilityLabel={`${dayIsToday ? 'Today, ' : ''}${longDate(d)}${
+                    count ? `, ${count === 1 ? '1 session' : `${count} sessions`}` : ''
+                  }`}
                   accessibilityState={{ selected: on }}
                   onPress={() => setSelected(d)}
                   style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
@@ -134,7 +134,7 @@ export default function CalendarScreen() {
                     on && { backgroundColor: Colors.text },
                   ]}>
                   <Text variant="footnote" style={{ color: on ? Colors.background : Colors.textSecondary }}>
-                    {d.toLocaleDateString(undefined, { weekday: 'narrow' })}
+                    {weekdayShort(d).slice(0, 1)}
                   </Text>
                   <Text variant="headline" style={[Tabular, { color: ink }]}>
                     {d.getDate()}

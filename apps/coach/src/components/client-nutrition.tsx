@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, View } from 'react-native';
 
 import { DaySummary } from '@/components/day-summary';
-import { Body, Button, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, ErrorText, Text, TextField } from '@/components/ui';
+import { Colors, Radius, Spacing, themed, Type } from '@/constants/theme';
 import type { Client } from '@/lib/clients';
 import { confirm } from '@/lib/confirm';
+import { plainError } from '@/lib/errors';
 import {
   dayKey,
   dayTitle,
@@ -22,6 +23,7 @@ import {
   type DiaryEntry,
   type Targets,
 } from '@/lib/food';
+import { weekdayShort } from '@/lib/format';
 import { deletePlan, loadClientDiary, loadPlan, savePlan, type NutritionPlan } from '@/lib/nutrition';
 
 type Draft = {
@@ -125,7 +127,7 @@ export function ClientNutrition({
       setPlan(saved);
       setDraft(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the plan. Try again.');
+      setError(plainError(e, 'Could not save the plan. Try again.'));
     }
     setSaving(false);
   }
@@ -143,7 +145,7 @@ export function ClientNutrition({
       setPlan(null);
       setDraft(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not remove the plan. Try again.');
+      setError(plainError(e, 'Could not remove the plan. Try again.'));
     }
   }
 
@@ -433,7 +435,7 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
               const kcal = totalsOf(shown.filter((e) => e.day === key)).kcal;
               const logged = shown.some((e) => e.day === key);
               const selected = key === day;
-              const weekday = fromDayKey(key).toLocaleDateString(undefined, { weekday: 'short' });
+              const weekday = weekdayShort(fromDayKey(key));
               return (
                 <Pressable
                   key={key}
@@ -492,11 +494,8 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
 
 const styles = themed(() => ({
   section: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   card: {
     gap: Spacing.three,

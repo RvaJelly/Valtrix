@@ -1,15 +1,16 @@
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { LineChart } from '@/components/line-chart';
 import { PhotoViewer } from '@/components/photo-viewer';
-import { Body, Button, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, ErrorText, Notice, Skeleton, Text, TextField, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useClientData } from '@/lib/client-data';
 import type { Client } from '@/lib/clients';
 import { dayMonth } from '@/lib/days';
+import { plainError } from '@/lib/errors';
 import { fromDayKey } from '@/lib/food';
 import {
   CHECK_IN_QUESTIONS,
@@ -98,13 +99,14 @@ export function ClientProgress({
 
   return (
     <View testID="client-progress" style={styles.part}>
-      <Text style={styles.section}>Progress</Text>
-      {!data && !failed ? <ActivityIndicator color={Colors.accentText} /> : null}
+      <Text variant="label" tone="secondary" accessibilityRole="header">
+        Progress
+      </Text>
+      {!data && !failed ? <Loading /> : null}
       {!data && failed ? (
-        <>
-          <ErrorText>Could not load {client.first_name}’s progress. Check your internet connection.</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={again} />
-        </>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: again }}>
+          Couldn’t load {client.first_name}’s progress. Check your connection and try again.
+        </Notice>
       ) : null}
       {empty ? (
         <Body secondary style={styles.small}>
@@ -125,6 +127,18 @@ export function ClientProgress({
         />
       ) : null}
       <PhotoViewer photo={viewing} name={client.first_name} onClose={() => setViewing(null)} />
+    </View>
+  );
+}
+
+// Two card-shaped placeholders, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  if (!shown) return null;
+  return (
+    <View accessible accessibilityLabel="Loading" style={{ gap: Spacing.tight }}>
+      <Skeleton height={260} radius={Radius.large} />
+      <Skeleton height={200} radius={Radius.large} />
     </View>
   );
 }
@@ -215,7 +229,12 @@ function MeasurementsCard({ measurements, unit }: { measurements: Measurements[]
         })}
       </View>
       {logged.length > 1 ? (
-        <Chips options={options} value={chosen.key} onChange={(key) => key && setPicked(key)} />
+        <Chips
+          options={options}
+          value={chosen.key}
+          onChange={(key) => key && setPicked(key)}
+          background={Colors.surface}
+        />
       ) : null}
       <LineChart
         points={points}
@@ -389,7 +408,7 @@ function CheckIns({
     } catch (e) {
       setErrors((errs) => ({
         ...errs,
-        [ci.id]: e instanceof Error ? e.message : "That didn't save. Check your connection and try again.",
+        [ci.id]: plainError(e, "That didn't save. Check your connection and try again."),
       }));
     }
     setSending((s) => ({ ...s, [ci.id]: false }));
@@ -497,33 +516,26 @@ function Answer({ label, text }: { label: string; text: string }) {
 
 const styles = themed(() => ({
   part: {
-    gap: Spacing.three,
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    gap: Spacing.tight,
   },
   small: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...Type.footnote,
   },
   card: {
     gap: Spacing.two,
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   subhead: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
   },
   meta: {
+    ...Type.footnote,
     color: Colors.textSecondary,
-    fontSize: 13,
   },
   bigRow: {
     flexDirection: 'row',
@@ -531,26 +543,28 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   big: {
+    ...Type.stat,
+    ...Tabular,
     color: Colors.text,
-    fontSize: 28,
-    fontWeight: '900',
   },
   change: {
+    ...Type.callout,
+    ...Tabular,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
   table: {
     borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-    paddingHorizontal: Spacing.three,
+    borderCurve: 'continuous',
+    backgroundColor: Colors.tint,
+    paddingHorizontal: Spacing.tight,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 44,
     gap: Spacing.two,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   tableNameBox: {
@@ -558,24 +572,26 @@ const styles = themed(() => ({
     paddingVertical: Spacing.one,
   },
   tableName: {
+    ...Type.callout,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '600',
   },
   tableDay: {
+    ...Type.footnote,
     color: Colors.textSecondary,
-    fontSize: 12,
   },
   tableValue: {
+    ...Type.callout,
+    ...Tabular,
+    fontFamily: Fonts.textSemi,
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '800',
     minWidth: 76,
     textAlign: 'right',
   },
   tableChange: {
+    ...Type.footnote,
+    ...Tabular,
     color: Colors.text,
-    fontSize: 14,
     minWidth: 84,
     textAlign: 'right',
   },
@@ -593,58 +609,54 @@ const styles = themed(() => ({
     width: '100%',
     aspectRatio: 3 / 4,
     borderRadius: Radius.medium,
+    borderCurve: 'continuous',
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
   },
   photoImage: {
     width: '100%',
     height: '100%',
   },
   noPhoto: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.tint,
+    opacity: 0.6,
   },
   poseLabel: {
+    ...Type.footnote,
     color: Colors.textSecondary,
-    fontSize: 12,
     textAlign: 'center',
   },
   week: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
   },
   answers: {
+    ...Type.callout,
     color: Colors.text,
-    fontSize: 14,
-    lineHeight: 21,
   },
   worry: {
     color: Colors.danger,
-    fontWeight: '700',
+    fontFamily: Fonts.textSemi,
   },
   answerText: {
+    ...Type.callout,
     color: Colors.text,
-    fontSize: 15,
-    lineHeight: 22,
   },
   reply: {
     gap: Spacing.two,
-    paddingTop: Spacing.two,
+    paddingTop: Spacing.tight,
     marginTop: Spacing.one,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
   replyLabel: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
   },
   replyInput: {
     minHeight: 88,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.tight,
     textAlignVertical: 'top',
   },
 }));

@@ -1,3 +1,4 @@
+import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 type DbError = { code?: string; message: string };
@@ -9,7 +10,7 @@ export const PLAN_NOT_ACTIVE =
 // or not allowed, which the form should normally stop before it gets that far.
 export function saveError(error: DbError) {
   if (error.code === '23514') return 'Some of that is too long. Shorten it and try again.';
-  return error.message;
+  return plainError(error);
 }
 
 // The same for adding something new: a client, workout, exercise, session, plan or video.

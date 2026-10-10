@@ -2,14 +2,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { DaySwitcher } from '@/components/day-switcher';
 import { LineChart } from '@/components/line-chart';
 import { Sheet } from '@/components/sheet';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Body,
+  Button,
+  Card,
+  ErrorText,
+  IconButton,
+  Notice,
+  Section,
+  Segmented,
+  Skeleton,
+  Text,
+  TextField,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { confirm } from '@/lib/confirm';
 import { dayMonth } from '@/lib/days';
@@ -53,7 +66,11 @@ import {
 } from '@/lib/units';
 
 type Range = 'month' | 'three' | 'year';
-const RANGES: Record<Range, string> = { month: 'Month', three: '3 months', year: 'Year' };
+const RANGES: { value: Range; label: string }[] = [
+  { value: 'month', label: 'Month' },
+  { value: 'three', label: '3 months' },
+  { value: 'year', label: 'Year' },
+];
 const RANGE_DAYS: Record<Range, number> = { month: 30, three: 90, year: 365 };
 
 const MEASUREMENT_LABELS = Object.fromEntries(MEASUREMENTS.map((m) => [m.key, m.label])) as Record<
@@ -99,7 +116,7 @@ export default function Progress() {
         if (p) setPhotos(p);
         if (signedLinks) setLinks(signedLinks);
         if (c) setCheckIns(c);
-        setError(w && m && p && c ? null : 'Could not load everything. Check your internet connection.');
+        setError(w && m && p && c ? null : "Some of your progress didn't load. Check your connection and try again.");
       }),
     [],
   );
@@ -126,43 +143,44 @@ export default function Progress() {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}>
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}>
       {error ? (
-        <View style={{ gap: Spacing.two }}>
-          <ErrorText>{error}</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={refresh} loading={refreshing} />
-        </View>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: refresh, loading: refreshing }}>
+          {error}
+        </Notice>
       ) : null}
 
-      <Text style={styles.section}>Body weight</Text>
-      {weights ? (
-        <WeightSection weights={weights} unit={settings.units} onSaved={reload} />
-      ) : !error ? (
-        <ActivityIndicator color={Colors.accentText} />
-      ) : null}
+      <Section title="Body weight">
+        {weights ? (
+          <WeightSection weights={weights} unit={settings.units} onSaved={reload} />
+        ) : !error ? (
+          <Loading height={280} />
+        ) : null}
+      </Section>
 
-      <Text style={styles.section}>Measurements</Text>
-      {measurements ? (
-        <MeasurementsSection measurements={measurements} lengths={settings.lengths} onSaved={reload} />
-      ) : !error ? (
-        <ActivityIndicator color={Colors.accentText} />
-      ) : null}
+      <Section title="Measurements">
+        {measurements ? (
+          <MeasurementsSection measurements={measurements} lengths={settings.lengths} onSaved={reload} />
+        ) : !error ? (
+          <Loading height={220} />
+        ) : null}
+      </Section>
 
-      <Text style={styles.section}>Photos</Text>
-      {photos ? (
-        <PhotosSection photos={photos} links={links} />
-      ) : !error ? (
-        <ActivityIndicator color={Colors.accentText} />
-      ) : null}
+      <Section title="Photos">
+        {photos ? <PhotosSection photos={photos} links={links} /> : !error ? <Loading height={200} /> : null}
+      </Section>
 
-      <Text style={styles.section}>Weekly check-in</Text>
-      {checkIns ? (
-        <CheckInSection checkIns={checkIns} />
-      ) : !error ? (
-        <ActivityIndicator color={Colors.accentText} />
-      ) : null}
+      <Section title="Weekly check-in">
+        {checkIns ? <CheckInSection checkIns={checkIns} /> : !error ? <Loading height={120} /> : null}
+      </Section>
     </ScrollView>
   );
+}
+
+// A card-shaped placeholder, after a short wait so fast loads show nothing.
+function Loading({ height }: { height: number }) {
+  const shown = useDelayed();
+  return shown ? <Skeleton height={height} radius={Radius.large} /> : null;
 }
 
 // ---------- Body weight ----------
@@ -201,19 +219,21 @@ function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit
   }
 
   return (
-    <Card style={{ gap: Spacing.three }}>
+    <Card style={{ gap: Spacing.gutter }}>
       {latest ? (
-        <View style={{ gap: 2 }}>
-          <Text style={styles.big}>{formatWeight(latest.weight_kg, unit)}</Text>
-          <Body secondary style={styles.small}>
+        <View style={{ gap: Spacing.one }}>
+          <Text variant="stat" style={Tabular}>
+            {formatWeight(latest.weight_kg, unit)}
+          </Text>
+          <Text variant="footnote" tone="secondary">
             {change !== null ? `${signed(`${formatNumber(Math.abs(change), 1)} ${unit}`, change)} in 30 days · ` : ''}
             {dayMonth(latest.day)}
-          </Body>
+          </Text>
         </View>
       ) : (
         <Body secondary>Log your weight to see how it changes over time.</Body>
       )}
-      <Chips options={RANGES} value={range} onChange={(r) => r && setRange(r)} />
+      <Segmented options={RANGES} value={range} onChange={setRange} />
       <LineChart
         points={points}
         format={(v) => formatNumber(v, 1)}
@@ -225,34 +245,42 @@ function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit
       />
       <Button
         title="Log weight"
+        icon="add"
+        variant="secondary"
         onPress={() => setSheet((s) => ({ open: true, key: s.key + 1 }))}
         testID="log-weight"
       />
       {weights.length ? (
-        <View style={{ gap: Spacing.one }}>
-          <Text style={styles.smallHeading}>Recent</Text>
+        <View>
+          <Text variant="label" tone="secondary" style={{ marginBottom: Spacing.one }}>
+            Recent
+          </Text>
           {[...weights]
             .reverse()
             .slice(0, 5)
-            .map((w) => (
-              <View key={w.day} style={styles.listRow}>
-                <Text style={styles.listDay}>{dayMonth(w.day)}</Text>
-                <Text style={[styles.listValue, { flex: 1 }]}>{formatWeight(w.weight_kg, unit)}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove the weight from ${dayMonth(w.day)}`}
+            .map((w, i, list) => (
+              <View key={w.day} style={[styles.listRow, i < list.length - 1 && styles.listLine]}>
+                <Text variant="callout" tone="secondary" style={styles.listDay}>
+                  {dayMonth(w.day)}
+                </Text>
+                <Text variant="rowTitle" style={[Tabular, { flex: 1 }]}>
+                  {formatWeight(w.weight_kg, unit)}
+                </Text>
+                <IconButton
+                  icon="trash-outline"
+                  tone="secondary"
+                  label={`Remove the weight from ${dayMonth(w.day)}`}
                   onPress={() => remove(w)}
-                  style={styles.iconButton}>
-                  <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
-                </Pressable>
+                  style={{ marginRight: -Spacing.tight }}
+                />
               </View>
             ))}
         </View>
       ) : null}
       <ErrorText>{problem}</ErrorText>
-      <Body secondary style={styles.small}>
+      <Text variant="footnote" tone="secondary">
         Your trainers can see this.
-      </Body>
+      </Text>
       <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Log weight">
         <WeightForm
           key={sheet.key}
@@ -326,9 +354,9 @@ function WeightForm({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: W
         onSubmitEditing={save}
       />
       {existing ? (
-        <Body secondary style={styles.small}>
+        <Text variant="footnote" tone="secondary">
           This replaces the {formatWeight(existing.weight_kg, unit)} logged that day.
-        </Body>
+        </Text>
       ) : null}
       <ErrorText>{problem}</ErrorText>
       <Button title="Save" onPress={save} loading={busy} />
@@ -357,7 +385,7 @@ function MeasurementsSection({
   const last = points.at(-1);
 
   return (
-    <Card style={{ gap: Spacing.three }}>
+    <Card style={{ gap: Spacing.gutter }}>
       <View style={styles.tiles}>
         {[MEASUREMENTS.slice(0, 3), MEASUREMENTS.slice(3)].map((row) => (
           <View key={row[0].key} style={styles.tileRow}>
@@ -371,10 +399,14 @@ function MeasurementsSection({
                   : null;
               return (
                 <View key={key} style={styles.tile}>
-                  <Text style={styles.tileLabel}>{label}</Text>
-                  <Text style={styles.tileValue}>{formatLength(latest, lengths)}</Text>
+                  <Text variant="footnote" tone="secondary" numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <Text variant="rowTitle" style={[Tabular, { fontFamily: Fonts.textSemi }]} numberOfLines={1}>
+                    {formatLength(latest, lengths)}
+                  </Text>
                   {change !== null ? (
-                    <Text style={styles.tileChange}>
+                    <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
                       {signed(`${formatNumber(Math.abs(change), 1)} ${lengths}`, change)}
                     </Text>
                   ) : null}
@@ -388,7 +420,12 @@ function MeasurementsSection({
       </View>
       {measurements.length ? (
         <>
-          <Chips options={MEASUREMENT_LABELS} value={chart} onChange={(k) => k && setChart(k)} />
+          <Chips
+            options={MEASUREMENT_LABELS}
+            value={chart}
+            onChange={(k) => k && setChart(k)}
+            background={Colors.surface}
+          />
           <LineChart
             points={points}
             format={(v) => formatNumber(v, 1)}
@@ -404,12 +441,14 @@ function MeasurementsSection({
       )}
       <Button
         title="Add measurements"
+        icon="add"
+        variant="secondary"
         onPress={() => setSheet((s) => ({ open: true, key: s.key + 1 }))}
         testID="add-measurements"
       />
-      <Body secondary style={styles.small}>
+      <Text variant="footnote" tone="secondary">
         Your trainers can see this.
-      </Body>
+      </Text>
       <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Add measurements">
         <MeasurementsForm
           key={sheet.key}
@@ -507,9 +546,9 @@ function MeasurementsForm({
         />
       ))}
       {existing ? (
-        <Body secondary style={styles.small}>
+        <Text variant="footnote" tone="secondary">
           This replaces the measurements logged that day.
-        </Body>
+        </Text>
       ) : null}
       <ErrorText>{problem}</ErrorText>
       <Button title="Save" onPress={save} loading={busy} />
@@ -523,7 +562,7 @@ function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<
   // The newest of each pose.
   const latest = POSES.map((pose) => ({ pose, photo: photos.find((p) => p.pose === pose.key) ?? null }));
   return (
-    <Card style={{ gap: Spacing.three }}>
+    <Card style={{ gap: Spacing.gutter }}>
       {photos.length ? (
         <>
           <View style={styles.thumbs}>
@@ -549,7 +588,7 @@ function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<
                       <Ionicons name="body-outline" size={28} color={Colors.textSecondary} />
                     )}
                   </View>
-                  <Text style={styles.thumbLabel}>
+                  <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} numberOfLines={2}>
                     {pose.label}
                     {photo ? ` · ${dayMonth(photo.day)}` : ''}
                   </Text>
@@ -565,9 +604,9 @@ function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<
           <Button title="Add progress photos" variant="secondary" onPress={() => router.push('/progress/photos')} />
         </>
       )}
-      <Body secondary style={styles.small}>
+      <Text variant="footnote" tone="secondary">
         Only you and your trainers can see these.
-      </Body>
+      </Text>
     </Card>
   );
 }
@@ -582,18 +621,20 @@ function CheckInSection({ checkIns }: { checkIns: CheckIn[] }) {
     .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))
     .slice(0, 2);
   return (
-    <Card style={{ gap: Spacing.three }}>
+    <Card style={{ gap: Spacing.gutter }}>
       {current ? (
         <View style={styles.listRow}>
-          <Ionicons name="checkmark-circle" size={22} color={Colors.accentText} />
-          <Text style={[styles.listValue, { flex: 1 }]}>Checked in for the week of {dayMonth(week)}</Text>
-          <Pressable
-            accessibilityRole="button"
+          <Ionicons name="checkmark-circle-outline" size={22} color={Colors.success} />
+          <Text variant="callout" style={{ flex: 1 }}>
+            Checked in for the week of {dayMonth(week)}
+          </Text>
+          <Button
+            title="Edit"
+            variant="ghost"
+            size="small"
+            accessibilityLabel="Edit this week's check-in"
             onPress={() => router.push('/progress/check-in')}
-            hitSlop={8}
-            style={styles.textButton}>
-            <Text style={styles.link}>Edit</Text>
-          </Pressable>
+          />
         </View>
       ) : (
         <>
@@ -602,14 +643,18 @@ function CheckInSection({ checkIns }: { checkIns: CheckIn[] }) {
         </>
       )}
       {replies.map((r) => (
-        <Body key={`${r.trainer_id}-${r.updated_at}`} style={styles.small} numberOfLines={3}>
-          <Text style={{ fontWeight: '800' }}>{r.trainer_name}:</Text> {r.body}
-        </Body>
+        <Text key={`${r.trainer_id}-${r.updated_at}`} variant="callout" numberOfLines={3}>
+          <Text style={{ fontFamily: Fonts.textSemi }}>{r.trainer_name}:</Text> {r.body}
+        </Text>
       ))}
       {checkIns.length ? (
-        <Pressable accessibilityRole="button" onPress={() => router.push('/progress/check-in')} hitSlop={8}>
-          <Text style={styles.link}>See all</Text>
-        </Pressable>
+        <Button
+          title="See all check-ins"
+          variant="ghost"
+          size="small"
+          onPress={() => router.push('/progress/check-in')}
+          style={{ alignSelf: 'flex-start', marginLeft: -14 }}
+        />
       ) : null}
     </Card>
   );
@@ -617,57 +662,26 @@ function CheckInSection({ checkIns }: { checkIns: CheckIn[] }) {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.gutter,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
     width: '100%',
-    maxWidth: 640,
+    maxWidth: Layout.maxClient,
     alignSelf: 'center',
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: Spacing.two,
-  },
-  big: {
-    color: Colors.text,
-    fontSize: 32,
-    fontWeight: '900',
-  },
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  smallHeading: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
   },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 44,
+    gap: Spacing.tight,
+    minHeight: 48,
+  },
+  listLine: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   listDay: {
-    width: 64,
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  listValue: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 72,
   },
   tiles: {
     gap: Spacing.two,
@@ -679,29 +693,16 @@ const styles = themed(() => ({
   // Same padding as a tile, so all three in a row get the same width.
   tileSpacer: {
     flex: 1,
-    paddingHorizontal: Spacing.two,
+    paddingHorizontal: Spacing.tight,
   },
   tile: {
     flex: 1,
     gap: 2,
-    padding: Spacing.two,
+    paddingHorizontal: Spacing.tight,
+    paddingVertical: Spacing.tight,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.background,
-  },
-  tileLabel: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tileValue: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  tileChange: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    borderCurve: 'continuous',
+    backgroundColor: Colors.tint,
   },
   thumbs: {
     flexDirection: 'row',
@@ -709,31 +710,15 @@ const styles = themed(() => ({
   },
   thumbWrap: {
     flex: 1,
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   thumb: {
     aspectRatio: 3 / 4,
     borderRadius: Radius.medium,
+    borderCurve: 'continuous',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
-  },
-  thumbLabel: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  link: {
-    color: Colors.accentText,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  textButton: {
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: Colors.tint,
   },
 }));

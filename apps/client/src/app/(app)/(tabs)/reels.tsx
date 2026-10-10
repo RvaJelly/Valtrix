@@ -10,7 +10,6 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +18,9 @@ import { CommentsSheet } from '@/components/comments-sheet';
 import { PostMenu } from '@/components/post-menu';
 import { ReelView } from '@/components/reel-view';
 import { ShareSheet } from '@/components/share-sheet';
-import { Button } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { loadReels, setLiked, sharedCount, type Reel } from '@/lib/posts';
 import { loadCounts, type PostCounts } from '@/lib/social';
 import { listTrainers } from '@/lib/trainers';
@@ -72,7 +72,7 @@ export default function Reels() {
       toTop.current = true;
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load reels.');
+      setError(plainError(e, 'Could not load reels.'));
     }
   }, []);
 

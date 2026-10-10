@@ -3,12 +3,13 @@ import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { CommunityRules } from '@/components/community-rules';
-import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
+import { Body, Button, Card, ErrorText, Text, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { MediaError, pickMedia, REEL_LENGTH_HINT, type PickedMedia } from '@/lib/media';
 import { useGoBack } from '@/lib/nav';
 import { acceptRules, createPost, hasAcceptedRules } from '@/lib/posts';
@@ -56,7 +57,7 @@ export default function NewPost() {
       await createPost(session.user.id, kind, media, kind === 'reel' ? caption : null);
       goBack(kind === 'reel' ? '/reels' : '/');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not share it. Try again.');
+      setError(plainError(e, 'Could not share it. Try again.'));
       setBusy(null);
     }
   }
@@ -166,7 +167,8 @@ function PreviewVideo({ uri }: { uri: string }) {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     gap: Spacing.four,
   },
   heading: {

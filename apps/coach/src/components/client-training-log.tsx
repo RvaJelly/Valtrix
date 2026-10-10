@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Body, Button, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Body, Button, ErrorText, Notice, SkeletonRows, StatusPill, Text, useDelayed } from '@/components/ui';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useClientData } from '@/lib/client-data';
 import type { Client } from '@/lib/clients';
 import { dayMonth, weekdayDayMonth } from '@/lib/days';
@@ -81,7 +81,7 @@ export function ClientTrainingLog({ client }: { client: Pick<Client, 'id' | 'fir
   const waitingForMore = !!data && data.more && data.logs.length < count;
   const loadingMore = waitingForMore && !failed;
   const moreError =
-    waitingForMore && failed ? 'Could not load more workouts. Check your internet connection and try again.' : null;
+    waitingForMore && failed ? 'Couldn’t load more workouts. Check your connection and try again.' : null;
 
   function showMore() {
     if (waitingForMore) again();
@@ -97,13 +97,14 @@ export function ClientTrainingLog({ client }: { client: Pick<Client, 'id' | 'fir
 
   return (
     <View testID="client-training-log" style={styles.part}>
-      <Text style={styles.section}>Workout log</Text>
-      {!data && !failed ? <ActivityIndicator color={Colors.accentText} /> : null}
+      <Text variant="label" tone="secondary" accessibilityRole="header">
+        Workout log
+      </Text>
+      {!data && !failed ? <Loading /> : null}
       {!data && failed ? (
-        <>
-          <ErrorText>Could not load {client.first_name}’s workouts. Check your internet connection.</ErrorText>
-          <Button title="Try again" variant="secondary" onPress={again} />
-        </>
+        <Notice tone="danger" action={{ label: 'Try again', onPress: again }}>
+          Couldn’t load {client.first_name}’s workouts. Check your connection and try again.
+        </Notice>
       ) : null}
 
       {data && !data.logs.length && !data.bests.length ? (
@@ -143,7 +144,7 @@ export function ClientTrainingLog({ client }: { client: Pick<Client, 'id' | 'fir
               style={styles.recordRow}
               accessible
               accessibilityLabel={`${r.exercise_name}, ${recordLabel(r, unit)}, ${dayMonth(r.day)}`}>
-              <Ionicons name="trophy" size={18} color={Colors.accentText} />
+              <Ionicons name="trophy-outline" size={18} color={Colors.text} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.recordText}>
                   {r.exercise_name} · {recordLabel(r, unit)}
@@ -230,17 +231,12 @@ function LogCard({
             <Text style={styles.logName} numberOfLines={2}>
               {log.workout_name}
             </Text>
-            {log.from_my_plan ? (
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>Your plan</Text>
-              </View>
-            ) : null}
+            {log.from_my_plan ? <StatusPill tone="neutral" label="Your plan" /> : null}
           </View>
           <Text style={styles.meta}>{summary}</Text>
           {bests ? (
             <View style={styles.bestsLine}>
-              <Ionicons name="trophy" size={14} color={Colors.accentText} />
-              <Text style={styles.bestsText}>{bests === 1 ? '1 new best' : `${bests} new bests`}</Text>
+              <StatusPill tone="success" label={bests === 1 ? '1 new best' : `${bests} new bests`} />
             </View>
           ) : null}
         </View>
@@ -253,7 +249,7 @@ function LogCard({
               <View style={styles.exerciseRow}>
                 <Text style={styles.exercise}>{group.name}</Text>
                 {bestIn.has(`${log.id}|${exerciseKey(group.name)}`) ? (
-                  <Ionicons name="trophy" size={14} color={Colors.accentText} accessibilityLabel="New best" />
+                  <Ionicons name="trophy-outline" size={14} color={Colors.text} accessibilityLabel="New best" />
                 ) : null}
               </View>
               {group.sets.map((set) => {
@@ -272,6 +268,12 @@ function LogCard({
       ) : null}
     </View>
   );
+}
+
+// Rows shaped like the workout cards, after a short wait so fast loads show nothing.
+function Loading() {
+  const shown = useDelayed();
+  return shown ? <SkeletonRows count={3} /> : null;
 }
 
 function BestRow({ best, unit }: { best: PersonalBest; unit: WeightUnit }) {
@@ -299,29 +301,22 @@ function BestRow({ best, unit }: { best: PersonalBest; unit: WeightUnit }) {
 
 const styles = themed(() => ({
   part: {
-    gap: Spacing.three,
-  },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    gap: Spacing.tight,
   },
   small: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...Type.footnote,
   },
   card: {
     gap: Spacing.two,
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.three,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
   subhead: {
+    ...Type.headline,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
   },
   logHeader: {
     flexDirection: 'row',
@@ -336,40 +331,22 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   logName: {
+    ...Type.headline,
     flexShrink: 1,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  tag: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 2,
-    borderRadius: Radius.small,
-    backgroundColor: Colors.surfaceRaised,
-  },
-  tagText: {
-    color: Colors.accentText,
-    fontSize: 12,
-    fontWeight: '700',
   },
   meta: {
+    ...Type.footnote,
     color: Colors.textSecondary,
-    fontSize: 13,
   },
   bestsLine: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-  },
-  bestsText: {
-    color: Colors.accentText,
-    fontSize: 13,
-    fontWeight: '700',
+    marginTop: 2,
   },
   sets: {
     gap: Spacing.three,
-    paddingTop: Spacing.two,
-    borderTopWidth: 1,
+    paddingTop: Spacing.tight,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
   exerciseRow: {
@@ -378,23 +355,22 @@ const styles = themed(() => ({
     gap: Spacing.one,
   },
   exercise: {
+    ...Type.callout,
+    fontFamily: Fonts.textSemi,
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
   },
   setLine: {
+    ...Type.callout,
+    ...Tabular,
     color: Colors.text,
-    fontSize: 15,
-    lineHeight: 22,
   },
   setNumber: {
     color: Colors.textSecondary,
   },
   note: {
+    ...Type.callout,
     color: Colors.text,
-    fontSize: 15,
     fontStyle: 'italic',
-    lineHeight: 22,
   },
   recordRow: {
     flexDirection: 'row',
@@ -403,19 +379,17 @@ const styles = themed(() => ({
     paddingVertical: Spacing.one,
   },
   recordText: {
+    ...Type.callout,
     color: Colors.text,
-    fontSize: 15,
-    lineHeight: 21,
   },
   best: {
     gap: 2,
     paddingVertical: Spacing.two,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },
   bestLine: {
+    ...Type.footnote,
     color: Colors.text,
-    fontSize: 14,
-    lineHeight: 20,
   },
 }));

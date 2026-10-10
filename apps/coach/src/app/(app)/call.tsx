@@ -7,11 +7,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentProps } from 'react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
 import { CallView, type CallViewHandle } from '@/components/call-view';
+import { Text } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import type { CallPageEvent, CallSignal } from '@/lib/call-page';
 import {

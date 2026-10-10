@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { FoodSheet } from '@/components/food-sheet';
-import { Body, Button, ErrorText, segmentOn, TextField } from '@/components/ui';
+import { Body, Button, ErrorText, segmentOn, Text, TextField } from '@/components/ui';
 import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { plainError } from '@/lib/errors';
 import { dayKey, isBarcode, isDayKey, isMeal, mealForNow, mealLabel } from '@/lib/food';
 import { addToDiary, saveMyFood, type SavedFood } from '@/lib/nutrition';
 
@@ -98,7 +99,7 @@ export default function CustomFood() {
       setSaved(food);
       setAdding(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save your food. Try again.');
+      setError(plainError(e, 'Could not save your food. Try again.'));
     }
     setBusy(false);
   }
@@ -271,7 +272,8 @@ function Segmented<T extends string>({
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     paddingBottom: Spacing.six,
     gap: Spacing.three,
     width: '100%',

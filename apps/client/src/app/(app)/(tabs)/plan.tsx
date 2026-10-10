@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { AppState, Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { AppState, Platform, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chips } from '@/components/chips';
@@ -223,18 +223,28 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
     );
   }
 
-  // One row per day of the week, and one per extra workout on a busy day.
-  const rows: { key: string; day: string; date: string; today: boolean; item: PlanItem | null; done: boolean }[] = [];
+  // One row per day of the week, and one per extra workout on a busy day. Only a day's first row shows
+  // the day; the others keep it for VoiceOver.
+  const rows: {
+    key: string;
+    day: string;
+    date: string;
+    showDay: boolean;
+    today: boolean;
+    item: PlanItem | null;
+    done: boolean;
+  }[] = [];
   for (const d of WEEKDAYS) {
     const date = addDays(week, d.day - 1);
     const items = weekdayItems(plan, date);
     const isToday = sameDay(date, today);
     const base = { day: isToday ? 'Today' : d.short, date: String(date.getDate()), today: isToday };
-    if (!items.length) rows.push({ key: `${d.day}`, ...base, item: null, done: false });
+    if (!items.length) rows.push({ key: `${d.day}`, ...base, showDay: true, item: null, done: false });
     items.forEach((item, i) =>
       rows.push({
         key: `${d.day}-${item.plan_item_id}`,
-        ...(i === 0 ? base : { day: '', date: '', today: isToday }),
+        ...base,
+        showDay: i === 0,
         item,
         done: item.done_on.includes(dayKey(date)),
       }),
@@ -243,8 +253,9 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
   anyDay.forEach((item, i) =>
     rows.push({
       key: `any-${item.plan_item_id}`,
-      day: i === 0 ? 'Any' : '',
-      date: i === 0 ? 'day' : '',
+      day: 'Any',
+      date: 'day',
+      showDay: i === 0,
       today: false,
       item,
       done: item.done_on.length > 0,
@@ -285,7 +296,7 @@ function Workouts({ plan, trainers }: { plan: PlanItem[]; trainers: Trainer[] | 
             {`${progress.done} of ${progress.planned} done`}
           </Text>
           <View style={styles.weekBar}>
-            <ProgressBar progress={progress.planned ? progress.done / progress.planned : 0} color={Colors.success} />
+            <ProgressBar progress={progress.planned ? progress.done / progress.planned : 0} color={Colors.text} />
           </View>
         </View>
         <Group>
@@ -354,6 +365,7 @@ function WorkoutCard({
 function WeekRow({
   day,
   date,
+  showDay,
   today,
   item,
   done,
@@ -361,19 +373,26 @@ function WeekRow({
 }: {
   day: string;
   date: string;
+  showDay: boolean;
   today: boolean;
   item: PlanItem | null;
   done: boolean;
   last: boolean;
 }) {
+  // The day column grows with the text size, so "Today" never runs into the workout's name.
+  const { fontScale } = useWindowDimensions();
   const leading = (
-    <View style={styles.weekDay}>
-      <Text variant="footnote" tone={today ? 'primary' : 'secondary'} style={today && styles.today}>
-        {day}
-      </Text>
-      <Text variant="footnote" tone="tertiary" style={Tabular}>
-        {date}
-      </Text>
+    <View style={[styles.weekDay, { minWidth: Math.round(44 * Math.min(Math.max(fontScale, 1), 2)) }]}>
+      {showDay ? (
+        <>
+          <Text variant="footnote" tone={today ? 'primary' : 'secondary'} style={today && styles.today}>
+            {day}
+          </Text>
+          <Text variant="footnote" tone="tertiary" style={Tabular}>
+            {date}
+          </Text>
+        </>
+      ) : null}
     </View>
   );
   if (!item) return <ListRow compact title="Rest" titleTone="tertiary" leading={leading} last={last} />;
@@ -490,7 +509,6 @@ const styles = themed(() => ({
     width: 56,
   },
   weekDay: {
-    width: 40,
     alignItems: 'flex-start',
   },
   today: {

@@ -11,6 +11,9 @@ import { videoFileName, videoLink } from '@/lib/workout-videos';
 
 const DENIED = 'Voltrix needs permission to add videos to your phone. Allow it in your phone settings, then try again.';
 
+// On a computer the video goes to the downloads folder, so it says Download there.
+const WEB = Platform.OS === 'web';
+
 // A workout video from the trainer: watch it full screen, or save it to the phone. Quiet on
 // purpose: the screen's one orange button is Start.
 export function PlanVideo({ path, label, title }: { path: string; label: string; title: string }) {
@@ -29,7 +32,7 @@ export function PlanVideo({ path, label, title }: { path: string; label: string;
       if (result === 'denied') setMessage({ text: DENIED, ok: false });
       else {
         haptic.success();
-        setMessage({ text: Platform.OS === 'web' ? 'Saved to your downloads' : 'Saved to your phone', ok: true });
+        setMessage({ text: WEB ? 'Saved to your downloads' : 'Saved to your phone', ok: true });
       }
     } catch {
       setMessage({ text: 'The video could not be saved. Check your connection and try again.', ok: false });
@@ -57,7 +60,7 @@ export function PlanVideo({ path, label, title }: { path: string; label: string;
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Save ${label.toLowerCase()} to phone`}
+          accessibilityLabel={WEB ? `Download ${label.toLowerCase()}` : `Save ${label.toLowerCase()} to phone`}
           onPress={save}
           disabled={saving}
           style={({ pressed }) => [
@@ -72,7 +75,7 @@ export function PlanVideo({ path, label, title }: { path: string; label: string;
           )}
           {narrow ? null : (
             <Text variant="footnote" tone="secondary">
-              {saving ? 'Saving…' : 'Save to phone'}
+              {saving ? (WEB ? 'Downloading…' : 'Saving…') : WEB ? 'Download' : 'Save to phone'}
             </Text>
           )}
         </Pressable>

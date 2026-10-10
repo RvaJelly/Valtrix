@@ -5,7 +5,6 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 
 import { Avatar } from '@/components/avatar';
 import { Chips } from '@/components/chips';
-import { PasswordField } from '@/components/password-field';
 import { useToast } from '@/components/toast';
 import {
   Button,
@@ -16,6 +15,7 @@ import {
   ListRow,
   Section,
   Segmented,
+  SkeletonRows,
   Text,
   TextField,
   Toggle,
@@ -44,14 +44,15 @@ export const APPEARANCE: Record<SettingsValues['appearance'], string> = {
   system: 'Auto',
 };
 
+// Whole words, so the choice fits at large text sizes; the numbers themselves show the short units.
 export const UNITS: Record<SettingsValues['units'], string> = {
-  kg: 'Kilograms (kg)',
-  lb: 'Pounds (lb)',
+  kg: 'Kilograms',
+  lb: 'Pounds',
 };
 
 export const LENGTHS: Record<SettingsValues['lengths'], string> = {
-  cm: 'Centimetres (cm)',
-  in: 'Inches (in)',
+  cm: 'Centimetres',
+  in: 'Inches',
 };
 
 function options<T extends string>(record: Record<T, string>) {
@@ -175,6 +176,7 @@ export function ProfilePhoto({
     await removeProfilePhoto(url);
     await onSaved();
     setBusy(null);
+    toast('Photo removed');
   }
 
   return (
@@ -263,7 +265,8 @@ export function PasswordForm() {
 
   return (
     <View style={{ gap: Spacing.three }}>
-      <PasswordField
+      <TextField
+        password
         label="New password"
         value={password}
         onChangeText={setPassword}
@@ -477,7 +480,7 @@ export function BlockedList() {
     setBusy(null);
   }
 
-  if (!blocked) return null;
+  if (!blocked) return <SkeletonRows count={2} avatar />;
   return (
     <View style={{ gap: Spacing.two }}>
       {blocked.length ? (

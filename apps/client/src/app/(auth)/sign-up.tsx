@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { AuthPage, CheckEmailActions } from '@/components/auth-page';
-import { PasswordField } from '@/components/password-field';
 import { Button, ErrorText, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
@@ -106,7 +105,8 @@ export default function SignUp() {
         placeholder="you@example.com"
         error={errorFor('email')}
       />
-      <PasswordField
+      <TextField
+        password
         label="Password"
         value={password}
         onChangeText={setPassword}

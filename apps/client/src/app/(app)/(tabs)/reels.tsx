@@ -275,6 +275,10 @@ export default function Reels() {
           Reels
         </Text>
         <View style={styles.headerButtons}>
+          {/* Phones pull down to refresh; a mouse can't, so a computer gets a button. */}
+          {Platform.OS === 'web' && reels ? (
+            <TopButton icon="refresh-outline" label="Refresh reels" onPress={refresh} loading={refreshing} />
+          ) : null}
           {reels?.length ? (
             <TopButton
               icon={muted ? 'volume-mute-outline' : 'volume-high-outline'}
@@ -307,18 +311,22 @@ function TopButton({
   icon,
   label,
   onPress,
+  loading,
 }: {
   icon: ComponentProps<typeof Ionicons>['name'];
   label: string;
   onPress: () => void;
+  loading?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={loading ? { busy: true } : undefined}
       onPress={onPress}
+      disabled={loading}
       style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.6 }]}>
-      <Ionicons name={icon} size={24} color={BRAND.white} />
+      {loading ? <ActivityIndicator color={BRAND.white} /> : <Ionicons name={icon} size={24} color={BRAND.white} />}
     </Pressable>
   );
 }

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import {
   Button,
@@ -54,12 +54,21 @@ type TodayCardProps = {
 
 const MAX_ROWS = 3;
 
+// "6:50 h"; under an hour stays "50 min".
+function shortSleep(minutes: number) {
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  return hours ? `${hours}:${String(total % 60).padStart(2, '0')} h` : `${total} min`;
+}
+
 // The top of Home: what's on today. Today's workouts with Start, calories left, habits with a
-// quick add for water and the weekly check-in. (The next session is Home's own hero card, right
-// under this one, so it isn't repeated here.)
+// quick add for water and the weekly check-in. (The next session is Home's own hero card, so it
+// isn't repeated here.)
 export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardProps) {
   const { settings } = useSettings();
   const unit = settings.units;
+  // At large text sizes the sleep tile shows "6:50 h", which fits a third of a phone.
+  const large = useWindowDimensions().fontScale > 1.15;
   // The newest water quick add, shown until Today loads again with it.
   const [added, setAdded] = useState<HabitDay | null>(null);
   const [waterError, setWaterError] = useState<string | null>(null);
@@ -96,7 +105,7 @@ export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardPr
   const steps = habits ? formatNumber(habits.steps) : '–';
   // A dash rather than "Not logged", which doesn't fit a narrow tile on a phone's browser.
   const sleepMinutes = habits?.sleep_minutes ?? null;
-  const sleep = sleepMinutes !== null ? formatSleep(sleepMinutes) : '–';
+  const sleep = sleepMinutes === null ? '–' : large ? shortSleep(sleepMinutes) : formatSleep(sleepMinutes);
   const sleepGoal = formatSleep(targets.sleep_minutes);
   const stepLabel = unit === 'lb' ? '8 oz' : '250 ml';
   const checkIn = hasTrainers && today.checkIns?.checkedIn === false && (weekday >= 5 || weekday === 1);
@@ -149,6 +158,7 @@ export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardPr
                 title={`+${stepLabel}`}
                 variant="secondary"
                 size="small"
+                oneLine
                 onPress={addWater}
                 accessibilityLabel={`Add ${stepLabel} of water`}
                 testID="water-quick-add"

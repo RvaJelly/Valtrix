@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FoodSheet } from '@/components/food-sheet';
@@ -35,6 +35,9 @@ function numberOnly(text: string) {
   return text.replace(/[^0-9.,]/g, '');
 }
 
+// The field a check failed on. Its box turns red with the reason under it, and it takes the focus.
+type Field = 'name' | 'barcode' | 'energy' | 'protein' | 'carbs' | 'fat' | 'serving';
+
 // Type in a food from its label. It's saved as the person's own food, so Search
 // finds it and the next scan of its barcode does too.
 export default function CustomFood() {
@@ -58,8 +61,19 @@ export default function CustomFood() {
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [servingSize, setServingSize] = useState('');
+  const [invalid, setInvalid] = useState<{ field: Field; message: string } | null>(null);
+  // Only for a save that failed; a field's own problem shows at the field.
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const top = useRef({ food: 0, label: 0 });
+  const nameInput = useRef<TextInput>(null);
+  const barcodeInput = useRef<TextInput>(null);
+  const energyInput = useRef<TextInput>(null);
+  const proteinInput = useRef<TextInput>(null);
+  const carbsInput = useRef<TextInput>(null);
+  const fatInput = useRef<TextInput>(null);
+  const servingInput = useRef<TextInput>(null);
   // What this form saved, kept after Cancel so saving again changes it instead of adding a copy.
   const [saved, setSaved] = useState<SavedFood | null>(null);
   const [adding, setAdding] = useState(false);
@@ -68,22 +82,50 @@ export default function CustomFood() {
   const liquid = basis === '100ml';
   const measure = liquid ? 'ml' : 'g';
 
+  function bad(field: Field, message: string) {
+    setInvalid({ field, message });
+    setError(null);
+    // Bring the field into view, then put the cursor in it.
+    const y = field === 'name' || field === 'barcode' ? top.current.food : top.current.label;
+    scroll.current?.scrollTo({ y: Math.max(0, y - Spacing.three), animated: true });
+    const input = {
+      name: nameInput,
+      barcode: barcodeInput,
+      energy: energyInput,
+      protein: proteinInput,
+      carbs: carbsInput,
+      fat: fatInput,
+      serving: servingInput,
+    }[field];
+    input.current?.focus();
+  }
+
+  // Typing in the field that was wrong clears its message.
+  function edited(field: Field | Field[]) {
+    if (invalid && ([] as Field[]).concat(field).includes(invalid.field)) setInvalid(null);
+  }
+
   async function save() {
     const code = barcode.replace(/\D/g, '');
     const value = parse(energy);
     const macros = [parse(protein), parse(carbs), parse(fat)];
     const size = parse(servingSize);
-    if (!name.trim()) return setError('Give the food a name.');
-    if (code && !isBarcode(code)) return setError('Barcodes have 8 to 14 numbers. Check it, or leave it empty.');
-    if (value === null || Number.isNaN(value) || value < 0) return setError('Enter the calories from the label.');
+    if (!name.trim()) return bad('name', 'Give the food a name.');
+    if (code && !isBarcode(code)) return bad('barcode', 'Barcodes have 8 to 14 numbers. Check it, or leave it empty.');
+    if (value === null || Number.isNaN(value) || value < 0) return bad('energy', 'Enter the calories from the label.');
     const kcal = energyUnit === 'kJ' ? value / 4.184 : value;
     if (basis !== 'serving' && kcal > 950)
-      return setError('That is more calories than any food has in 100 g. Check the number.');
-    if (kcal > 20000) return setError('That is a lot of calories. Check the number.');
-    if (macros.some((m) => m !== null && (Number.isNaN(m) || m < 0 || m > 5000)))
-      return setError('Protein, carbs and fat must be numbers, or left empty.');
+      return bad('energy', 'That is more calories than any food has in 100 g. Check the number.');
+    if (kcal > 20000) return bad('energy', 'That is a lot of calories. Check the number.');
+    const wrong = macros.findIndex((m) => m !== null && (Number.isNaN(m) || m < 0 || m > 5000));
+    if (wrong >= 0)
+      return bad(
+        (['protein', 'carbs', 'fat'] as const)[wrong],
+        'Protein, carbs and fat must be numbers, or left empty.',
+      );
     if (size !== null && (Number.isNaN(size) || size <= 0 || size > 10000))
-      return setError(`Enter the serving size in ${measure}, or leave it empty.`);
+      return bad('serving', `Enter the serving size in ${measure}, or leave it empty.`);
+    setInvalid(null);
     setError(null);
     setBusy(true);
     try {
@@ -111,10 +153,14 @@ export default function CustomFood() {
   }
 
   const kj = energyUnit === 'kJ' ? parse(energy) : null;
+  // The message under a field, or, for the energy and macro rows, under the row.
+  const fieldError = (field: Field) => (invalid?.field === field ? invalid.message : null);
+  const rowBad = (field: Field) => (invalid?.field === field ? styles.inputBad : null);
+  const macroError = invalid && ['protein', 'carbs', 'fat'].includes(invalid.field) ? invalid.message : null;
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'Enter it yourself' }} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {scanned ? (
           <Notice>
             <Text variant="callout" style={{ fontFamily: Fonts.textMedium }}>
@@ -124,109 +170,158 @@ export default function CustomFood() {
           </Notice>
         ) : null}
 
-        <Section title="Food">
-          <View style={styles.fields}>
-            <TextField
-              label="Name"
-              value={name}
-              onChangeText={setName}
-              placeholder="For example: Chicken curry"
-              autoCapitalize="sentences"
-              maxLength={200}
-            />
-            <TextField
-              label="Brand"
-              optional
-              value={brand}
-              onChangeText={setBrand}
-              placeholder="For example: Woolworths"
-              maxLength={200}
-            />
-            <TextField
-              label="Barcode"
-              optional
-              value={barcode}
-              onChangeText={(t) => setBarcode(t.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              maxLength={14}
-              placeholder="The numbers under the barcode"
-            />
-          </View>
-        </Section>
-
-        <Section title="From the label">
-          <View style={styles.fields}>
-            <View style={{ gap: Spacing.two }}>
-              <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }}>
-                The numbers are for
-              </Text>
-              <Segmented options={BASIS} value={basis} onChange={setBasis} />
+        <View onLayout={(e) => (top.current.food = e.nativeEvent.layout.y)}>
+          <Section title="Food">
+            <View style={styles.fields}>
+              <TextField
+                ref={nameInput}
+                label="Name"
+                value={name}
+                onChangeText={(t) => {
+                  setName(t);
+                  edited('name');
+                }}
+                error={fieldError('name')}
+                placeholder="For example: Chicken curry"
+                autoCapitalize="sentences"
+                maxLength={200}
+              />
+              <TextField
+                label="Brand"
+                optional
+                value={brand}
+                onChangeText={setBrand}
+                placeholder="For example: Woolworths"
+                maxLength={200}
+              />
+              <TextField
+                ref={barcodeInput}
+                label="Barcode"
+                optional
+                value={barcode}
+                onChangeText={(t) => {
+                  setBarcode(t.replace(/[^0-9]/g, ''));
+                  edited('barcode');
+                }}
+                error={fieldError('barcode')}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="The numbers under the barcode"
+              />
             </View>
+          </Section>
+        </View>
 
-            <View style={styles.energyRow}>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Energy"
-                  value={energy}
-                  onChangeText={(t) => setEnergy(numberOnly(t))}
-                  keyboardType="decimal-pad"
-                  placeholder={energyUnit === 'kJ' ? 'kJ' : 'kcal'}
-                  maxLength={7}
-                />
+        <View onLayout={(e) => (top.current.label = e.nativeEvent.layout.y)}>
+          <Section title="From the label">
+            <View style={styles.fields}>
+              <View style={{ gap: Spacing.two }}>
+                <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }}>
+                  The numbers are for
+                </Text>
+                <Segmented options={BASIS} value={basis} onChange={setBasis} />
               </View>
-              <Segmented options={ENERGY} value={energyUnit} onChange={setEnergyUnit} style={{ width: 132 }} />
+
+              <View style={styles.energyRow}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    ref={energyInput}
+                    label="Energy"
+                    value={energy}
+                    onChangeText={(t) => {
+                      setEnergy(numberOnly(t));
+                      edited('energy');
+                    }}
+                    style={rowBad('energy')}
+                    keyboardType="decimal-pad"
+                    placeholder="For example 250"
+                    maxLength={7}
+                  />
+                </View>
+                <Segmented options={ENERGY} value={energyUnit} onChange={setEnergyUnit} style={{ width: 132 }} />
+              </View>
+              {fieldError('energy') ? (
+                <View style={{ marginTop: -Spacing.two }}>
+                  <ErrorText>{fieldError('energy')}</ErrorText>
+                </View>
+              ) : null}
+              {kj ? (
+                <Text variant="footnote" tone="secondary" style={{ marginTop: -Spacing.two }}>
+                  That’s {Math.round(kj / 4.184)} kcal.
+                </Text>
+              ) : null}
+
+              <View style={styles.macroRow}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    ref={proteinInput}
+                    label="Protein (g)"
+                    value={protein}
+                    onChangeText={(t) => {
+                      setProtein(numberOnly(t));
+                      edited(['protein', 'carbs', 'fat']);
+                    }}
+                    style={rowBad('protein')}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                    maxLength={6}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    ref={carbsInput}
+                    label="Carbs (g)"
+                    value={carbs}
+                    onChangeText={(t) => {
+                      setCarbs(numberOnly(t));
+                      edited(['protein', 'carbs', 'fat']);
+                    }}
+                    style={rowBad('carbs')}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                    maxLength={6}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    ref={fatInput}
+                    label="Fat (g)"
+                    value={fat}
+                    onChangeText={(t) => {
+                      setFat(numberOnly(t));
+                      edited(['protein', 'carbs', 'fat']);
+                    }}
+                    style={rowBad('fat')}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                    maxLength={6}
+                  />
+                </View>
+              </View>
+              {macroError ? (
+                <View style={{ marginTop: -Spacing.two }}>
+                  <ErrorText>{macroError}</ErrorText>
+                </View>
+              ) : null}
+
+              <TextField
+                ref={servingInput}
+                label={`One serving in ${measure}`}
+                optional
+                value={servingSize}
+                onChangeText={(t) => {
+                  setServingSize(numberOnly(t));
+                  edited('serving');
+                }}
+                error={fieldError('serving')}
+                keyboardType="decimal-pad"
+                placeholder={liquid ? 'For example 250' : 'For example 30'}
+                maxLength={7}
+              />
             </View>
-            {kj ? (
-              <Text variant="footnote" tone="secondary" style={{ marginTop: -Spacing.two }}>
-                That’s {Math.round(kj / 4.184)} kcal.
-              </Text>
-            ) : null}
-
-            <View style={styles.macroRow}>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Protein g"
-                  value={protein}
-                  onChangeText={(t) => setProtein(numberOnly(t))}
-                  keyboardType="decimal-pad"
-                  placeholder="0"
-                  maxLength={6}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Carbs g"
-                  value={carbs}
-                  onChangeText={(t) => setCarbs(numberOnly(t))}
-                  keyboardType="decimal-pad"
-                  placeholder="0"
-                  maxLength={6}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  label="Fat g"
-                  value={fat}
-                  onChangeText={(t) => setFat(numberOnly(t))}
-                  keyboardType="decimal-pad"
-                  placeholder="0"
-                  maxLength={6}
-                />
-              </View>
-            </View>
-
-            <TextField
-              label={`One serving in ${measure}`}
-              optional
-              value={servingSize}
-              onChangeText={(t) => setServingSize(numberOnly(t))}
-              keyboardType="decimal-pad"
-              placeholder={liquid ? 'For example 250' : 'For example 30'}
-              maxLength={7}
-            />
-          </View>
-        </Section>
+          </Section>
+        </View>
 
         <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
           It’s saved to your foods, so you can find it in Search next time.
@@ -281,6 +376,9 @@ const styles = themed(() => ({
   macroRow: {
     flexDirection: 'row',
     gap: Spacing.two,
+  },
+  inputBad: {
+    borderColor: Colors.danger,
   },
   footer: {
     paddingTop: Spacing.tight,

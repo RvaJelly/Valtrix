@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform, RefreshControl, ScrollView, View } from 'react-native';
+import { AppState, Platform, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
@@ -228,10 +228,13 @@ export default function Home() {
   const upcoming = data?.sessions?.filter((s) => endOf(s) > now) ?? null;
   const next = upcoming?.[0];
   const later = upcoming?.slice(1, 4) ?? [];
+  // A session in the next 24 hours is the most important thing on the screen, so it comes first, above
+  // the Today card; one further off sits below it.
+  const hasTrainers = !!data?.trainers && data.trainers.length > 0;
+  const nextSoon = !!next && hasTrainers && new Date(next.starts_at).getTime() - now.getTime() < 86_400_000;
   // The trainers loaded but the sessions didn't: the Next session card says so instead.
   const sessionsMissing = !!data?.trainers && !upcoming;
 
-  const hasTrainers = !!data?.trainers && data.trainers.length > 0;
   const waiting = !!data?.trainers && data.trainers.length === 0 && !data.invites.length;
 
   return (
@@ -308,6 +311,12 @@ export default function Home() {
           </Card>
         ) : null}
 
+        {nextSoon && next ? (
+          <EnterUp>
+            <NextSession session={next} now={now} />
+          </EnterUp>
+        ) : null}
+
         {today && userId ? (
           <TodayCard today={today} userId={userId} hasTrainers={hasTrainers} onChanged={todayChanged} />
         ) : null}
@@ -319,9 +328,11 @@ export default function Home() {
                 Your sessions could not be loaded.
               </Notice>
             ) : next ? (
-              <EnterUp>
-                <NextSession session={next} now={now} />
-              </EnterUp>
+              nextSoon ? null : (
+                <EnterUp>
+                  <NextSession session={next} now={now} />
+                </EnterUp>
+              )
             ) : (
               <EmptyState
                 compact
@@ -426,6 +437,8 @@ export default function Home() {
 // card with white type (on dark themes the raised surface), when first and big, then with whom and
 // where. Join, the screen's one orange button, sits under it as its own button while the call is on.
 function NextSession({ session, now }: { session: Session; now: Date }) {
+  // The big time steps down a size at large text, so "07:00–08:00" stays whole on one line.
+  const large = useWindowDimensions().fontScale > 1.15;
   const start = new Date(session.starts_at);
   const end = endOf(session);
   // One phrase: "in 25 min" when it is close, otherwise the day.
@@ -456,9 +469,11 @@ function NextSession({ session, now }: { session: Session; now: Date }) {
       </Text>
       <Text
         variant="display"
-        style={[Tabular, { color: ink, marginTop: Spacing.one }]}
+        // Chakra Petch's figures reach past a 46 line, so the line is taller than the type scale's.
+        style={[Tabular, { color: ink, marginTop: Spacing.one, lineHeight: 52 }, large && styles.heroTimeLarge]}
         numberOfLines={1}
-        adjustsFontSizeToFit>
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}>
         {timeRange(start, end)}
       </Text>
       <View style={[styles.heroMeta, { marginTop: Spacing.three }]}>
@@ -495,7 +510,7 @@ function EmailRow({ email }: { email: string }) {
   return (
     <View style={styles.email}>
       <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
-      <Text variant="rowTitle" numberOfLines={1} style={{ flex: 1 }} selectable>
+      <Text variant="rowTitle" numberOfLines={2} style={{ flex: 1 }} selectable>
         {email}
       </Text>
       <Button
@@ -545,6 +560,10 @@ const styles = themed(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  heroTimeLarge: {
+    fontSize: 32,
+    lineHeight: 40,
   },
   heroMeta: {
     flexDirection: 'row',

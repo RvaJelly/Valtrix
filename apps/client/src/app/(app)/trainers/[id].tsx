@@ -12,7 +12,7 @@ import { BRAND, Colors, Fonts, Layout, Radius, Spacing, themed, withAlpha } from
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { haptic } from '@/lib/haptics';
-import { loadReels, type Reel } from '@/lib/posts';
+import { loadReels, timeAgo, type Reel } from '@/lib/posts';
 import { serial, type Current } from '@/lib/serial';
 import {
   displayName,
@@ -283,11 +283,10 @@ export default function TrainerProfile() {
                   onPress={() => router.push({ pathname: '/reel/[id]', params: { id: r.id } })}
                   style={({ pressed }) => [styles.reel, pressed && { opacity: 0.8 }]}>
                   <Ionicons name="play" size={22} color={BRAND.white} />
-                  {r.caption ? (
-                    <Text variant="footnote" numberOfLines={2} style={styles.reelCaption}>
-                      {r.caption}
-                    </Text>
-                  ) : null}
+                  {/* Every tile has a line: the caption, or how long ago it was posted ("2d"). */}
+                  <Text variant="footnote" numberOfLines={2} style={styles.reelCaption}>
+                    {r.caption || timeAgo(r.created_at)}
+                  </Text>
                 </Pressable>
               ))}
             </View>

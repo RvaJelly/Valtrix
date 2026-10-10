@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -43,7 +42,7 @@ export default function Settings() {
     {
       icon: 'barbell-outline',
       title: 'Workouts and units',
-      subtitle: `${UNITS[settings.units].split(' ')[0]} · ${LENGTHS[settings.lengths].split(' ')[0]}`,
+      subtitle: `${UNITS[settings.units]} · ${LENGTHS[settings.lengths]}`,
       href: '/settings/units',
     },
     {
@@ -155,9 +154,6 @@ export default function Settings() {
             Signed in with your Voltrix Coach account. To delete it, use Voltrix Coach.
           </Text>
         ) : null}
-        <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
-          Voltrix {Constants.expoConfig?.version ?? ''}
-        </Text>
       </View>
     </SettingsPage>
   );

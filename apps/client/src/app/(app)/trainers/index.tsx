@@ -211,10 +211,8 @@ export default function Trainers() {
         ) : null}
       </View>
       {offered.length ? (
-        // The row runs to the screen edges, so a chip cut by the edge reads as "scroll for more".
-        <View style={{ marginHorizontal: -Spacing.gutter }}>
-          <Chips options={specialties} value={specialty} onChange={setSpecialty} all="All" />
-        </View>
+        // Chips runs the row to the screen edges itself, so a chip cut by the edge reads as "scroll for more".
+        <Chips options={specialties} value={specialty} onChange={setSpecialty} all="All" />
       ) : null}
       {sort !== 'default' || activeTown ? (
         <Text variant="footnote" tone="secondary">
@@ -254,7 +252,7 @@ export default function Trainers() {
               <Button
                 title="Clear"
                 variant="ghost"
-                size="small"
+                size="medium"
                 onPress={() => {
                   setSearch('');
                   setSpecialty(null);

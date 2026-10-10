@@ -493,8 +493,9 @@ const styles = themed(() => ({
   columnText: {
     textAlign: 'center',
   },
+  // Wide enough for "SET" at the largest label size, so the header never breaks.
   setColumn: {
-    width: 28,
+    width: 34,
   },
   weightColumn: {
     flex: 5,

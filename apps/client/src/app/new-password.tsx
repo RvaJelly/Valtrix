@@ -1,8 +1,7 @@
 import { useState } from 'react';
 
 import { AuthPage } from '@/components/auth-page';
-import { PasswordField } from '@/components/password-field';
-import { Button } from '@/components/ui';
+import { Button, TextField } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -36,7 +35,8 @@ export default function NewPassword() {
           <Button title="Cancel" variant="ghost" onPress={signOut} />
         </>
       }>
-      <PasswordField
+      <TextField
+        password
         label="New password"
         value={password}
         onChangeText={setPassword}

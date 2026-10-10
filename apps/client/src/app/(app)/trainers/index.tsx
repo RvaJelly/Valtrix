@@ -269,7 +269,8 @@ export default function Trainers() {
             {row.map((t) => (
               <TrainerCard key={t.id} trainer={t} mine={mine.has(t.id)} distanceKm={nearest?.get(t.id)} />
             ))}
-            {row.length === 1 ? <View style={{ flex: 1 }} /> : null}
+            {/* The empty half takes the card's padding too, so a lone last card is as wide as the ones above. */}
+            {row.length === 1 ? <View style={styles.card} /> : null}
           </View>
         ))}
       </View>

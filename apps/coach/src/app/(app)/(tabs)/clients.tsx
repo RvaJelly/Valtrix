@@ -71,22 +71,14 @@ export default function Clients() {
     return clients.filter((c) => `${fullName(c)} ${c.email ?? ''}`.toLowerCase().includes(term));
   }, [clients, search]);
 
-  // The header pulls its actions 8 pt right so plain icons line up; a filled circle should sit on the edge.
-  const add = (
-    <IconButton
-      variant="tonal"
-      icon="add"
-      label="Add client"
-      onPress={addClient}
-      style={{ marginRight: Spacing.two }}
-    />
-  );
+  const add = <IconButton variant="tonal" icon="add" label="Add client" onPress={addClient} />;
 
   if (clients && clients.length === 0) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <ScrollView contentContainerStyle={styles.list}>
-          <PageHeader title="Clients" actions={add} />
+          {/* The empty state's button is the one way to add a client here. */}
+          <PageHeader title="Clients" />
           <EmptyState
             icon="people-outline"
             title="Your client list starts here"
@@ -108,12 +100,16 @@ export default function Clients() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}
         ListHeaderComponent={
           <View style={styles.header}>
-            <PageHeader
-              eyebrow={clients ? `${clients.length} ${clients.length === 1 ? 'client' : 'clients'}` : undefined}
-              title="Clients"
-              actions={add}
+            <PageHeader title="Clients" actions={add} />
+            {/* The count lives in the search box, so the header doesn't move when the list arrives. */}
+            <SearchField
+              value={search}
+              onChangeText={setSearch}
+              placeholder={
+                clients ? `Search ${clients.length} ${clients.length === 1 ? 'client' : 'clients'}` : 'Search clients'
+              }
+              style={styles.search}
             />
-            <SearchField value={search} onChangeText={setSearch} placeholder="Search clients" style={styles.search} />
             {error ? <Notice tone="danger">{error}</Notice> : null}
             {!clients && !error && showSkeleton ? <SkeletonRows count={6} avatar /> : null}
           </View>
@@ -129,7 +125,8 @@ export default function Clients() {
           const app = appStatusOf(item);
           const paused = item.status !== 'active';
           const status = paused ? STATUS_LABELS[item.status] : app !== 'joined' ? APP_STATUS_LABELS[app] : null;
-          const goal = item.goal || item.email;
+          // The email belongs on the client's page; here a missing goal says so, as on Home.
+          const goal = item.goal;
           return (
             <View style={groupedItem(index, rows.length)}>
               <ListRow
@@ -140,7 +137,7 @@ export default function Clients() {
                   </Text>
                 }
                 leading={<Avatar name={fullName(item)} size={44} />}
-                trailing={
+                status={
                   paused ? (
                     <StatusPill tone="neutral" label={STATUS_LABELS[item.status]} />
                   ) : app !== 'joined' ? (

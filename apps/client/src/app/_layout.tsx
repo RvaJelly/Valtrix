@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AppLock } from '@/components/app-lock';
 import { FONT_FILES } from '@/constants/fonts';
@@ -17,9 +17,15 @@ SplashScreen.preventAutoHideAsync();
 function RootNavigator() {
   const { loading: authLoading, session, recovering } = useAuth();
   const { ready } = useSettings();
-  // A font that fails to load falls back to the system font, so it never keeps the app from starting.
+  // A font that fails to load, or takes more than 3 seconds, falls back to the system font, so it
+  // never keeps the app from starting. On the web the fonts load from public/index.html instead.
   const [fontsLoaded, fontError] = useFonts(FONT_FILES);
-  const loading = authLoading || !ready || !(fontsLoaded || fontError);
+  const [fontsLate, setFontsLate] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setFontsLate(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+  const loading = authLoading || !ready || !(fontsLoaded || fontError || fontsLate);
 
   useEffect(() => {
     if (fontError) console.warn('Fonts failed to load', fontError);

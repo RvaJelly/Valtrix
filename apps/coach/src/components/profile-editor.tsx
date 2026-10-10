@@ -4,7 +4,7 @@ import { Platform, Pressable, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { Body, Button, Card, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, themed } from '@/constants/theme';
 import type { Profile } from '@/lib/auth';
 import { findMe, townAt, type Coords } from '@/lib/location';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
@@ -164,7 +164,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
               accessibilityState={{ selected }}
               onPress={() => toggle(s)}
               style={[styles.chip, selected && styles.chipSelected]}>
-              <Text style={[styles.chipText, selected && { color: Colors.onAccent }]}>{s}</Text>
+              <Text style={[styles.chipText, selected && { color: Colors.background }]}>{s}</Text>
             </Pressable>
           );
         })}
@@ -184,7 +184,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
       <Text style={styles.label}>Location</Text>
       <View style={styles.locationRow}>
         <View style={styles.locationIcon}>
-          <Ionicons name={location ? 'location' : 'location-outline'} size={20} color={Colors.accentText} />
+          <Ionicons name={location ? 'location' : 'location-outline'} size={20} color={Colors.textSecondary} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.locationTitle}>{location ? 'Location set' : 'Not set'}</Text>
@@ -232,7 +232,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         style={{ minHeight: 110, paddingTop: Spacing.three, textAlignVertical: 'top' }}
       />
       <ErrorText>{error}</ErrorText>
-      {saved ? <Body style={{ color: Colors.accentText }}>Saved</Body> : null}
+      {saved ? <Body style={{ color: Colors.success }}>Saved</Body> : null}
       <Button title="Save profile" onPress={save} loading={busy} />
     </Card>
   );
@@ -282,20 +282,19 @@ const styles = themed(() => ({
     gap: Spacing.two,
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   chipSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   chipText: {
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.textMedium,
+    fontSize: 15,
+    lineHeight: 21,
   },
 }));

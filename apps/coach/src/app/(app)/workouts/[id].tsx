@@ -125,7 +125,7 @@ export default function WorkoutEditor() {
         <Body secondary>{error}</Body>
       </View>
     ) : (
-      <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />
+      <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />
     );
   }
 
@@ -313,9 +313,9 @@ const styles = themed(() => ({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.accent,
-    color: Colors.onAccent,
-    fontWeight: '800',
+    backgroundColor: Colors.tint,
+    color: Colors.text,
+    fontWeight: '700',
     textAlign: 'center',
     lineHeight: 28,
     overflow: 'hidden',

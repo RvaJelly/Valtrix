@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, Text, Vi
 
 import { Chips } from '@/components/chips';
 import { Body, Button, ErrorText, TextField } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { fullName, type Client } from '@/lib/clients';
 import {
   addDays,
@@ -170,7 +170,7 @@ export function SessionForm({ initial, day: initialDay, submitLabel, onSubmit, t
 
         {who && who !== NO_CLIENT ? (
           <View style={styles.online}>
-            <Ionicons name="videocam-outline" size={22} color={Colors.accentText} />
+            <Ionicons name="videocam-outline" size={22} color={Colors.textSecondary} />
             {/* The words toggle it too, so it is easy to hit. */}
             <Pressable accessible={false} onPress={() => setOnline(!online)} style={{ flex: 1 }}>
               <Text style={styles.onlineTitle}>Online (video call)</Text>
@@ -221,42 +221,43 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
       accessibilityState={{ selected }}
       onPress={onPress}
       style={[styles.choice, selected && styles.choiceSelected]}>
-      <Text style={[styles.choiceText, selected && { color: Colors.onAccent }]}>{label}</Text>
+      <Text style={[styles.choiceText, selected && { color: Colors.background }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Spacing.four,
+    paddingBottom: Spacing.hero,
     gap: Spacing.three,
   },
   label: {
+    ...Type.footnote,
+    fontFamily: Fonts.textMedium,
     color: Colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
   },
   wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
   },
+  // Selected chips are inverted (text-coloured), never orange.
   choice: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.large,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: Colors.tint,
   },
   choiceSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.text,
   },
   choiceText: {
+    ...Type.callout,
+    fontFamily: Fonts.textMedium,
     color: Colors.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
   dayRow: {
     flexDirection: 'row',
@@ -272,14 +273,14 @@ const styles = themed(() => ({
     borderRadius: Radius.small,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: Colors.tint,
   },
   dayText: {
+    ...Type.headline,
+    ...Tabular,
     flex: 1,
     textAlign: 'center',
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   online: {
     flexDirection: 'row',
@@ -290,9 +291,8 @@ const styles = themed(() => ({
     backgroundColor: Colors.surface,
   },
   onlineTitle: {
+    ...Type.rowTitle,
     color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
   },
   warning: {
     flexDirection: 'row',

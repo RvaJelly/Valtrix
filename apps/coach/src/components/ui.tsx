@@ -10,11 +10,13 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Platform,
   Pressable,
   Text as RNText,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
   type StyleProp,
   type TextInputProps,
@@ -22,21 +24,22 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { VMark } from '@/components/v-mark';
-import { Duration, Ease, Spring } from '@/constants/motion';
-import { Colors, Fonts, Radius, Spacing, Tabular, themed, Type, withAlpha, type TypeName } from '@/constants/theme';
+import { Duration, Ease, NATIVE_DRIVER, Spring, useReducedMotion } from '@/constants/motion';
+import {
+  BRAND,
+  Colors,
+  Fonts,
+  mix,
+  Radius,
+  Spacing,
+  Tabular,
+  themed,
+  Type,
+  withAlpha,
+  type TypeName,
+} from '@/constants/theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -163,8 +166,9 @@ export function Button({
   style,
 }: ButtonProps) {
   const reduceMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  const [scale] = useState(() => new Animated.Value(1));
+  const press = (to: number) =>
+    Animated.spring(scale, { toValue: to, ...Spring.press, useNativeDriver: NATIVE_DRIVER }).start();
   const s = SIZES[size];
   const inactive = disabled || loading;
   const { hovered, hover } = useHover(!!inactive);
@@ -186,7 +190,7 @@ export function Button({
         : Colors.text;
 
   return (
-    <Animated.View style={[pressStyle, style]}>
+    <Animated.View style={[{ transform: [{ scale }] }, style]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
@@ -196,9 +200,9 @@ export function Button({
         disabled={inactive}
         hitSlop={size === 'small' ? 4 : undefined}
         onPressIn={() => {
-          if (!reduceMotion) scale.set(withSpring(0.98, Spring.press));
+          if (!reduceMotion) press(0.98);
         }}
-        onPressOut={() => scale.set(withSpring(1, Spring.press))}
+        onPressOut={() => press(1)}
         {...hover}
         style={({ pressed }) => [
           styles.button,
@@ -220,6 +224,34 @@ export function Button({
         {loading ? <ActivityIndicator color={color} style={StyleSheet.absoluteFill} /> : null}
       </Pressable>
     </Animated.View>
+  );
+}
+
+// A quiet text link under a form: an optional lead-in in the secondary colour ("New here?") and the
+// action in the text colour. Never as heavy as a button.
+export function TextLink({ lead, label, onPress }: { lead?: string; label: string; onPress: () => void }) {
+  const { hovered, hover } = useHover();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={lead ? `${lead} ${label}` : label}
+      onPress={onPress}
+      {...hover}
+      style={[styles.textLink, pointer]}>
+      {({ pressed }) => (
+        <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
+          {lead ? `${lead} ` : null}
+          <Text
+            tone="primary"
+            style={{
+              fontFamily: lead ? Fonts.textSemi : Fonts.textMedium,
+              textDecorationLine: pressed || hovered ? 'underline' : 'none',
+            }}>
+            {label}
+          </Text>
+        </Text>
+      )}
+    </Pressable>
   );
 }
 
@@ -269,13 +301,14 @@ export function IconButton({
 type FieldProps = TextInputProps & { label: string; error?: string; optional?: boolean; icon?: IconName };
 
 // A labelled text box. The label stays above the field; focus and errors show on its border.
+// Focus is drawn in the text colour, which stands out on every theme and with every accent.
 export function TextField({ label, error, optional, icon, style, onFocus, onBlur, ...rest }: FieldProps) {
   const [focused, setFocused] = useState(false);
-  const border = error ? Colors.danger : focused ? Colors.accent : 'transparent';
+  const border = error ? Colors.danger : focused ? Colors.text : 'transparent';
   const input = (
     <TextInput
       accessibilityLabel={label}
-      placeholderTextColor={Colors.textTertiary}
+      placeholderTextColor={Colors.textSecondary}
       selectionColor={Colors.accent}
       onFocus={(e) => {
         setFocused(true);
@@ -297,7 +330,7 @@ export function TextField({ label, error, optional, icon, style, onFocus, onBlur
       </Text>
       {icon ? (
         <View style={[styles.input, styles.inputRow, { borderColor: border }]}>
-          <Ionicons name={icon} size={18} color={Colors.textTertiary} />
+          <Ionicons name={icon} size={18} color={Colors.textSecondary} />
           {input}
         </View>
       ) : (
@@ -322,13 +355,13 @@ export function SearchField({
 }) {
   return (
     <View style={[styles.search, style]}>
-      <Ionicons name="search-outline" size={18} color={Colors.textTertiary} />
+      <Ionicons name="search-outline" size={18} color={Colors.textSecondary} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         accessibilityLabel={placeholder}
-        placeholderTextColor={Colors.textTertiary}
+        placeholderTextColor={Colors.textSecondary}
         selectionColor={Colors.accent}
         autoCorrect={false}
         autoCapitalize="none"
@@ -346,6 +379,51 @@ export function SearchField({
           <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+// The selected segment of a segmented control: a raised, monochrome pill on the tint track
+// (never orange). Light themes lift it with a soft shadow; dark themes with a lighter fill.
+export function segmentOn(): ViewStyle {
+  return Colors.scheme === 'light'
+    ? { backgroundColor: Colors.surfaceHigh, boxShadow: '0 1px 3px rgba(14,14,15,0.12)' }
+    : { backgroundColor: Colors.tintPressed };
+}
+
+// Two to four choices in one row: Workouts / Sessions, Navy / Light / Auto.
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  style,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.segmented, style]} accessibilityRole="tablist">
+      {options.map((o) => {
+        const selected = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(o.value)}
+            style={[styles.segment, pointer, selected && segmentOn()]}>
+            <Text
+              variant="callout"
+              tone={selected ? 'primary' : 'secondary'}
+              style={{ fontFamily: Fonts.textSemi }}
+              numberOfLines={1}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -411,40 +489,76 @@ export function Notice({
 
 // ---------- Surfaces ----------
 
+// Every card's content starts 20 in from its edge, the same as a row's text, so stacked cards and
+// groups share one left edge. A hero card is roomier top and bottom only.
+const CARD_X = Spacing.gutter;
+const CARD_Y = Spacing.gutter;
+const HERO_Y = Spacing.four;
+
 // A card: the warm surface colour, no border, no shadow. Never put a card inside a card.
+// With `onPress` the content is one button; `footer` (a Join button) sits under it as its own
+// button, never inside the card's, so screen readers and the web reach both.
 export function Card({
   children,
   style,
   hero,
   onPress,
+  footer,
+  pressedFill,
   accessibilityLabel,
   accessibilityHint,
 }: PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
-  // The one big card at the top of a screen: rounder and roomier.
+  // The one big card at the top of a screen: roomier top and bottom.
   hero?: boolean;
   onPress?: () => void;
+  footer?: ReactNode;
+  // The pressed and hovered fill, for a card that isn't the surface colour.
+  pressedFill?: string;
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }>) {
   const { hovered, hover } = useHover();
+  const [pressed, setPressed] = useState(false);
   const look = [styles.card, hero && styles.hero, style];
-  if (!onPress) return <View style={look}>{children}</View>;
+  const footerView = footer ? <View style={{ marginTop: Spacing.gutter }}>{footer}</View> : null;
+  if (!onPress) {
+    return (
+      <View style={look}>
+        {children}
+        {footerView}
+      </View>
+    );
+  }
+  const y = hero ? HERO_Y : CARD_Y;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={accessibilityHint}
-      onPress={onPress}
-      {...hover}
-      style={[look, pointer]}>
-      {({ pressed }) => (
-        <>
-          {pressed || hovered ? <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.tint }]} /> : null}
-          {children}
-        </>
-      )}
-    </Pressable>
+    <View style={look}>
+      {pressed || hovered ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: pressedFill ?? Colors.tint }]} />
+      ) : null}
+      {/* The pressable area reaches the card's edges, so the padding is part of the target. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        onPress={onPress}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
+        {...hover}
+        style={[
+          pointer,
+          {
+            marginHorizontal: -CARD_X,
+            paddingHorizontal: CARD_X,
+            marginTop: -y,
+            paddingTop: y,
+            ...(footer ? null : { marginBottom: -y, paddingBottom: y }),
+          },
+        ]}>
+        {children}
+      </Pressable>
+      {footerView}
+    </View>
   );
 }
 
@@ -482,6 +596,9 @@ type ListRowProps = {
   subtitle?: ReactNode;
   // An avatar or IconTile on the left.
   leading?: ReactNode;
+  // A short status (a pill or a dot and a word). With large text it moves under the title, so the
+  // title keeps its width.
+  status?: ReactNode;
   trailing?: ReactNode;
   // Shown by default when the row can be pressed.
   chevron?: boolean;
@@ -497,12 +614,13 @@ type ListRowProps = {
   accessibilityState?: ComponentProps<typeof Pressable>['accessibilityState'];
 };
 
-// A row in a Group: leading, title and subtitle, trailing, chevron. The hairline under it starts
-// where the title starts.
+// A row in a Group: leading, title and subtitle, status, trailing, chevron. The hairline under it
+// starts where the title starts. With large text the title and subtitle may take two lines.
 export function ListRow({
   title,
   subtitle,
   leading,
+  status,
   trailing,
   chevron,
   onPress,
@@ -516,24 +634,31 @@ export function ListRow({
   accessibilityState,
 }: ListRowProps) {
   const { hovered, hover } = useHover();
+  const large = useWindowDimensions().fontScale > 1.15;
   const showChevron = chevron ?? !!onPress;
   const content = (
     <>
       {leading ? <View style={styles.rowLeading}>{leading}</View> : null}
       <View style={[styles.rowBody, { minHeight: compact ? 56 : 64 }, !last && styles.rowLine]}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text variant="rowTitle" tone={titleTone} numberOfLines={titleLines} style={titleStyle}>
+        <View style={styles.rowText}>
+          <Text
+            variant="rowTitle"
+            tone={titleTone}
+            numberOfLines={large ? Math.max(titleLines, 2) : titleLines}
+            style={titleStyle}>
             {title}
           </Text>
           {typeof subtitle === 'string' ? (
-            <Text variant="footnote" tone="secondary" numberOfLines={2}>
+            <Text variant="footnote" tone="secondary" numberOfLines={large ? 2 : 1}>
               {subtitle}
             </Text>
           ) : (
             subtitle
           )}
+          {status && large ? <View style={styles.rowStatusBelow}>{status}</View> : null}
         </View>
-        {trailing}
+        {status && !large ? <View style={styles.rowTrailing}>{status}</View> : null}
+        {trailing ? <View style={styles.rowTrailing}>{trailing}</View> : null}
         {showChevron ? <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} /> : null}
       </View>
     </>
@@ -553,7 +678,8 @@ export function ListRow({
   );
 }
 
-// A titled block of a page: an uppercase label and maybe one action on the right.
+// A titled block of a page: an uppercase label and maybe one quiet action on the right ("See all ›"),
+// always quieter than the label it sits beside.
 export function Section({
   title,
   action,
@@ -564,6 +690,7 @@ export function Section({
   action?: { label: string; onPress: () => void; accessibilityLabel?: string };
   style?: StyleProp<ViewStyle>;
 }>) {
+  const { hovered, hover } = useHover();
   return (
     <View style={[{ gap: Spacing.tight }, style]}>
       <View style={styles.sectionHeader}>
@@ -575,14 +702,21 @@ export function Section({
             accessibilityRole="button"
             accessibilityLabel={action.accessibilityLabel}
             onPress={action.onPress}
-            hitSlop={12}
+            {...hover}
             style={[styles.sectionAction, pointer]}>
             {({ pressed }) => (
               <>
-                <Text variant="callout" tone={pressed ? 'secondary' : 'primary'} style={{ fontFamily: Fonts.textSemi }}>
+                <Text
+                  variant="footnote"
+                  tone={pressed || hovered ? 'primary' : 'secondary'}
+                  style={{ fontFamily: Fonts.textMedium }}>
                   {action.label}
                 </Text>
-                <Ionicons name="chevron-forward" size={14} color={Colors.textSecondary} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={12}
+                  color={pressed || hovered ? Colors.text : Colors.textTertiary}
+                />
               </>
             )}
           </Pressable>
@@ -593,7 +727,9 @@ export function Section({
   );
 }
 
-// The top of a tab screen: a small eyebrow line, a big uppercase title and icon buttons on the right.
+// The top of a tab screen. With an eyebrow (and the Rising V), the icon buttons share the eyebrow's
+// line and the big uppercase title has the full width below; without one, the buttons sit beside
+// the title.
 export function PageHeader({
   eyebrow,
   title,
@@ -615,32 +751,35 @@ export function PageHeader({
       {title}
     </Text>
   );
-  return (
-    <View style={styles.pageHeader}>
-      <View style={{ flex: 1, gap: Spacing.one }}>
-        {brand || eyebrow ? (
-          <View style={styles.eyebrow}>
-            {brand ? <VMark height={14} /> : null}
-            {eyebrow ? (
-              <Text variant="label" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
-                {eyebrow}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-        {onTitlePress ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={titleAccessibilityLabel}
-            onPress={onTitlePress}
-            style={[{ alignSelf: 'flex-start' }, pointer]}>
-            {heading}
-          </Pressable>
-        ) : (
-          heading
-        )}
+  const titleView = onTitlePress ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={titleAccessibilityLabel}
+      onPress={onTitlePress}
+      style={[{ alignSelf: 'flex-start' }, pointer]}>
+      {heading}
+    </Pressable>
+  ) : (
+    heading
+  );
+  if (!brand && !eyebrow) {
+    return (
+      <View style={styles.pageHeaderRow}>
+        <View style={{ flex: 1 }}>{titleView}</View>
+        {actions ? <View style={styles.pageActionsBeside}>{actions}</View> : null}
       </View>
-      {actions ? <View style={styles.pageActions}>{actions}</View> : null}
+    );
+  }
+  return (
+    <View style={{ gap: Spacing.one }}>
+      <View style={styles.eyebrow}>
+        {brand ? <VMark height={14} /> : null}
+        <Text variant="label" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
+          {eyebrow ?? ''}
+        </Text>
+        {actions ? <View style={styles.pageActions}>{actions}</View> : null}
+      </View>
+      {titleView}
     </View>
   );
 }
@@ -660,19 +799,28 @@ export function StatusDot({ tone, label }: { tone: StatusTone; label: string }) 
   return (
     <View style={styles.statusDotRow}>
       <View style={[styles.dot, { backgroundColor: statusColor(tone) }]} />
-      <Text variant="footnote" tone="secondary" style={{ fontFamily: Fonts.textMedium }} numberOfLines={1}>
+      <Text
+        variant="footnote"
+        tone="secondary"
+        style={{ fontFamily: Fonts.textMedium, flexShrink: 1 }}
+        numberOfLines={1}>
         {label}
       </Text>
     </View>
   );
 }
 
+// A word on a tinted pill. On light themes the word is a deeper shade of its colour on a lighter
+// tint, so 12 px text clears 4.5:1 against the pill.
 export function StatusPill({ tone, label }: { tone: StatusTone; label: string }) {
   const color = statusColor(tone);
   const neutral = tone === 'neutral' || tone === 'muted';
+  const light = Colors.scheme === 'light';
+  const ink = neutral || !light ? color : mix(color, BRAND.iron, 0.15);
+  const fill = neutral ? Colors.tint : withAlpha(color, light ? 0.1 : 0.14);
   return (
-    <View style={[styles.pill, { backgroundColor: neutral ? Colors.tint : withAlpha(color, 0.14) }]}>
-      <Text style={[styles.pillText, { color }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+    <View style={[styles.pill, { backgroundColor: fill }]}>
+      <Text style={[styles.pillText, { color: ink }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
     </View>
@@ -681,37 +829,44 @@ export function StatusPill({ tone, label }: { tone: StatusTone; label: string })
 
 // ---------- Numbers ----------
 
-// A quiet row of numbers separated by hairlines, no cards.
+// A quiet row of numbers separated by hairlines, no cards. Labels are sentence case. With large
+// text the numbers go two to a row instead of cutting their labels short.
 export function StatStrip({
   items,
 }: {
-  items: { value: string | number | null | undefined; label: string; onPress?: () => void }[];
+  // `spoken` replaces "value label" for screen readers when the short label needs more words.
+  items: { value: string | number | null | undefined; label: string; spoken?: string; onPress?: () => void }[];
 }) {
+  const grid = useWindowDimensions().fontScale > 1.2 && items.length > 2;
   return (
-    <View style={styles.statStrip}>
+    <View style={[styles.statStrip, grid && styles.statGrid]}>
       {items.map((item, i) => {
         const content = (
           <>
             <Text variant="stat" style={Tabular}>
               {item.value ?? '–'}
             </Text>
-            <Text variant="label" tone="secondary" numberOfLines={1}>
+            <Text variant="footnote" tone="secondary" numberOfLines={2} style={{ fontFamily: Fonts.textMedium }}>
               {item.label}
             </Text>
           </>
         );
-        const look = [styles.statItem, i > 0 && styles.statDivider];
+        const look = [styles.statItem, grid && styles.statItemGrid, (grid ? i % 2 === 1 : i > 0) && styles.statDivider];
         return item.onPress ? (
           <Pressable
             key={item.label}
             accessibilityRole="button"
-            accessibilityLabel={`${item.value ?? 'No'} ${item.label}`}
+            accessibilityLabel={item.spoken ?? `${item.value ?? 'No'} ${item.label}`}
             onPress={item.onPress}
             style={({ pressed }) => [look, pointer, pressed && { backgroundColor: Colors.tint }]}>
             {content}
           </Pressable>
         ) : (
-          <View key={item.label} style={look} accessible accessibilityLabel={`${item.value ?? 'No'} ${item.label}`}>
+          <View
+            key={item.label}
+            style={look}
+            accessible
+            accessibilityLabel={item.spoken ?? `${item.value ?? 'No'} ${item.label}`}>
             {content}
           </View>
         );
@@ -720,7 +875,8 @@ export function StatStrip({
   );
 }
 
-// A thin bar for progress. Text-coloured unless it is the screen's main number.
+// A thin bar for progress. Text-coloured unless it is the screen's main number. The fill grows
+// with a transform, so no layout runs while it moves.
 export function ProgressBar({
   progress,
   color,
@@ -732,16 +888,56 @@ export function ProgressBar({
   height?: number;
 }) {
   const reduceMotion = useReducedMotion();
-  const share = useSharedValue(0);
+  const [share] = useState(() => new Animated.Value(0));
   const p = Math.max(0, Math.min(1, Number.isFinite(progress) ? progress : 0));
   useEffect(() => {
-    share.set(reduceMotion ? p : withTiming(p, { duration: 300, easing: Ease.standard }));
+    if (reduceMotion) share.setValue(p);
+    else
+      Animated.timing(share, {
+        toValue: p,
+        duration: Duration.enter,
+        easing: Ease.standard,
+        useNativeDriver: NATIVE_DRIVER,
+      }).start();
   }, [p, reduceMotion, share]);
-  const fillStyle = useAnimatedStyle(() => ({ width: `${share.get() * 100}%` }));
   return (
     <View style={[styles.bar, { height, borderRadius: height / 2 }]}>
-      <Animated.View style={[{ height, borderRadius: height / 2, backgroundColor: color ?? Colors.text }, fillStyle]} />
+      <Animated.View
+        style={{
+          height,
+          borderRadius: height / 2,
+          backgroundColor: color ?? Colors.text,
+          transformOrigin: 'left',
+          transform: [{ scaleX: share }],
+        }}
+      />
     </View>
+  );
+}
+
+// ---------- Motion ----------
+
+// The first appearance of a card or group: up 8 and fade in, once, on mount. Only the first six are
+// staggered. With reduced motion it only fades.
+export function EnterUp({
+  index = 0,
+  children,
+  style,
+}: PropsWithChildren<{ index?: number; style?: StyleProp<ViewStyle> }>) {
+  const reduceMotion = useReducedMotion();
+  const [shown] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(shown, {
+      toValue: 1,
+      duration: Duration.enter,
+      delay: Math.min(index, 5) * 40,
+      easing: Ease.enter,
+      useNativeDriver: NATIVE_DRIVER,
+    }).start();
+  }, [index, shown]);
+  const rise = shown.interpolate({ inputRange: [0, 1], outputRange: [reduceMotion ? 0 : 8, 0] });
+  return (
+    <Animated.View style={[{ opacity: shown, transform: [{ translateY: rise }] }, style]}>{children}</Animated.View>
   );
 }
 
@@ -757,7 +953,32 @@ export function useDelayed(ms = 300) {
   return shown;
 }
 
-// A placeholder block that gently pulses while the real thing loads.
+// Every skeleton on screen pulses together from one shared loop, which runs only while one shows.
+const pulse = new Animated.Value(1);
+const pulsing = { count: 0, loop: null as Animated.CompositeAnimation | null };
+
+function joinPulse() {
+  pulsing.count += 1;
+  if (pulsing.count > 1) return;
+  const half = { duration: Duration.pulse / 2, easing: Ease.standard, useNativeDriver: NATIVE_DRIVER };
+  pulsing.loop = Animated.loop(
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.55, ...half }),
+      Animated.timing(pulse, { toValue: 1, ...half }),
+    ]),
+  );
+  pulsing.loop.start();
+}
+
+function leavePulse() {
+  pulsing.count -= 1;
+  if (pulsing.count > 0) return;
+  pulsing.loop?.stop();
+  pulsing.loop = null;
+  pulse.setValue(1);
+}
+
+// A placeholder block that gently pulses while the real thing loads (still with reduced motion).
 export function Skeleton({
   width,
   height,
@@ -770,20 +991,18 @@ export function Skeleton({
   style?: StyleProp<ViewStyle>;
 }) {
   const reduceMotion = useReducedMotion();
-  const opacity = useSharedValue(1);
   useEffect(() => {
-    if (reduceMotion) {
-      opacity.set(0.75);
-      return;
-    }
-    const half = { duration: Duration.pulse / 2, easing: Easing.inOut(Easing.ease) };
-    opacity.set(withRepeat(withSequence(withTiming(0.55, half), withTiming(1, half)), -1));
-    return () => cancelAnimation(opacity);
-  }, [reduceMotion, opacity]);
-  const pulse = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+    if (reduceMotion) return;
+    joinPulse();
+    return leavePulse;
+  }, [reduceMotion]);
   return (
     <Animated.View
-      style={[{ width: width ?? '100%', height, borderRadius: radius, backgroundColor: Colors.tint }, pulse, style]}
+      style={[
+        { width: width ?? '100%', height, borderRadius: radius, backgroundColor: Colors.tint },
+        { opacity: reduceMotion ? 0.75 : pulse },
+        style,
+      ]}
     />
   );
 }
@@ -861,6 +1080,12 @@ const styles = themed(() => ({
     justifyContent: 'center',
     gap: Spacing.two,
   },
+  textLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.two,
+  },
   iconPlain: {
     width: 44,
     height: 44,
@@ -878,7 +1103,7 @@ const styles = themed(() => ({
   input: {
     minHeight: 52,
     borderRadius: Radius.medium,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: 'transparent',
     backgroundColor: Colors.tint,
     color: Colors.text,
@@ -911,6 +1136,21 @@ const styles = themed(() => ({
     color: Colors.text,
     ...Type.body,
   },
+  segmented: {
+    flexDirection: 'row',
+    minHeight: 40,
+    padding: 3,
+    borderRadius: Radius.medium,
+    backgroundColor: Colors.tint,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 34,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -921,19 +1161,19 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.tight,
     paddingVertical: Spacing.tight,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: CARD_X,
     borderRadius: Radius.medium,
   },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.large,
     borderCurve: 'continuous',
-    padding: Spacing.gutter,
+    paddingHorizontal: CARD_X,
+    paddingVertical: CARD_Y,
     overflow: 'hidden',
   },
   hero: {
-    borderRadius: Radius.xl,
-    padding: Spacing.four,
+    paddingVertical: HERO_Y,
   },
   group: {
     backgroundColor: Colors.surface,
@@ -956,7 +1196,7 @@ const styles = themed(() => ({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    paddingLeft: Spacing.three,
+    paddingLeft: CARD_X,
   },
   rowLeading: {
     justifyContent: 'center',
@@ -968,7 +1208,21 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.tight,
     paddingVertical: 10,
-    paddingRight: Spacing.three,
+    paddingRight: CARD_X,
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  rowTrailing: {
+    flexShrink: 1,
+    maxWidth: '45%',
+    alignItems: 'flex-end',
+  },
+  rowStatusBelow: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.one,
   },
   rowLine: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -980,28 +1234,41 @@ const styles = themed(() => ({
     gap: Spacing.two,
     minHeight: 22,
   },
+  // 44 high for the finger, drawn in the 22 of the header row.
   sectionAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    minHeight: 44,
+    marginVertical: -11,
+    paddingLeft: Spacing.tight,
+    paddingRight: Spacing.two,
+    marginRight: -Spacing.two,
   },
-  pageHeader: {
+  pageHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Spacing.two,
+    minHeight: 40,
   },
   eyebrow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    minHeight: 16,
+    minHeight: 32,
   },
+  // The 44 buttons take only the 32 of the eyebrow line, so the title doesn't move down.
   pageActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-    marginRight: -Spacing.two,
-    marginTop: -2,
+    marginRight: -10,
+    marginVertical: -6,
+  },
+  pageActionsBeside: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   statusDotRow: {
     flexDirection: 'row',
@@ -1028,12 +1295,20 @@ const styles = themed(() => ({
   statStrip: {
     flexDirection: 'row',
   },
+  statGrid: {
+    flexWrap: 'wrap',
+    rowGap: Spacing.three,
+  },
   statItem: {
     flex: 1,
     gap: Spacing.one,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.medium,
+  },
+  statItemGrid: {
+    flex: 0,
+    flexBasis: '50%',
   },
   statDivider: {
     borderLeftWidth: StyleSheet.hairlineWidth,

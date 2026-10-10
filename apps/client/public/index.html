@@ -5,8 +5,57 @@
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>%WEB_TITLE%</title>
+    <!-- The brand fonts, Latin subsets (about 90 KB in all, SIL Open Font License). The page draws
+         at once in the system font and swaps these in, so a slow connection never holds the app. -->
+    <link rel="preload" href="/fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/Inter-Medium.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/Inter-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ChakraPetch-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ChakraPetch-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- The page and splash follow the theme saved on this device, so a dark theme never starts white. -->
+    <script>
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('valtrix.settings') || '{}');
+          var a = s.v === 2 ? s.appearance : undefined;
+          var dark =
+            a === 'dark' || (a === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.setAttribute('data-scheme', 'dark');
+        } catch (e) {}
+      })();
+    </script>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
+      @font-face {
+        font-family: 'Inter-Regular';
+        src: url('/fonts/Inter-Regular.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter-Medium';
+        src: url('/fonts/Inter-Medium.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Inter-SemiBold';
+        src: url('/fonts/Inter-SemiBold.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'ChakraPetch-SemiBold';
+        src: url('/fonts/ChakraPetch-SemiBold.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'ChakraPetch-Bold';
+        src: url('/fonts/ChakraPetch-Bold.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: swap;
+      }
       /* These styles make the body full-height */
       html,
       body {
@@ -16,6 +65,14 @@
       html,
       body {
         background: #FFFFFF;
+      }
+      /* The dark theme, when it is the one saved (see the script above). */
+      html[data-scheme='dark'],
+      html[data-scheme='dark'] body {
+        background: #0E0E0F;
+      }
+      html[data-scheme='dark'] #voltrix-splash .v-left {
+        fill: #FFFFFF;
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
@@ -55,7 +112,7 @@
     </noscript>
     <div id="voltrix-splash" aria-hidden="true">
       <svg viewBox="-25 -45 135.8 170" width="56" height="70">
-        <path fill="#0E0E0F" d="M0,0 L22,0 L51,100 L29,100 Z" />
+        <path class="v-left" fill="#0E0E0F" d="M0,0 L22,0 L51,100 L29,100 Z" />
         <path fill="#FF5B14" d="M63.8,-20 L85.8,-20 L51,100 L29,100 Z" />
       </svg>
     </div>

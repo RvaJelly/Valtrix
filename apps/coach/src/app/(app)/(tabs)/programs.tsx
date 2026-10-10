@@ -1,34 +1,36 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useLayoutEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { FlatList, Platform, RefreshControl, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Body, Button, EmptyState, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  EmptyState,
+  Group,
+  groupedItem,
+  IconButton,
+  IconTile,
+  ListRow,
+  Notice,
+  PageHeader,
+  Section,
+  SkeletonRows,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { Workout } from '@/lib/workouts';
 
 type WorkoutRow = Workout & { workout_exercises: { count: number }[] };
 
+const newWorkout = () => router.push('/workouts/new');
+
 export default function Programs() {
-  const navigation = useNavigation();
   const [workouts, setWorkouts] = useState<WorkoutRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityLabel="New workout"
-          hitSlop={12}
-          onPress={() => router.push('/workouts/new')}
-          style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
-        </Pressable>
-      ),
-    });
-  }, [navigation]);
+  const showSkeleton = useDelayed(300);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
@@ -55,116 +57,90 @@ export default function Programs() {
     setRefreshing(false);
   }
 
-  const libraryLink = (
-    <Pressable
-      onPress={() => router.push('/exercises')}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-      <View style={[styles.icon, { backgroundColor: Colors.surfaceRaised }]}>
-        <Ionicons name="library" size={22} color={Colors.accentText} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name}>Exercise library</Text>
-        <Body secondary style={{ fontSize: 14 }}>
-          Browse exercises and add your own
-        </Body>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-    </Pressable>
-  );
-
+  const rows = workouts ?? [];
   return (
-    <FlatList
-      data={workouts ?? []}
-      keyExtractor={(w) => w.id}
-      contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.accentText} />}
-      ListHeaderComponent={
-        <View style={{ gap: Spacing.three, marginBottom: Spacing.three }}>
-          {libraryLink}
-          <Text style={styles.section}>Nutrition</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/nutrition/check')}
-            style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-            <View style={[styles.icon, { backgroundColor: Colors.surfaceRaised }]}>
-              <Ionicons name="nutrition" size={22} color={Colors.accentText} />
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <FlatList
+        data={rows}
+        keyExtractor={(w) => w.id}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <PageHeader
+              title="Programs"
+              actions={<IconButton variant="tonal" icon="add" label="New workout" onPress={newWorkout} />}
+            />
+            <Section title="Library">
+              <Group>
+                <ListRow
+                  title="Exercise library"
+                  subtitle="Browse exercises and add your own"
+                  leading={<IconTile icon="list-outline" />}
+                  onPress={() => router.push('/exercises')}
+                />
+                <ListRow
+                  title="Check a food"
+                  subtitle="Calories, protein, carbs and fat"
+                  leading={<IconTile icon="restaurant-outline" />}
+                  onPress={() => router.push('/nutrition/check')}
+                  last
+                />
+              </Group>
+            </Section>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            {rows.length > 0 ? (
+              <Text variant="label" tone="secondary" accessibilityRole="header">
+                Your workouts
+              </Text>
+            ) : null}
+            {!workouts && !error && showSkeleton ? <SkeletonRows count={4} /> : null}
+          </View>
+        }
+        ListEmptyComponent={
+          workouts ? (
+            <EmptyState
+              icon="barbell-outline"
+              title="No workouts yet"
+              message="Build a workout from the exercise library. You can assign it to clients next."
+              action={<Button title="Build a workout" onPress={newWorkout} />}
+            />
+          ) : null
+        }
+        renderItem={({ item, index }) => {
+          const count = item.workout_exercises[0]?.count ?? 0;
+          return (
+            <View style={groupedItem(index, rows.length)}>
+              <ListRow
+                title={item.name}
+                subtitle={count === 1 ? '1 exercise' : `${count} exercises`}
+                leading={<IconTile icon="barbell-outline" />}
+                onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.id } })}
+                last={index === rows.length - 1}
+              />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>Check a food</Text>
-              <Body secondary style={{ fontSize: 14 }}>
-                Scan or search to see calories, protein, carbs and fat
-              </Body>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-          </Pressable>
-          <ErrorText>{error}</ErrorText>
-          {workouts && workouts.length > 0 ? <Text style={styles.section}>Your workouts</Text> : null}
-        </View>
-      }
-      ListEmptyComponent={
-        workouts ? (
-          <EmptyState
-            icon="barbell-outline"
-            title="No workouts yet"
-            message="Build a workout from the exercise library. You can assign it to clients next."
-            action={<Button title="Build a workout" onPress={() => router.push('/workouts/new')} />}
-          />
-        ) : null
-      }
-      ItemSeparatorComponent={() => <View style={{ height: Spacing.two }} />}
-      renderItem={({ item }) => {
-        const count = item.workout_exercises[0]?.count ?? 0;
-        return (
-          <Pressable
-            onPress={() => router.push({ pathname: '/workouts/[id]', params: { id: item.id } })}
-            style={({ pressed }) => [styles.row, pressed && { backgroundColor: Colors.surfaceRaised }]}>
-            <View style={styles.icon}>
-              <Ionicons name="barbell" size={22} color={Colors.onAccent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Body secondary style={{ fontSize: 14 }}>
-                {count === 1 ? '1 exercise' : `${count} exercises`}
-              </Body>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-          </Pressable>
-        );
-      }}
-    />
+          );
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = themed(() => ({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   list: {
-    padding: Spacing.three,
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
   },
-  section: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  icon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  name: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+  header: {
+    gap: Spacing.section,
+    marginBottom: Spacing.tight,
   },
 }));

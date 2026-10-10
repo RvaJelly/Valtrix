@@ -143,7 +143,7 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
 
   let body;
   if (!checked) {
-    body = <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
+    body = <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />;
   } else if (typing || !hasCamera) {
     body = (
       <TypeBarcode

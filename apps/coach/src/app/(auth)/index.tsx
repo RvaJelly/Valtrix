@@ -9,17 +9,18 @@ import { Colors, Fonts, Layout, Spacing, themed } from '@/constants/theme';
 import { TRIAL_DAYS } from '@/lib/access';
 
 const HIGHLIGHTS = [
-  { title: 'All your clients', text: 'Goals, notes and progress in one place.' },
-  { title: 'Programs in minutes', text: 'Build workouts from a ready-made library.' },
-  { title: 'Bookings and chat', text: 'Fill your calendar, minus the WhatsApp chaos.' },
+  { title: 'All your clients', text: 'Goals, notes and progress together.' },
+  { title: 'Programs in minutes', text: 'Build from a ready-made library.' },
+  { title: 'Bookings and chat', text: 'Bookings without the WhatsApp chaos.' },
 ];
 
 export default function Welcome() {
   const wide = useWindowDimensions().width >= Layout.wide;
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      {/* A faint Rising V behind everything: atmosphere without photos. */}
-      <VMark height={560} mono style={styles.watermark} />
+      {/* A faint Rising V behind everything: atmosphere without photos. It runs off the right and
+          bottom edges, so no edge of it shows. */}
+      <VMark height={640} mono style={styles.watermark} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, wide && styles.contentWide]}>
         <Logo style={styles.logo} />
         <View style={styles.hero}>
@@ -34,7 +35,7 @@ export default function Welcome() {
           </Text>
         </View>
 
-        <View style={styles.list}>
+        <View style={[styles.list, !wide && styles.listLow]}>
           {HIGHLIGHTS.map((h, i) => (
             <View key={h.title} style={styles.item}>
               <Text style={styles.number}>{String(i + 1).padStart(2, '0')}</Text>
@@ -66,11 +67,12 @@ const styles = themed(() => ({
   },
   watermark: {
     position: 'absolute',
-    right: -120,
-    top: 72,
+    right: -180,
+    bottom: -200,
     opacity: Colors.scheme === 'light' ? 0.04 : 0.05,
   },
   content: {
+    flexGrow: 1,
     width: '100%',
     maxWidth: Layout.maxWelcome,
     alignSelf: 'center',
@@ -85,16 +87,22 @@ const styles = themed(() => ({
   logo: {
     width: 148,
     alignSelf: 'flex-start',
+    // The image carries the brand kit's clear space; this lines the V up with the text below.
+    marginLeft: -12,
   },
   hero: {
     marginTop: 40,
+    marginBottom: Spacing.five,
+  },
+  // On a phone the list sits just above the buttons and the spare room goes under the headline.
+  listLow: {
+    marginTop: 'auto',
   },
   tagline: {
     marginTop: Spacing.three,
     maxWidth: 340,
   },
   list: {
-    marginTop: Spacing.five,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
   },

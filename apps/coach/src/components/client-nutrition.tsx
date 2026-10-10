@@ -156,7 +156,7 @@ export function ClientNutrition({
   return (
     <>
       <Text style={styles.section}>Nutrition plan</Text>
-      {plan === undefined && !loadError ? <ActivityIndicator color={Colors.accentText} /> : null}
+      {plan === undefined && !loadError ? <ActivityIndicator color={Colors.textSecondary} /> : null}
       <ErrorText>{loadError}</ErrorText>
 
       {draft ? (
@@ -242,7 +242,7 @@ export function ClientNutrition({
               accessibilityRole="button"
               onPress={() => edit({ meals: [...draft.meals, { name: '', food: '' }] })}
               style={({ pressed }) => [styles.addMeal, pressed && { opacity: 0.6 }]}>
-              <Ionicons name="add-circle" size={22} color={Colors.accentText} />
+              <Ionicons name="add-circle-outline" size={22} color={Colors.text} />
               <Text style={styles.addMealText}>Add a meal</Text>
             </Pressable>
           ) : null}
@@ -424,7 +424,7 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
       {failedDay === day && !shown ? (
         <ErrorText>Could not load the food diary. Check your internet connection and try again.</ErrorText>
       ) : null}
-      {!shown && failedDay !== day ? <ActivityIndicator color={Colors.accentText} /> : null}
+      {!shown && failedDay !== day ? <ActivityIndicator color={Colors.textSecondary} /> : null}
 
       {shown ? (
         <>
@@ -441,9 +441,9 @@ function FoodDiary({ client, targets }: { client: Client; targets: Targets | nul
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${dayTitle(key, fromDayKey(today))}: ${logged ? formatKcal(kcal) : 'nothing logged'}`}
                   onPress={() => go(key)}
-                  style={[styles.weekDay, selected && { backgroundColor: Colors.accent }]}>
-                  <Text style={[styles.weekName, selected && { color: Colors.onAccent }]}>{weekday}</Text>
-                  <Text style={[styles.weekKcal, selected && { color: Colors.onAccent }]} numberOfLines={1}>
+                  style={[styles.weekDay, selected && { backgroundColor: Colors.text }]}>
+                  <Text style={[styles.weekName, selected && { color: Colors.background }]}>{weekday}</Text>
+                  <Text style={[styles.weekKcal, selected && { color: Colors.background }]} numberOfLines={1}>
                     {logged ? formatNumber(kcal) : '–'}
                   </Text>
                 </Pressable>
@@ -570,7 +570,7 @@ const styles = themed(() => ({
     minHeight: 48,
   },
   addMealText: {
-    color: Colors.accentText,
+    color: Colors.text,
     fontSize: 16,
     fontWeight: '700',
   },

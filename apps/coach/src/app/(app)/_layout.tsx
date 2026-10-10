@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Layout } from '@/constants/theme';
 import { ChatProvider } from '@/lib/chat-live';
 import { useOpenFromReminder } from '@/lib/notify';
 import { refreshReminders, setReminderLead } from '@/lib/reminders';
@@ -26,9 +26,19 @@ export default function AppLayout() {
           // Screen readers say "Back", not "(tabs), back" (the tabs group's name). The (tabs)
           // screen's title below is set to 'Back' for the same reason.
           headerBackTitle: 'Back',
-          contentStyle: { backgroundColor: Colors.background },
+          // On a wide window every pushed screen is a centred column, so nothing stretches across a PC
+          // screen. The tabs keep the full width for their sidebar.
+          contentStyle: {
+            backgroundColor: Colors.background,
+            width: '100%',
+            maxWidth: Layout.maxCoach,
+            alignSelf: 'center',
+          },
         }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{ headerShown: false, title: 'Back', contentStyle: { backgroundColor: Colors.background } }}
+        />
         <Stack.Screen name="clients/new" options={{ title: 'New client', presentation: 'modal' }} />
         <Stack.Screen name="clients/[id]" options={{ title: 'Client' }} />
         <Stack.Screen name="sessions/new" options={{ title: 'Book a session', presentation: 'modal' }} />

@@ -1,9 +1,7 @@
 import type { PropsWithChildren } from 'react';
 import { StyleSheet, View, type ColorValue } from 'react-native';
-import Animated from 'react-native-reanimated';
 
-import { Card, ProgressBar, Text } from '@/components/ui';
-import { enterUp } from '@/constants/motion';
+import { Card, EnterUp, ProgressBar, Text } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
 import { formatGrams, formatKcal, formatNumber, type Targets, type Totals } from '@/lib/food';
 
@@ -25,7 +23,7 @@ export function DaySummary({ totals, targets }: Props) {
       : `${formatKcal(totals.kcal)} eaten of ${formatKcal(target)}. ${formatKcal(Math.abs(left!))} ${over ? 'over' : 'left'}.`;
 
   return (
-    <Animated.View entering={enterUp(0)}>
+    <EnterUp>
       <Card hero style={{ gap: Spacing.four }}>
         <View style={styles.top} accessible accessibilityLabel={summary}>
           <Ring
@@ -74,7 +72,7 @@ export function DaySummary({ totals, targets }: Props) {
           <MacroBar label="Fat" grams={totals.fat} target={targets?.fat_g ?? null} />
         </View>
       </Card>
-    </Animated.View>
+    </EnterUp>
   );
 }
 

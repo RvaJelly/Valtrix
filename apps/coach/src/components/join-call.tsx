@@ -45,6 +45,7 @@ export function JoinCall({
   name,
   avatar,
   onApp,
+  size,
   style,
 }: {
   session: Pick<Session, 'online' | 'status' | 'starts_at' | 'duration_minutes' | 'client_id'>;
@@ -52,6 +53,7 @@ export function JoinCall({
   avatar?: string | null;
   // Whether the client accepted the invite in the Voltrix app, so there is someone to call.
   onApp: boolean;
+  size?: 'large' | 'medium';
   style?: StyleProp<ViewStyle>;
 }) {
   const now = useNow();
@@ -70,6 +72,7 @@ export function JoinCall({
     <Button
       title="Join video call"
       icon="videocam-outline"
+      size={size}
       accessibilityLabel={`Join video call with ${name}`}
       loading={joining}
       onPress={async () => {

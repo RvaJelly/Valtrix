@@ -3,7 +3,6 @@ import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, RefreshControl, ScrollView, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
@@ -16,6 +15,7 @@ import {
   Button,
   Card,
   EmptyState,
+  EnterUp,
   Group,
   IconButton,
   IconTile,
@@ -30,8 +30,7 @@ import {
   Text,
   useDelayed,
 } from '@/components/ui';
-import { enterUp } from '@/constants/motion';
-import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { BRAND, Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useChatEvents } from '@/lib/chat-live';
 import { longDate, relative, timeRange } from '@/lib/format';
@@ -243,7 +242,7 @@ export default function Home() {
         {data && !profile ? <Notice>Your account details could not be loaded. Pull down to try again.</Notice> : null}
         {!data && !error && showSkeleton ? (
           <View style={{ gap: Spacing.tight }}>
-            <Skeleton height={200} radius={24} />
+            <Skeleton height={200} radius={Radius.large} />
             <SkeletonRows count={3} />
           </View>
         ) : null}
@@ -291,9 +290,9 @@ export default function Home() {
                 Your sessions could not be loaded.
               </Notice>
             ) : next ? (
-              <Animated.View entering={enterUp(0)}>
+              <EnterUp>
                 <NextSession session={next} now={now} />
-              </Animated.View>
+              </EnterUp>
             ) : (
               <EmptyState
                 compact
@@ -342,21 +341,19 @@ export default function Home() {
                     title={trainerTitle(t)}
                     subtitle={t.trainer_name && t.business_name ? t.business_name : undefined}
                     leading={<Avatar url={t.trainer_avatar} name={trainerTitle(t)} size={44} />}
+                    status={t.client_status === 'paused' ? <StatusPill tone="neutral" label="Paused" /> : null}
                     trailing={
-                      <View style={styles.trainerActions}>
-                        {t.client_status === 'paused' ? <StatusPill tone="neutral" label="Paused" /> : null}
-                        <IconButton
-                          variant="tonal"
-                          icon="chatbubble-outline"
-                          label={`Message ${t.trainer_name || t.business_name || 'your trainer'}`}
-                          onPress={() =>
-                            router.push({
-                              pathname: '/chat/[id]',
-                              params: { id: t.client_id, name: trainerTitle(t), avatar: t.trainer_avatar ?? '' },
-                            })
-                          }
-                        />
-                      </View>
+                      <IconButton
+                        variant="tonal"
+                        icon="chatbubble-outline"
+                        label={`Message ${t.trainer_name || t.business_name || 'your trainer'}`}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/chat/[id]',
+                            params: { id: t.client_id, name: trainerTitle(t), avatar: t.trainer_avatar ?? '' },
+                          })
+                        }
+                      />
                     }
                     chevron={false}
                     onPress={() => router.push({ pathname: '/trainers/[id]', params: { id: t.trainer_id } })}
@@ -386,7 +383,7 @@ export default function Home() {
               style={styles.bleed}
               contentContainerStyle={styles.carousel}>
               {data.everyone.slice(0, 12).map((t) => (
-                <TrainerCircle key={t.id} trainer={t} />
+                <TrainerCircle key={t.id} trainer={t} width={88} />
               ))}
             </ScrollView>
           </Section>
@@ -396,7 +393,9 @@ export default function Home() {
   );
 }
 
-// The next session as a calm hero card: when, with whom, where, and Join while the call is on.
+// The next session as the one high-contrast object on the page: on the light theme an Iron Black
+// card with white type (on dark themes the raised surface), when first and big, then with whom and
+// where. Join, the screen's one orange button, sits under it as its own button while the call is on.
 function NextSession({ session, now }: { session: Session; now: Date }) {
   const start = new Date(session.starts_at);
   const end = endOf(session);
@@ -405,25 +404,37 @@ function NextSession({ session, now }: { session: Session; now: Date }) {
   const when = soon ? relative(start, now) : formatDay(start, now);
   const name = trainerName(session);
   const place = session.online ? 'Video call' : session.location;
+  const iron = Colors.scheme === 'light';
+  const ink = iron ? BRAND.white : Colors.text;
+  const quiet = iron ? 'rgba(255,255,255,0.64)' : Colors.textSecondary;
   return (
     <Card
       hero
+      style={{ backgroundColor: iron ? BRAND.iron : Colors.surfaceHigh }}
+      pressedFill={iron ? 'rgba(255,255,255,0.08)' : undefined}
       onPress={() => router.navigate({ pathname: '/plan', params: { view: 'sessions' } })}
-      accessibilityLabel={`Next session, ${when}, ${timeRange(start, end)} with ${name}${place ? `, ${place}` : ''}`}>
+      accessibilityLabel={`Next session, ${when}, ${timeRange(start, end)} with ${name}${place ? `, ${place}` : ''}`}
+      accessibilityHint="Opens your sessions"
+      footer={canJoin(session, now.getTime()) ? <JoinCall session={session} /> : null}>
       <View style={styles.heroTop}>
-        <Text variant="label" tone="secondary" style={{ flex: 1 }}>
+        <Text variant="label" style={{ flex: 1, color: quiet }}>
           Next session
         </Text>
-        <Text variant="label" tone="secondary">
-          {when}
-        </Text>
+        <Ionicons name="chevron-forward" size={16} color={quiet} />
       </View>
-      <Text variant="stat" style={[Tabular, { marginTop: Spacing.two }]}>
+      <Text variant="headline" style={{ color: ink, marginTop: Spacing.tight }}>
+        {when}
+      </Text>
+      <Text
+        variant="display"
+        style={[Tabular, { color: ink, marginTop: Spacing.one }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit>
         {timeRange(start, end)}
       </Text>
       <View style={[styles.heroMeta, { marginTop: Spacing.three }]}>
-        <Avatar url={session.trainer_avatar} name={name} size={24} />
-        <Text variant="callout" numberOfLines={1} style={{ flex: 1 }}>
+        <Avatar url={session.trainer_avatar} name={name} size={32} />
+        <Text variant="callout" numberOfLines={1} style={{ flex: 1, color: quiet }}>
           {name}
         </Text>
       </View>
@@ -432,15 +443,14 @@ function NextSession({ session, now }: { session: Session; now: Date }) {
           <Ionicons
             name={session.online ? 'videocam-outline' : 'location-outline'}
             size={16}
-            color={Colors.textSecondary}
-            style={{ width: 24, textAlign: 'center' }}
+            color={quiet}
+            style={{ width: 32, textAlign: 'center' }}
           />
-          <Text variant="callout" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
+          <Text variant="callout" numberOfLines={2} style={{ flex: 1, color: quiet }}>
             {place}
           </Text>
         </View>
       ) : null}
-      {canJoin(session, now.getTime()) ? <JoinCall session={session} style={{ marginTop: Spacing.gutter }} /> : null}
     </Card>
   );
 }
@@ -510,19 +520,15 @@ const styles = themed(() => ({
   heroMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-  },
-  trainerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.tight,
   },
   // The carousel runs to the screen's edges while its first trainer lines up with the page.
   bleed: {
     marginHorizontal: -Spacing.gutter,
   },
+  // Half of the fourth trainer shows at 390, so the row reads as one to scroll.
   carousel: {
-    gap: Spacing.three,
+    gap: Spacing.gutter,
     paddingHorizontal: Spacing.gutter,
   },
 }));

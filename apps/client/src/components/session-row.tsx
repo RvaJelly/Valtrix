@@ -40,7 +40,7 @@ export function SessionRow({
       subtitle={[where, who].filter(Boolean).join(' · ')}
       leading={
         showDay ? (
-          <View style={{ width: 44, alignItems: 'center' }}>
+          <View style={{ minWidth: 44, alignItems: 'center' }}>
             <Text variant="label" tone="secondary">
               {weekdayShort(start)}
             </Text>
@@ -48,7 +48,7 @@ export function SessionRow({
           </View>
         ) : undefined
       }
-      trailing={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
+      status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
       chevron={false}
       last={variant === 'card' || last}
     />

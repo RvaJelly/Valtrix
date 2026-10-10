@@ -14,7 +14,7 @@ import {
 
 import { FoodRow, FoodSheet } from '@/components/food-sheet';
 import { Body, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
 import { FOOD_CREDIT, FoodError, fullProduct, searchFoods, type Food } from '@/lib/food';
 
 // Look up any food's calories, protein, carbs and fat, by barcode or by name.
@@ -59,13 +59,13 @@ export default function CheckFood() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/nutrition/scan')}
-          style={({ pressed }) => [styles.scan, pressed && { backgroundColor: Colors.accentPressed }]}>
-          <Ionicons name="barcode-outline" size={28} color={Colors.onAccent} />
+          style={({ pressed }) => [styles.scan, pressed && { backgroundColor: Colors.tint }]}>
+          <Ionicons name="barcode-outline" size={28} color={Colors.text} />
           <View style={{ flex: 1 }}>
             <Text style={styles.scanTitle}>Scan a barcode</Text>
             <Text style={styles.scanDetail}>Point the camera at the pack</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.onAccent} />
+          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
         </Pressable>
 
         <Text style={styles.or}>or search by name</Text>
@@ -102,7 +102,7 @@ export default function CheckFood() {
         <ErrorText>{error}</ErrorText>
         {searching ? (
           <View style={styles.searching}>
-            <ActivityIndicator color={Colors.accentText} />
+            <ActivityIndicator color={Colors.textSecondary} />
             <Body secondary>Searching…</Body>
           </View>
         ) : null}
@@ -145,26 +145,23 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.three,
     minHeight: 72,
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
     borderRadius: Radius.large,
-    backgroundColor: Colors.accent,
+    backgroundColor: Colors.surface,
   },
   scanTitle: {
-    color: Colors.onAccent,
+    color: Colors.text,
+    fontFamily: Fonts.textSemi,
     fontSize: 17,
-    fontWeight: '800',
   },
   scanDetail: {
-    color: Colors.onAccent,
-    fontSize: 14,
-    opacity: 0.8,
+    color: Colors.textSecondary,
+    fontFamily: Fonts.text,
+    fontSize: 13,
   },
   or: {
+    ...Type.label,
     color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
     textAlign: 'center',
   },
   searchRow: {
@@ -179,9 +176,7 @@ const styles = themed(() => ({
     minHeight: 52,
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.tint,
   },
   searchInput: {
     flex: 1,
@@ -198,9 +193,8 @@ const styles = themed(() => ({
     backgroundColor: Colors.accent,
   },
   searchButtonText: {
+    ...Type.button,
     color: Colors.onAccent,
-    fontSize: 16,
-    fontWeight: '700',
   },
   searching: {
     flexDirection: 'row',

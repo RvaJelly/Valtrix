@@ -98,7 +98,7 @@ export default function ExerciseForm() {
   }
 
   if (!loaded) {
-    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.accentText} style={{ marginTop: Spacing.six }} />;
+    return error ? <ErrorText>{error}</ErrorText> : <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.six }} />;
   }
 
   return (
@@ -136,7 +136,8 @@ export default function ExerciseForm() {
 
 const styles = themed(() => ({
   content: {
-    padding: Spacing.four,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.four,
     gap: Spacing.three,
   },
   label: {

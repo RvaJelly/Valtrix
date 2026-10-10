@@ -12,8 +12,9 @@ const SIZE = 56;
 // Ring and gap around the photo, so every circle takes the same room.
 const OUTER = SIZE + 8;
 
-// The row of story circles at the top of Home, like Instagram. An orange ring means there is a
-// story this phone hasn't shown yet; a thin grey one, a story already seen.
+// The row of story circles at the top of Home, like Instagram. A ring in the text colour means there
+// is a story this phone hasn't shown yet; a thin grey one, a story already seen. Not orange: the
+// screen's one orange mark belongs to its main action.
 export function StoriesRow({
   groups,
   seen,
@@ -47,7 +48,7 @@ export function StoriesRow({
           accessibilityRole="button"
           accessibilityLabel="Add to your story"
           onPress={addStory}
-          hitSlop={8}
+          hitSlop={10}
           style={styles.plus}>
           <Ionicons name="add" size={14} color={Colors.background} />
         </Pressable>
@@ -84,7 +85,7 @@ function Ring({ state, children }: { state: 'unseen' | 'seen' | 'none'; children
       style={[
         styles.ring,
         state === 'unseen'
-          ? { borderWidth: 2, padding: 2, borderColor: Colors.accent }
+          ? { borderWidth: 2, padding: 2, borderColor: Colors.text }
           : { borderWidth: 1, padding: 3, borderColor: state === 'seen' ? Colors.borderStrong : 'transparent' },
       ]}>
       {children}

@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Body, Button, Card, ErrorText, TextField, Title } from '@/components/ui';
-import { Spacing, themed } from '@/constants/theme';
+import { Logo } from '@/components/logo';
+import { Body, Button, Card, ErrorText, TextField, TextLink, Title } from '@/components/ui';
+import { Layout, Spacing, themed } from '@/constants/theme';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
 
@@ -48,6 +49,7 @@ export default function SignUp() {
     return (
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content}>
+          <Logo style={styles.logo} />
           <Title>Check your email</Title>
           <Card>
             <Body>We sent a confirmation link to {email.trim()}. Open it to confirm your account, then sign in.</Body>
@@ -62,6 +64,7 @@ export default function SignUp() {
     <SafeAreaView style={{ flex: 1 }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Logo style={styles.logo} />
           <Title>Create your account</Title>
           <Body secondary>Use the email your personal trainer has for you, so we can connect you to them.</Body>
           <TextField
@@ -70,7 +73,7 @@ export default function SignUp() {
             onChangeText={setFullName}
             autoComplete="name"
             textContentType="name"
-            placeholder="Alex Smith"
+            placeholder="First and last name"
           />
           <TextField
             label="Email"
@@ -93,7 +96,7 @@ export default function SignUp() {
           />
           <ErrorText>{error}</ErrorText>
           <Button title="Create account" onPress={signUp} loading={busy} />
-          <Button title="Already have an account? Sign in" variant="ghost" onPress={() => router.replace('/sign-in')} />
+          <TextLink lead="Already have an account?" label="Sign in" onPress={() => router.replace('/sign-in')} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -101,9 +104,21 @@ export default function SignUp() {
 }
 
 const styles = themed(() => ({
+  // The welcome screen's 20 gutter and column, and room at the top for the back arrow.
   content: {
-    padding: Spacing.four,
+    width: '100%',
+    maxWidth: Layout.maxWelcome,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.six,
+    paddingBottom: Spacing.four,
     gap: Spacing.three,
+  },
+  logo: {
+    width: 148,
+    alignSelf: 'flex-start',
+    // The image carries the brand kit's clear space; this lines the V up with the text below.
+    marginLeft: -12,
+    marginBottom: Spacing.two,
   },
 }));

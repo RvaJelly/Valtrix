@@ -59,7 +59,7 @@ export function LikersSheet({
           </Text>
         </View>
         {!shown ? (
-          <ActivityIndicator color={Colors.accentText} style={{ marginVertical: Spacing.five }} />
+          <ActivityIndicator color={Colors.textSecondary} style={{ marginVertical: Spacing.five }} />
         ) : !shown.likers ? (
           <Text style={styles.note}>Could not load who liked this. Check your internet and try again.</Text>
         ) : !shown.likers.length ? (

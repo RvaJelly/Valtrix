@@ -11,8 +11,8 @@ export function ReelCard({ reel, mine }: { reel: Reel | null | undefined; mine: 
   if (reel === null) {
     return (
       <View style={styles.gone}>
-        <Ionicons name="film-outline" size={22} color={mine ? Colors.onAccent : Colors.textSecondary} />
-        <Text style={[styles.goneText, mine && { color: Colors.onAccent }]}>This reel is no longer available</Text>
+        <Ionicons name="film-outline" size={22} color={mine ? Colors.onBubble : Colors.textSecondary} />
+        <Text style={[styles.goneText, mine && { color: Colors.onBubble }]}>This reel is no longer available</Text>
       </View>
     );
   }
@@ -41,7 +41,7 @@ export function ReelCard({ reel, mine }: { reel: Reel | null | undefined; mine: 
         )}
       </View>
       {reel?.caption ? (
-        <Text style={[styles.caption, mine && { color: Colors.onAccent }]} numberOfLines={2}>
+        <Text style={[styles.caption, mine && { color: Colors.onBubble }]} numberOfLines={2}>
           {reel.caption}
         </Text>
       ) : null}

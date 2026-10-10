@@ -21,7 +21,7 @@ import {
   useDelayed,
   type IconName,
 } from '@/components/ui';
-import { Colors, Fonts, Layout, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import {
   dayKey,
   dayTitle,
@@ -235,7 +235,7 @@ export default function Nutrition() {
             action={<Button title="Try again" variant="secondary" onPress={retry} loading={retrying} />}
           />
         ) : showSkeleton ? (
-          <Skeleton height={260} radius={24} />
+          <Skeleton height={260} radius={Radius.large} />
         ) : (
           <View style={{ height: 260 }} />
         )}

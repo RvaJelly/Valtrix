@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, ScrollView, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppStatusLabel } from '@/components/app-status';
@@ -14,10 +13,12 @@ import {
   Button,
   Card,
   EmptyState,
+  EnterUp,
   Group,
   IconButton,
   IconTile,
   ListRow,
+  Notice,
   PageHeader,
   Section,
   Skeleton,
@@ -27,15 +28,23 @@ import {
   useDelayed,
   type IconName,
 } from '@/components/ui';
-import { enterUp } from '@/constants/motion';
-import { Colors, Fonts, Layout, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { coachAccess, PRICE_LABEL } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat } from '@/lib/chat-live';
 import { appStatusOf, fullName, type Client } from '@/lib/clients';
 import { dayMonth, longDate, relative, timeRange } from '@/lib/format';
 import { loadSeen, loadStories, type StoryGroup } from '@/lib/posts';
-import { addDays, dayKey, endOf, SESSION_COLUMNS, sessionName, startOfDay, type Session } from '@/lib/sessions';
+import {
+  addDays,
+  dayKey,
+  endOf,
+  SESSION_COLUMNS,
+  sessionName,
+  startOfDay,
+  startOfWeek,
+  type Session,
+} from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
 
 const NONE_SEEN = new Set<string>();
@@ -50,21 +59,30 @@ function greeting() {
 type Stats = {
   activeClients: number;
   workouts: number;
+  // Booked (not cancelled) sessions from Monday to Sunday.
+  thisWeek: number;
   recent: Pick<Client, 'id' | 'first_name' | 'last_name' | 'goal' | 'user_id' | 'app_status'>[];
   today: Session[];
 };
 
-const SHORTCUTS: { icon: IconName; label: string; href: Href }[] = [
-  { icon: 'person-add-outline', label: 'New client', href: '/clients/new' },
-  { icon: 'calendar-outline', label: 'New session', href: '/sessions/new' },
-  { icon: 'barbell-outline', label: 'New workout', href: '/workouts/new' },
-  { icon: 'library-outline', label: 'Exercises', href: '/exercises' },
+// One word each, so the five labels never run into each other; screen readers hear the full name.
+const SHORTCUTS: { icon: IconName; label: string; name: string; href: Href }[] = [
+  { icon: 'person-add-outline', label: 'Client', name: 'New client', href: '/clients/new' },
+  { icon: 'calendar-clear-outline', label: 'Session', name: 'Book a session', href: '/sessions/new' },
+  { icon: 'barbell-outline', label: 'Workout', name: 'New workout', href: '/workouts/new' },
+  { icon: 'list-outline', label: 'Library', name: 'Exercise library', href: '/exercises' },
+  { icon: 'play-circle-outline', label: 'Reels', name: 'Reels', href: '/reels' },
 ];
 
 export default function Home() {
   const { profile } = useAuth();
   const { chats } = useChat();
   const [stats, setStats] = useState<Stats | null>(null);
+  // The day's numbers could not be loaded; what was on screen stays.
+  const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  // Only the newest load may show its answer.
+  const loads = useRef(0);
   const [stories, setStories] = useState<{ groups: StoryGroup[]; seen: Set<string> } | null>(null);
   // The time the screen was last drawn for, moved on every minute so a session that has
   // ended leaves "Up next".
@@ -73,35 +91,56 @@ export default function Home() {
   const firstName = profile?.full_name?.split(' ')[0];
   const access = coachAccess(profile);
 
+  // RLS limits every query to the signed-in trainer's own rows. Every answer is checked: a failed
+  // load says so and keeps what was shown, and never passes for a new trainer with no clients.
+  const loadStats = useCallback(async () => {
+    const id = ++loads.current;
+    const today = startOfDay(new Date());
+    const week = startOfWeek(today);
+    const answers = await Promise.all([
+      supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      supabase.from('workouts').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('clients')
+        .select('id, first_name, last_name, goal, user_id, app_status')
+        .neq('status', 'archived')
+        .order('created_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('sessions')
+        .select(SESSION_COLUMNS)
+        .neq('status', 'cancelled')
+        .gte('starts_at', today.toISOString())
+        .lt('starts_at', addDays(today, 1).toISOString())
+        .order('starts_at'),
+      supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .neq('status', 'cancelled')
+        .gte('starts_at', week.toISOString())
+        .lt('starts_at', addDays(week, 7).toISOString()),
+    ]).catch(() => null);
+    if (id !== loads.current) return;
+    const [active, workouts, recent, todays, thisWeek] = answers ?? [];
+    if (!active || !workouts || !recent || !todays || !thisWeek || answers!.some((a) => a.error)) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
+    setStats({
+      activeClients: active.count ?? 0,
+      workouts: workouts.count ?? 0,
+      thisWeek: thisWeek.count ?? 0,
+      recent: (recent.data as Stats['recent']) ?? [],
+      today: (todays.data as unknown as Session[]) ?? [],
+    });
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       setNow(new Date());
       const timer = setInterval(() => setNow(new Date()), 60_000);
-      // RLS limits every query to the signed-in trainer's own rows.
-      Promise.all([
-        supabase.from('clients').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('workouts').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('clients')
-          .select('id, first_name, last_name, goal, user_id, app_status')
-          .neq('status', 'archived')
-          .order('created_at', { ascending: false })
-          .limit(3),
-        supabase
-          .from('sessions')
-          .select(SESSION_COLUMNS)
-          .neq('status', 'cancelled')
-          .gte('starts_at', startOfDay(new Date()).toISOString())
-          .lt('starts_at', addDays(startOfDay(new Date()), 1).toISOString())
-          .order('starts_at'),
-      ]).then(([active, workouts, recent, today]) =>
-        setStats({
-          activeClients: active.count ?? 0,
-          workouts: workouts.count ?? 0,
-          recent: (recent.data as Stats['recent']) ?? [],
-          today: (today.data as unknown as Session[]) ?? [],
-        }),
-      );
+      loadStats();
       // Stories from clients and trainers. If they can't load, "Your story" still shows.
       const refreshStories = () =>
         Promise.all([loadStories().catch(() => [] as StoryGroup[]), loadSeen()]).then(([groups, seen]) =>
@@ -120,8 +159,14 @@ export default function Home() {
         sub.remove();
         clearInterval(timer);
       };
-    }, []),
+    }, [loadStats]),
   );
+
+  async function retry() {
+    setRetrying(true);
+    await loadStats();
+    setRetrying(false);
+  }
 
   // The first booked session today that hasn't ended leads; the rest of the day sits under it.
   const next = stats?.today.find((s) => s.status === 'scheduled' && endOf(s) > now);
@@ -134,7 +179,7 @@ export default function Home() {
     account.push({
       key: 'profile',
       title: 'Finish your profile',
-      subtitle: 'Add a photo and specialties for the client app',
+      subtitle: 'Photo and specialties for your clients',
       icon: 'person-circle-outline',
       href: '/settings',
     });
@@ -167,12 +212,7 @@ export default function Home() {
             brand
             eyebrow={longDate(now)}
             title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
-            actions={
-              <>
-                <IconButton icon="play-circle-outline" label="Reels" onPress={() => router.navigate('/reels')} />
-                <IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
-              </>
-            }
+            actions={<IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />}
           />
           {/* Shown straight away so Home doesn't jump when the stories arrive. */}
           <StoriesRow
@@ -183,10 +223,15 @@ export default function Home() {
         </View>
 
         <Section title="Today" action={{ label: 'Calendar', onPress: () => router.navigate('/calendar') }}>
+          {failed ? (
+            <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
+              {stats ? 'Could not refresh your day.' : 'Your day could not be loaded.'}
+            </Notice>
+          ) : null}
           {!stats ? (
-            showSkeleton ? (
+            showSkeleton && !failed ? (
               <View style={{ gap: Spacing.tight }}>
-                <Skeleton height={168} radius={24} />
+                <Skeleton height={168} radius={Radius.large} />
                 <SkeletonRows count={2} />
               </View>
             ) : null
@@ -208,22 +253,28 @@ export default function Home() {
           ) : (
             <View style={{ gap: Spacing.tight }}>
               {next ? (
-                <Animated.View entering={enterUp(0)}>
+                <EnterUp>
                   <UpNext
                     session={next}
                     now={now}
                     avatar={chats.find((c) => c.chat_id === next.client_id)?.other_avatar}
                   />
-                </Animated.View>
+                </EnterUp>
               ) : null}
               {rest.length ? (
-                <Animated.View entering={enterUp(1)}>
+                <EnterUp index={1}>
                   <Group>
                     {rest.map((s, i) => (
-                      <SessionRow key={s.id} session={s} variant="grouped" last={i === rest.length - 1} />
+                      <SessionRow
+                        key={s.id}
+                        session={s}
+                        variant="grouped"
+                        now={now.getTime()}
+                        last={i === rest.length - 1}
+                      />
                     ))}
                   </Group>
-                </Animated.View>
+                </EnterUp>
               ) : null}
             </View>
           )}
@@ -248,9 +299,14 @@ export default function Home() {
           ) : (
             <StatStrip
               items={[
-                { value: stats.activeClients, label: 'Clients', onPress: () => router.navigate('/clients') },
+                { value: stats.activeClients, label: 'Active clients', onPress: () => router.navigate('/clients') },
                 { value: stats.workouts, label: 'Workouts', onPress: () => router.navigate('/programs') },
-                { value: stats.today.length, label: 'Today', onPress: () => router.navigate('/calendar') },
+                {
+                  value: stats.thisWeek,
+                  label: 'This week',
+                  spoken: `${stats.thisWeek} ${stats.thisWeek === 1 ? 'session' : 'sessions'} this week`,
+                  onPress: () => router.navigate('/calendar'),
+                },
               ]}
             />
           )
@@ -288,7 +344,7 @@ export default function Home() {
                       </Text>
                     }
                     leading={<Avatar name={fullName(c)} size={40} />}
-                    trailing={status !== 'joined' ? <AppStatusLabel status={status} short /> : null}
+                    status={status !== 'joined' ? <AppStatusLabel status={status} short /> : null}
                     onPress={() => router.push({ pathname: '/clients/[id]', params: { id: c.id } })}
                     last={i === stats.recent.length - 1}
                   />
@@ -302,37 +358,40 @@ export default function Home() {
   );
 }
 
-// The next session today as a hero card: who, when, where, and Join while the call is on.
+// The next session today as a hero card: who, when, where, and Join while the call is on. The card
+// opens the session; Join is its own button under it, not inside the card's.
 function UpNext({ session, now, avatar }: { session: Session; now: Date; avatar?: string | null }) {
   const start = new Date(session.starts_at);
   const end = endOf(session);
   const live = start <= now && now < end;
+  // Only a start within two hours is worth saying; the time is printed right below.
+  const soon = !live && start.getTime() - now.getTime() < 2 * 3_600_000;
   const name = sessionName(session);
   const place = session.online ? 'Video call' : session.location;
-  const open = () => router.push({ pathname: '/sessions/[id]', params: { id: session.id } });
+  const joinable = canJoin(session, now.getTime());
   return (
     <Card
       hero
-      onPress={open}
-      accessibilityLabel={`${live ? 'Now' : 'Up next'}: ${name}, ${timeRange(start, end)}${place ? `, ${place}` : ''}`}>
+      onPress={() => router.push({ pathname: '/sessions/[id]', params: { id: session.id } })}
+      accessibilityLabel={`${live ? 'Now' : 'Up next'}: ${name}, ${timeRange(start, end)}${place ? `, ${place}` : ''}`}
+      accessibilityHint="Opens the session"
+      footer={
+        joinable ? <JoinCall session={session} name={name} avatar={avatar} onApp={!!session.clients?.user_id} /> : null
+      }>
       <View style={styles.heroTop}>
-        {live ? (
-          <>
-            <View style={styles.liveDot} />
-            <Text variant="label" style={{ color: Colors.accentText, flex: 1 }}>
-              Now
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text variant="label" tone="secondary" style={{ flex: 1 }}>
-              Up next
-            </Text>
-            <Text variant="footnote" tone="secondary">
-              {relative(start, now)}
-            </Text>
-          </>
-        )}
+        {live ? <View style={styles.liveDot} /> : null}
+        <Text
+          variant="label"
+          tone={live ? undefined : 'secondary'}
+          style={[{ flex: 1 }, live && { color: Colors.accentText }]}>
+          {live ? 'Now' : 'Up next'}
+        </Text>
+        {soon ? (
+          <Text variant="footnote" tone="secondary">
+            {relative(start, now)}
+          </Text>
+        ) : null}
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </View>
       <Text variant="title" numberOfLines={2} style={{ marginTop: Spacing.two }}>
         {name}
@@ -347,27 +406,20 @@ function UpNext({ session, now, avatar }: { session: Session; now: Date; avatar?
             size={16}
             color={Colors.textSecondary}
           />
-          <Text variant="callout" tone="secondary" numberOfLines={1} style={{ flex: 1 }}>
+          <Text variant="callout" tone="secondary" numberOfLines={2} style={{ flex: 1 }}>
             {place}
           </Text>
         </View>
       ) : null}
-      <View style={{ marginTop: Spacing.gutter }}>
-        {canJoin(session, now.getTime()) ? (
-          <JoinCall session={session} name={name} avatar={avatar} onApp={!!session.clients?.user_id} />
-        ) : (
-          <Button title="View session" variant="secondary" size="medium" onPress={open} />
-        )}
-      </View>
     </Card>
   );
 }
 
-function Shortcut({ icon, label, href }: { icon: IconName; label: string; href: Href }) {
+function Shortcut({ icon, label, name, href }: { icon: IconName; label: string; name: string; href: Href }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={name}
       onPress={() => router.push(href)}
       style={[styles.shortcut, Platform.OS === 'web' && { cursor: 'pointer' }]}>
       {({ pressed }) => (
@@ -375,7 +427,7 @@ function Shortcut({ icon, label, href }: { icon: IconName; label: string; href: 
           <View style={[styles.shortcutCircle, pressed && { backgroundColor: Colors.tintPressed }]}>
             <Ionicons name={icon} size={22} color={Colors.text} />
           </View>
-          <Text variant="footnote" numberOfLines={1} style={styles.shortcutLabel}>
+          <Text variant="footnote" numberOfLines={2} style={styles.shortcutLabel}>
             {label}
           </Text>
         </>
@@ -438,7 +490,7 @@ const styles = themed(() => ({
   },
   shortcuts: {
     flexDirection: 'row',
-    marginHorizontal: -Spacing.two, // a little more room for the four labels
+    marginHorizontal: -Spacing.two, // a little more room for the five labels
   },
   shortcut: {
     flex: 1,

@@ -1,11 +1,21 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SessionRow } from '@/components/session-row';
-import { Body, Button, ErrorText } from '@/components/ui';
-import { Colors, Radius, Spacing, themed } from '@/constants/theme';
+import {
+  Button,
+  Group,
+  IconButton,
+  Notice,
+  PageHeader,
+  Section,
+  SkeletonRows,
+  Text,
+  useDelayed,
+} from '@/components/ui';
+import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import {
   addDays,
   dayKey,
@@ -20,31 +30,28 @@ import {
 import { supabase } from '@/lib/supabase';
 
 export default function CalendarScreen() {
-  const navigation = useNavigation();
   const [selected, setSelected] = useState(() => startOfDay(new Date()));
   // The sessions of one week, kept with the week they belong to.
   const [loaded, setLoaded] = useState<{ week: string; list: Session[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const showSkeleton = useDelayed(300);
   const weekStart = startOfWeek(selected);
   const weekKey = dayKey(weekStart);
   // Another week's sessions never stand in for this one while it loads.
   const sessions = loaded?.week === weekKey ? loaded.list : null;
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(selected), i)), [selected]);
-  const today = startOfDay(new Date());
+  const today = startOfDay(new Date(now));
+  const book = () => router.push({ pathname: '/sessions/new', params: { date: dayKey(selected) } });
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityLabel="Book a session"
-          hitSlop={12}
-          onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(selected) } })}
-          style={{ marginRight: Spacing.three }}>
-          <Ionicons name="add-circle" size={28} color={Colors.accentText} />
-        </Pressable>
-      ),
-    });
-  }, [navigation, selected]);
+  // Keeps Join buttons current while the screen is open.
+  useFocusEffect(
+    useCallback(() => {
+      setNow(Date.now());
+      const timer = setInterval(() => setNow(Date.now()), 60_000);
+      return () => clearInterval(timer);
+    }, []),
+  );
 
   // Load the visible week whenever the screen is shown or the week changes.
   useFocusEffect(
@@ -74,116 +81,131 @@ export default function CalendarScreen() {
   const booked = (sessions ?? []).filter((s) => s.status === 'scheduled' || s.status === 'completed');
   const done = (sessions ?? []).filter((s) => s.status === 'completed').length;
   const monthLabel = selected.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const isToday = sameDay(selected, today);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.monthRow}>
-        <Pressable accessibilityLabel="Previous week" hitSlop={8} onPress={() => setSelected(addDays(selected, -7))} style={styles.arrow}>
-          <Ionicons name="chevron-back" size={20} color={Colors.text} />
-        </Pressable>
-        <Text style={styles.month}>{monthLabel}</Text>
-        <Pressable accessibilityLabel="Next week" hitSlop={8} onPress={() => setSelected(addDays(selected, 7))} style={styles.arrow}>
-          <Ionicons name="chevron-forward" size={20} color={Colors.text} />
-        </Pressable>
-      </View>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <PageHeader
+          title="Calendar"
+          actions={<IconButton variant="tonal" icon="add" label="Book a session" onPress={book} />}
+        />
 
-      <View style={styles.week}>
-        {days.map((d) => {
-          const isSelected = sameDay(d, selected);
-          const isToday = sameDay(d, today);
-          const count = (sessions ?? []).filter((s) => s.status === 'scheduled' && sameDay(new Date(s.starts_at), d)).length;
-          return (
-            <Pressable
-              key={d.toISOString()}
-              accessibilityRole="button"
-              accessibilityLabel={d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-              accessibilityState={{ selected: isSelected }}
-              onPress={() => setSelected(d)}
-              style={[styles.day, isSelected && { backgroundColor: Colors.accent }]}>
-              <Text style={[styles.weekday, isSelected && { color: Colors.onAccent }]}>
-                {d.toLocaleDateString(undefined, { weekday: 'narrow' })}
+        <View style={{ gap: Spacing.tight }}>
+          <View style={styles.monthRow}>
+            <IconButton icon="chevron-back" label="Previous week" onPress={() => setSelected(addDays(selected, -7))} />
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text variant="headline" numberOfLines={1}>
+                {monthLabel}
               </Text>
-              <Text
-                style={[
-                  styles.date,
-                  isToday && !isSelected && { color: Colors.accentText },
-                  isSelected && { color: Colors.onAccent },
-                ]}>
-                {d.getDate()}
+              <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
+                {sessions
+                  ? `${booked.length === 1 ? '1 session' : `${booked.length} sessions`} this week${
+                      done ? ` · ${done} done` : ''
+                    }`
+                  : ' '}
               </Text>
-              <View style={[styles.dot, { opacity: count ? 1 : 0 }, isSelected && { backgroundColor: Colors.onAccent }]} />
-            </Pressable>
-          );
-        })}
-      </View>
+            </View>
+            <IconButton icon="chevron-forward" label="Next week" onPress={() => setSelected(addDays(selected, 7))} />
+          </View>
 
-      {sessions ? (
-        <Body secondary style={{ fontSize: 14, textAlign: 'center' }}>
-          {booked.length === 1 ? '1 session' : `${booked.length} sessions`} this week
-          {done ? ` · ${done} done` : ''}
-        </Body>
-      ) : null}
-
-      <View style={styles.dayHeader}>
-        <Text style={styles.dayTitle}>{formatDay(selected)}</Text>
-        {!sameDay(selected, today) ? (
-          <Pressable onPress={() => setSelected(today)} hitSlop={8}>
-            <Text style={styles.link}>Today</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      <ErrorText>{error}</ErrorText>
-      {!sessions && !error ? <ActivityIndicator color={Colors.accentText} /> : null}
-      {sessions && dayList.length === 0 ? (
-        <View style={styles.empty}>
-          <Body secondary style={{ textAlign: 'center' }}>
-            Nothing booked {sameDay(selected, today) ? 'today' : 'on this day'}.
-          </Body>
-          <Button
-            title="Book a session"
-            onPress={() => router.push({ pathname: '/sessions/new', params: { date: dayKey(selected) } })}
-          />
+          <View style={styles.week} accessibilityRole="tablist">
+            {days.map((d) => {
+              const on = sameDay(d, selected);
+              const dayIsToday = sameDay(d, today);
+              const count = (sessions ?? []).filter(
+                (s) => s.status === 'scheduled' && sameDay(new Date(s.starts_at), d),
+              ).length;
+              const ink = on ? Colors.background : Colors.text;
+              return (
+                <Pressable
+                  key={d.toISOString()}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${dayIsToday ? 'Today, ' : ''}${d.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}${count ? `, ${count === 1 ? '1 session' : `${count} sessions`}` : ''}`}
+                  accessibilityState={{ selected: on }}
+                  onPress={() => setSelected(d)}
+                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                    styles.day,
+                    (pressed || hovered) && !on && { backgroundColor: Colors.tint },
+                    on && { backgroundColor: Colors.text },
+                  ]}>
+                  <Text variant="footnote" style={{ color: on ? Colors.background : Colors.textSecondary }}>
+                    {d.toLocaleDateString(undefined, { weekday: 'narrow' })}
+                  </Text>
+                  <Text variant="headline" style={[Tabular, { color: ink }]}>
+                    {d.getDate()}
+                  </Text>
+                  {/* Today gets the one orange dot; other days with sessions a quiet one. */}
+                  <View
+                    style={[
+                      styles.dot,
+                      {
+                        opacity: count || dayIsToday ? 1 : 0,
+                        backgroundColor: dayIsToday ? Colors.accent : on ? Colors.background : Colors.textSecondary,
+                      },
+                    ]}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      ) : (
-        <View style={{ gap: Spacing.two }}>
-          {dayList.map((s) => (
-            <SessionRow key={s.id} session={s} />
-          ))}
-        </View>
-      )}
-    </ScrollView>
+
+        <Section
+          title={formatDay(selected, today)}
+          action={isToday ? undefined : { label: 'Today', onPress: () => setSelected(today) }}>
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          {!sessions && !error && showSkeleton ? <SkeletonRows count={2} /> : null}
+          {sessions && dayList.length === 0 ? (
+            <View style={styles.empty}>
+              <Text variant="callout" tone="secondary" style={{ flex: 1 }}>
+                Nothing booked {isToday ? 'today' : 'on this day'}.
+              </Text>
+              <Button title="Book" icon="add" variant="secondary" size="small" onPress={book} />
+            </View>
+          ) : null}
+          {dayList.length > 0 ? (
+            <Group>
+              {dayList.map((s, i) => (
+                <SessionRow key={s.id} session={s} variant="grouped" last={i === dayList.length - 1} now={now} />
+              ))}
+            </Group>
+          ) : null}
+        </Section>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = themed(() => ({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   content: {
-    padding: Spacing.three,
-    gap: Spacing.three,
+    width: '100%',
+    maxWidth: Layout.maxCoach,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.gutter,
+    paddingTop: Platform.OS === 'web' ? Spacing.four : Spacing.tight,
+    paddingBottom: Spacing.hero,
+    gap: Spacing.section,
   },
   monthRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
-  },
-  arrow: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.small,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.surface,
-  },
-  month: {
-    flex: 1,
-    textAlign: 'center',
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
+    marginHorizontal: -Spacing.tight,
   },
   week: {
     flexDirection: 'row',
     gap: Spacing.one,
+    padding: Spacing.one,
+    borderRadius: Radius.large,
+    backgroundColor: Colors.surface,
   },
   day: {
     flex: 1,
@@ -191,44 +213,22 @@ const styles = themed(() => ({
     gap: 2,
     paddingVertical: Spacing.two,
     borderRadius: Radius.medium,
-    backgroundColor: Colors.surface,
-  },
-  weekday: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  date: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '800',
+    borderCurve: 'continuous',
   },
   dot: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: Colors.accent,
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  dayTitle: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  link: {
-    color: Colors.accentText,
-    fontSize: 14,
-    fontWeight: '700',
   },
   empty: {
-    gap: Spacing.three,
-    padding: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
+    minHeight: 64,
+    paddingHorizontal: Spacing.gutter,
+    paddingVertical: Spacing.tight,
     borderRadius: Radius.large,
+    borderCurve: 'continuous',
     backgroundColor: Colors.surface,
   },
 }));

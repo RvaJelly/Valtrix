@@ -95,7 +95,8 @@ type Base = {
   track: string;
   text: string;
   textSecondary: string;
-  // Placeholders, chevrons and disabled labels; never the only carrier of information.
+  // Chevrons, quiet notes and disabled labels; never the only carrier of information. Placeholders
+  // use textSecondary, so they stay readable on an input's fill.
   textTertiary: string;
   danger: string;
   success: string;
@@ -105,11 +106,15 @@ type Base = {
   scrim: string;
   // A CSS box shadow for floating layers only (sheets, toasts, menus, sticky bars).
   shadowFloating: string;
-  // Fills for avatars without a photo: slate, stone, sage, clay and plum.
+  // Fills for avatars without a photo (light: slate, stone, sage, clay and plum).
   monogram: readonly string[];
+  // The person's own chat bubbles (the other person's use surface). Never the accent.
+  bubble: string;
+  onBubble: string;
 };
 
-const MONOGRAM_DARK = ['#2A3550', '#3A3833', '#2E3B36', '#3D302B', '#352E40'];
+// Dark fills are tones of the Iron base, so a monogram never reads as a bruise.
+const MONOGRAM_DARK = ['#232325', '#2B2B2D', '#303033', '#262628', '#353537'];
 const MONOGRAM_LIGHT = ['#E9E6E1', '#E3E7EC', '#E2E8E3', '#EDE4DE', '#E8E3EA'];
 
 // Client: white by default, and an Iron Black dark theme. Light surfaces are warm, tied to Stone.
@@ -135,6 +140,8 @@ const BASES: Record<Scheme, Base> = {
     scrim: 'rgba(0,0,0,0.6)',
     shadowFloating: '0 12px 32px rgba(0,0,0,0.5)',
     monogram: MONOGRAM_DARK,
+    bubble: '#333335',
+    onBubble: '#FFFFFF',
   },
   light: {
     background: '#FFFFFF',
@@ -147,8 +154,8 @@ const BASES: Record<Scheme, Base> = {
     borderStrong: '#D6D3CE',
     track: 'rgba(14,14,15,0.08)',
     text: '#0E0E0F',
-    textSecondary: '#6B6965',
-    textTertiary: '#7D7A76',
+    textSecondary: '#62605C',
+    textTertiary: '#6E6B67',
     danger: '#C42126',
     success: '#1F7A4D',
     warning: '#A15C07',
@@ -157,6 +164,8 @@ const BASES: Record<Scheme, Base> = {
     scrim: 'rgba(14,14,15,0.4)',
     shadowFloating: '0 8px 24px rgba(14,14,15,0.08), 0 1px 2px rgba(14,14,15,0.06)',
     monogram: MONOGRAM_LIGHT,
+    bubble: '#0E0E0F',
+    onBubble: '#FFFFFF',
   },
 };
 
@@ -206,6 +215,24 @@ export function withAlpha(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
   if (!m) return hex;
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
+}
+
+// Moves `hex` toward `toward` by `amount` (0 to 1): a status colour deepened for small text on a light pill.
+export function mix(hex: string, toward: string, amount: number): string {
+  const parse = (h: string) => {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(h.trim());
+    return m ? [1, 2, 3].map((i) => parseInt(m[i], 16)) : null;
+  };
+  const a = parse(hex);
+  const b = parse(toward);
+  if (!a || !b) return hex;
+  return `#${a
+    .map((v, i) =>
+      Math.round(v + (b[i] - v) * amount)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 }
 
 // ---------- Type ----------
@@ -283,7 +310,8 @@ export const Type: Record<TypeName, TextStyle> = {
     ...tight,
   },
   button: { fontFamily: Fonts.textSemi, fontSize: 16, lineHeight: 20, letterSpacing: -0.1, ...tight },
-  tab: { fontFamily: Fonts.textMedium, fontSize: 11, lineHeight: 13, letterSpacing: 0.1, ...tight },
+  // 15 so g, p and y keep their descenders in the tab bar.
+  tab: { fontFamily: Fonts.textMedium, fontSize: 11, lineHeight: 15, letterSpacing: 0.1, ...tight },
   timer: {
     fontFamily: Fonts.textSemi,
     fontSize: 56,
@@ -328,7 +356,7 @@ export const Layout = {
 export const Radius = {
   small: 8, // tags, skeleton text bars, small thumbnails
   medium: 12, // buttons, inputs, icon tiles, thumbnails, notices, toasts
-  large: 16, // cards and grouped lists
-  xl: 24, // hero cards, sheets (top corners)
+  large: 16, // cards, hero cards and grouped lists: one radius for everything stacked on a page
+  xl: 24, // sheets (top corners)
   pill: 999, // chips, status pills, badges
 } as const;

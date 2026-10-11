@@ -400,7 +400,8 @@ export default function ChatScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
-        <IconButton icon="chevron-back" label="Back" onPress={back} />
+        {/* The same back icon as the native header on every other screen: an arrow, a chevron on iPhone. */}
+        <IconButton icon={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'} label="Back" onPress={back} />
         <Avatar url={otherAvatar} name={otherName} size={36} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>

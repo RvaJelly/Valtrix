@@ -7,7 +7,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentProps } from 'react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/avatar';
@@ -358,7 +358,7 @@ export default function CallScreen() {
     try {
       started = await startCall(params.chat!, video);
     } catch (e) {
-      const message = e instanceof Error && /yourself/.test(e.message) ? "You can't call yourself." : null;
+      const message = e instanceof Error && /yourself/.test(e.message) ? 'You can’t call yourself.' : null;
       return finish(message ?? 'Could not start the call. Check your internet and try again.', 3000);
     }
     callId.current = started.id;
@@ -405,6 +405,22 @@ export default function CallScreen() {
 
   const onOpen = useEffectEvent(() => begin());
   const onClose = useEffectEvent(() => leave());
+
+  // Android's back button (or the edge swipe) asks first while the call is ringing or on, so a
+  // brush of the thumb doesn't hang up for both people.
+  const onBack = useEffectEvent(() => {
+    if (phaseNow.current === 'ended') return false;
+    const ringing = phaseNow.current === 'ringing-in';
+    Alert.alert(ringing ? 'Decline the call?' : 'End the call?', undefined, [
+      { text: 'Stay', style: 'cancel' },
+      { text: ringing ? 'Decline' : 'End call', style: 'destructive', onPress: () => (ringing ? decline() : hangUp()) },
+    ]);
+    return true;
+  });
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => onBack());
+    return () => sub.remove();
+  }, []);
   useEffect(() => {
     // Start right after the screen appears, so it shows before the ringing and permission prompts.
     const timer = setTimeout(onOpen, 0);

@@ -108,7 +108,7 @@ export async function reportComment(id: string, reason: ReportReason) {
   // Reported twice (a retry after a slow network): the first one arrived.
   if (!error || error.code === '23505') return;
   // Deleted meanwhile, or no longer something this person can see (for example after a block).
-  if (error.code === '42501' || error.code === '23503') throw new Error("This comment can't be reported any more.");
+  if (error.code === '42501' || error.code === '23503') throw new Error('This comment can’t be reported any more.');
   throw error;
 }
 

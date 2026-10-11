@@ -11,7 +11,7 @@ export type ShareResult = 'shared' | 'copied' | 'cancelled';
 export class CopyFailedError extends Error {
   url: string;
   constructor(url: string) {
-    super("Couldn't copy the link");
+    super('Couldn’t copy the link');
     this.url = url;
   }
 }

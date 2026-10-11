@@ -227,7 +227,7 @@ export function replyErrorMessage(error: unknown): string {
   ) {
     return message;
   }
-  return "That didn't save. Check your connection and try again.";
+  return 'That didn’t save. Check your connection and try again.';
 }
 
 // ---------- Workouts ----------

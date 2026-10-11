@@ -63,7 +63,7 @@ export function LikersSheet({
           compact
           icon="heart-outline"
           title="No likes yet"
-          message="When people like your story, you'll see them here."
+          message="When people like your story, you’ll see them here."
         />
       ) : (
         <Group>

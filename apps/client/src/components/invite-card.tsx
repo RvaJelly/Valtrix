@@ -44,7 +44,7 @@ export function InviteCard({
   // card goes when the screen loads again, so the notice says why.
   function gone() {
     notice(
-      `${firstName}'s invite is no longer available`,
+      `${firstName}’s invite is no longer available`,
       'It may have been withdrawn, or answered on another device.',
     );
     onAnswered(false);
@@ -96,7 +96,7 @@ export function InviteCard({
   async function decline() {
     const sure = await confirm(
       `Decline ${firstName}?`,
-      `${firstName} won't be linked to you and won't see anything of yours. They can send you an invite again later.`,
+      `${firstName} won’t be linked to you and won’t see anything of yours. They can send you an invite again later.`,
       'Decline',
     );
     if (!sure) return;

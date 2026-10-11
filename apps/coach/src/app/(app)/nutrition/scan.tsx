@@ -23,9 +23,9 @@ export default function ScanFood() {
         setFood(found);
         return;
       }
-      setMessage(`We couldn't find ${code}. Try searching for it by name.`);
+      setMessage(`We couldn’t find ${code}. Try searching for it by name.`);
     } catch (e) {
-      setMessage(e instanceof FoodError ? e.message : "Couldn't look that up right now. Try again.");
+      setMessage(e instanceof FoodError ? e.message : 'Couldn’t look that up right now. Try again.');
     }
     setBusy(false);
   }

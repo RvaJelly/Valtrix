@@ -27,17 +27,16 @@ import {
 import { serial } from '@/lib/serial';
 import { dayKey } from '@/lib/sessions';
 import { useSettings } from '@/lib/settings';
-import { supabase } from '@/lib/supabase';
+import { loadTrainers, trainerTitle } from '@/lib/trainers';
 import { formatWeight, fromKg, parseNumber, rangeLabel, toKg, weightInput, type WeightUnit } from '@/lib/units';
 
 const MAX_TEXT = 1000;
 
-// Whether the person has a trainer. Throws when it can't tell (no signal), so the screen keeps
-// its neutral wording instead of saying there's no trainer.
-async function hasTrainer(): Promise<boolean> {
-  const { data, error } = await supabase.rpc('my_trainers');
-  if (error) throw error;
-  return Array.isArray(data) && data.length > 0;
+// The first names of the person's trainers (none when they have no trainer). Throws when it can't
+// tell (no signal), so the screen keeps its neutral wording instead of saying there's no trainer.
+async function trainerNames(): Promise<string[]> {
+  const list = await loadTrainers();
+  return list.map((t) => trainerTitle(t).split(' ')[0] || trainerTitle(t));
 }
 
 type Answers = Record<CheckInQuestion, number | null>;
@@ -50,7 +49,7 @@ export default function CheckInScreen() {
   const week = checkInWeekKey();
   const [checkIns, setCheckIns] = useState<CheckIn[] | null>(null);
   const [weights, setWeights] = useState<BodyWeight[]>([]);
-  const [trainer, setTrainer] = useState<boolean | null>(null);
+  const [trainers, setTrainers] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -61,13 +60,13 @@ export default function CheckInScreen() {
         const today = dayKey(new Date());
         const [c, t, w] = await Promise.all([
           loadCheckIns(12).catch(() => null),
-          hasTrainer().catch(() => null),
+          trainerNames().catch(() => null),
           // The check-in week, and today for the weight saved with it.
           loadBodyWeights(week < today ? week : today, shiftDay(today, 1)).catch(() => null),
         ]);
         if (!current()) return;
         if (c) setCheckIns(c);
-        if (t !== null) setTrainer(t);
+        if (t !== null) setTrainers(t);
         if (w) setWeights(w);
         setError(c ? null : "Couldn't load your check-ins. Check your connection and try again.");
         const newest = (c ?? [])
@@ -138,9 +137,11 @@ export default function CheckInScreen() {
             }}
           />
           <Text variant="footnote" tone="secondary">
-            {trainer === false
+            {trainers?.length === 0
               ? "When you have a trainer, they'll see your check-ins."
-              : 'Your trainers see your check-in and can reply.'}
+              : trainers?.length === 1
+                ? `${trainers[0]} sees your check-in and can reply.`
+                : 'Your trainers see your check-in and can reply.'}
           </Text>
 
           {checkIns.length ? (

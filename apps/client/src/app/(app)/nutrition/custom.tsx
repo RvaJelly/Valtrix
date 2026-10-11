@@ -111,7 +111,7 @@ export default function CustomFood() {
     const macros = [parse(protein), parse(carbs), parse(fat)];
     const size = parse(servingSize);
     if (!name.trim()) return bad('name', 'Give the food a name.');
-    if (code && !isBarcode(code)) return bad('barcode', 'Barcodes have 8 to 14 numbers. Check it, or leave it empty.');
+    if (code && !isBarcode(code)) return bad('barcode', 'Barcodes have 6 to 14 numbers. Check it, or leave it empty.');
     if (value === null || Number.isNaN(value) || value < 0) return bad('energy', 'Enter the calories from the label.');
     const kcal = energyUnit === 'kJ' ? value / 4.184 : value;
     if (basis !== 'serving' && kcal > 950)

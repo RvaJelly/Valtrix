@@ -274,7 +274,7 @@ function TypeBarcode({
   function submit() {
     const digits = code.replace(/\D/g, '');
     if (!isBarcode(digits)) {
-      setProblem('Barcodes have 8 to 14 numbers. Check the number and try again.');
+      setProblem('Barcodes have 6 to 14 numbers. Check the number and try again.');
       return;
     }
     setProblem(null);

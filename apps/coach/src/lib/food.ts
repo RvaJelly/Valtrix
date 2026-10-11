@@ -367,7 +367,7 @@ function parseProduct(p: Record<string, unknown>, code: string | null): Food | n
 
 // Looks a barcode up. Null when Open Food Facts doesn't know it.
 export async function lookupBarcode(code: string): Promise<Food | null> {
-  if (!isBarcode(code)) throw new FoodError('Barcodes have 8 to 14 numbers. Check the number and try again.');
+  if (!isBarcode(code)) throw new FoodError('Barcodes have 6 to 14 numbers. Check the number and try again.');
   const { status, body } = await getJson(`${PRODUCT_URL}${code}?fields=${PRODUCT_FIELDS}`, 12000);
   const data = (body ?? {}) as { status?: number; product?: Record<string, unknown> };
   if (status === 404 || data.status === 0) return null;

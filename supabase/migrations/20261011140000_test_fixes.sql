@@ -6,6 +6,8 @@
 --   4. Blocking someone settles a request to train waiting between the two of them.
 --   5. Each person can find and remove the chat photos they sent, also once that chat has ended.
 --   6. A profile photo can only be the person's own photo in this project's avatars folder.
+--   7. A trainer and a person who blocked one another don't see each other in list_trainers()
+--      either, unless the trainer still coaches the person.
 
 -- ---------- 1. The free trial, without a card for now ----------
 
@@ -219,3 +221,46 @@ alter table public.profiles
     avatar_url is null
     or avatar_url ~ ('^https://[a-z0-9]{20}\.supabase\.co/storage/v1/object/public/avatars/'
                      || id::text || '/[A-Za-z0-9._-]{1,200}$'));
+
+-- ---------- 7. Blocks hide trainers in list_trainers() too ----------
+
+-- As before, plus the block rule list_trainers_v2() already has: a trainer and a person who blocked
+-- one another don't see each other here (Voltrix versions already on phones read this list for the
+-- Trainers page and a trainer's profile). A block keeps coaching going, so a person still sees the
+-- trainer who coaches them.
+create or replace function public.list_trainers()
+returns table (
+  id uuid,
+  full_name text,
+  business_name text,
+  avatar_url text,
+  specialties text[],
+  bio text,
+  city text,
+  years_experience int
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.id, p.full_name, p.business_name, p.avatar_url, p.specialties, p.bio, p.city, p.years_experience
+    from public.profiles p
+   where p.role = 'trainer'
+     and p.business_name is not null
+     and (
+       p.free_access
+       or p.is_admin
+       or p.trial_ends_at > now()
+       or (p.subscription_status in ('active', 'past_due', 'cancelled') and p.subscription_expires_at > now())
+     )
+     and (not exists (select 1 from public.user_blocks b
+                       where (b.blocker_id = auth.uid() and b.blocked_id = p.id)
+                          or (b.blocker_id = p.id and b.blocked_id = auth.uid()))
+          or exists (select 1 from public.clients c
+                      where c.user_id = auth.uid() and c.trainer_id = p.id and c.status <> 'archived'))
+   order by p.full_name nulls last, p.business_name;
+$$;
+
+revoke execute on function public.list_trainers() from public, anon;
+grant execute on function public.list_trainers() to authenticated;

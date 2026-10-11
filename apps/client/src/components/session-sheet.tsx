@@ -21,20 +21,25 @@ import { Colors, Spacing } from '@/constants/theme';
 import { canCancel } from '@/lib/book-times';
 import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
-import { dayMonth, shortDate, time24, timeRange, weekdayShort } from '@/lib/format';
+import { shortDate, time24, timeRange } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { refreshReminders } from '@/lib/reminders';
 import { cancelMySession, endOf, ONLINE_LABEL, trainerName, type Session } from '@/lib/sessions';
 
 const CANCEL_FAILED = 'Couldn’t cancel. Check your connection and try again.';
 
-// What the status row says, with its pill.
-function statusOf(s: Session, first: string): { icon: IconName; words: string; tone: StatusTone; pill: string } {
+// What the status row says, with its pill. A booked session that has ended waits for the trainer to
+// mark it done or missed.
+function statusOf(
+  s: Session,
+  first: string,
+  ended: boolean,
+): { icon: IconName; words: string; tone: StatusTone; pill: string } {
   switch (s.status) {
     case 'cancelled':
       return {
         icon: 'close-circle-outline',
-        words: s.cancelled_by_me ? 'You cancelled this' : 'Cancelled',
+        words: s.cancelled_by_me ? 'You cancelled this' : `${first} cancelled this`,
         tone: 'neutral',
         pill: 'Cancelled',
       };
@@ -43,6 +48,14 @@ function statusOf(s: Session, first: string): { icon: IconName; words: string; t
     case 'no_show':
       return { icon: 'remove-circle-outline', words: `${first} marked it missed`, tone: 'neutral', pill: 'Missed' };
     default:
+      if (ended) {
+        return {
+          icon: 'time-outline',
+          words: `Waiting for ${first} to mark it`,
+          tone: 'neutral',
+          pill: 'Not marked yet',
+        };
+      }
       return {
         icon: 'calendar-outline',
         words: s.booked_by_me ? 'You booked this' : `${first} booked this`,
@@ -80,7 +93,8 @@ export function SessionSheet({
   const start = new Date(s.starts_at);
   const name = trainerName(s);
   const first = name.split(' ')[0] || name;
-  const status = statusOf(s, first);
+  const ended = s.status === 'scheduled' && endOf(s) <= new Date();
+  const status = statusOf(s, first, ended);
   const cancellable = canCancel(s);
   const until = s.cancel_until ? new Date(s.cancel_until) : null;
   const place = s.online ? ONLINE_LABEL : s.location;
@@ -117,7 +131,7 @@ export function SessionSheet({
       visible={!!session}
       onClose={onClose}
       onClosed={() => setError(null)}
-      title={`${weekdayShort(start)} ${dayMonth(start)} · ${timeRange(start, endOf(s))}`}>
+      title={`${shortDate(start)} · ${timeRange(start, endOf(s))}`}>
       <View testID="session-sheet" style={{ gap: Spacing.gutter }}>
         <Group style={{ backgroundColor: Colors.tint }}>
           <ListRow
@@ -168,7 +182,7 @@ export function SessionSheet({
           </View>
         ) : (
           <View style={{ gap: Spacing.tight }}>
-            {s.status === 'scheduled' ? (
+            {s.status === 'scheduled' && !ended ? (
               <Text variant="footnote" tone="secondary">
                 To change or cancel, message {first}.
               </Text>

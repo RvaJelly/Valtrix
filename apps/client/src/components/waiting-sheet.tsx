@@ -8,6 +8,7 @@ import { Button, ErrorText, Notice, Text } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
 import { firstOf } from '@/lib/book-times';
 import { withdrawTime, type MyTimeRequest } from '@/lib/booking';
+import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
 import { ago, shortDate, timeRange } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
@@ -46,8 +47,11 @@ export function WaitingSheet({
   // Answered or withdrawn meanwhile (the list loaded again while the sheet was open).
   const settled = answered || (r.status !== 'pending' && !expired && !declined);
 
+  // Asked first, as every other withdraw and cancel is: a stray tap shouldn't give the time away.
   async function withdraw() {
-    haptic.select();
+    if (busy) return;
+    const sure = await confirm('Withdraw this request?', `${first} won’t see it any more.`, 'Withdraw');
+    if (!sure) return;
     setBusy(true);
     setError(null);
     try {

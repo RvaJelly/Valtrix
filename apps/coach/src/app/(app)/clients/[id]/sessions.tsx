@@ -5,7 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { Chips } from '@/components/chips';
 import { SessionRow } from '@/components/session-row';
 import { useToast } from '@/components/toast';
-import { Button, EmptyState, Group, Notice, PageHeader, SkeletonRows, Text, useDelayed } from '@/components/ui';
+import { Button, EmptyState, Group, Notice, SkeletonRows, Text, useDelayed } from '@/components/ui';
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { fullName } from '@/lib/clients';
 import { plainError } from '@/lib/errors';
@@ -141,10 +141,12 @@ export default function ClientSessions() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Sessions', headerTitle: '' }} />
+      <Stack.Screen options={{ title: 'Sessions' }} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={{ gap: Spacing.tight }}>
-          <PageHeader eyebrow={client ? fullName(client) : ' '} title="Sessions" />
+          <Text variant="label" tone="secondary" numberOfLines={2}>
+            {client ? fullName(client) : ' '}
+          </Text>
           {counts ? (
             <Text variant="footnote" tone="secondary">
               {summaryOf(counts)}

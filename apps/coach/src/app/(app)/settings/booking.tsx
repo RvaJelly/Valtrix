@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { BookingPreviewSheet } from '@/components/booking-preview-sheet';
 import { Chips } from '@/components/chips';
@@ -89,6 +89,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 // Settings › Online booking: whether clients you train can book your open times in Voltrix, your
 // weekly hours, and the rules for what they can book. Saved together with the button at the bottom.
 export default function OnlineBooking() {
+  const large = useWindowDimensions().fontScale > 1.15;
   const { profile, refreshProfile } = useAuth();
   const toast = useToast();
   const savedZone = profile?.time_zone || HOME_ZONE;
@@ -268,7 +269,7 @@ export default function OnlineBooking() {
         </Text>
         {draft.enabled ? (
           <Text variant="footnote" tone="secondary">
-            Until phone notifications arrive in an update, you see new bookings when you open Voltrix Coach.
+            New bookings and requests show on Home.
           </Text>
         ) : (
           <Text variant="footnote" tone="secondary">
@@ -283,8 +284,11 @@ export default function OnlineBooking() {
             <ListRow
               key={day}
               title={weekdayName(day)}
-              // One stretch of hours a line, so a split day reads as two clean times.
-              trailing={trailing(dayHours(draft.hours, day).split(', ').join('\n'), 4)}
+              // One stretch of hours a line, so a split day reads as two clean times. With large text
+              // the hours go under the day, so "Wednesday" keeps the row's width.
+              subtitle={large ? dayHours(draft.hours, day) : undefined}
+              subtitleLines={4}
+              trailing={large ? undefined : trailing(dayHours(draft.hours, day).split(', ').join('\n'), 4)}
               onPress={() => setHoursDay(day)}
               accessibilityLabel={`${weekdayName(day)}: ${dayHours(draft.hours, day)}`}
               testID={`booking-day-${day}`}
@@ -345,7 +349,7 @@ export default function OnlineBooking() {
             onPress={() => setPicker('cancel')}
             testID="booking-cancel"
           />
-          <View style={{ paddingHorizontal: Spacing.gutter, paddingVertical: Spacing.two }}>
+          <View style={{ paddingHorizontal: Spacing.gutter, paddingVertical: Spacing.two, gap: Spacing.one }}>
             <Stepper
               label="Sessions a client can hold"
               value={String(draft.max_ahead)}
@@ -356,6 +360,9 @@ export default function OnlineBooking() {
               moreDisabled={draft.max_ahead >= 20}
               testID="booking-hold"
             />
+            <Text variant="footnote" tone="secondary">
+              A client can hold this many booked sessions at once. Sessions you book for them don’t count.
+            </Text>
           </View>
           <Divider inset={Spacing.gutter} />
           <ListRow
@@ -375,9 +382,6 @@ export default function OnlineBooking() {
           />
           <ListRow title="What clients see" onPress={() => setPicker('preview')} testID="booking-preview" last />
         </Group>
-        <Text variant="footnote" tone="secondary">
-          A client can hold this many booked sessions at once. Sessions you book for them don’t count.
-        </Text>
       </Section>
 
       <HoursSheet

@@ -345,7 +345,7 @@ export default function ClientDetail() {
           <View style={styles.profile}>
             <Avatar name={name} size={96} />
             <View style={styles.names}>
-              <Text variant="largeTitle" numberOfLines={2} style={styles.center} accessibilityRole="header">
+              <Text variant="largeTitle" numberOfLines={3} style={styles.center} accessibilityRole="header">
                 {name}
               </Text>
               {client.goal ? (

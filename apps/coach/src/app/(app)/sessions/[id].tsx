@@ -497,7 +497,7 @@ export default function SessionDetail() {
           </View>
           <Text
             variant="title"
-            numberOfLines={2}
+            numberOfLines={3}
             accessibilityRole="header"
             style={session.status === 'cancelled' ? styles.struck : undefined}>
             {name}

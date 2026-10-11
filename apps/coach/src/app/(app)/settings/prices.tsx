@@ -197,24 +197,19 @@ export default function PriceSettings() {
           testID="prices-price"
         />
         <Group>
+          {/* The values sit under the titles, so a long one wraps rather than being cut to "South Afric…". */}
           <ListRow
             title="Currency"
-            trailing={
-              <Text variant="callout" tone="secondary" numberOfLines={1}>
-                {currencyOf(currency).name}
-              </Text>
-            }
+            subtitle={`${currencyOf(currency).name} (${currencyOf(currency).symbol.trim()})`}
+            subtitleLines={2}
             onPress={() => setPicking('currency')}
             accessibilityLabel={`Currency: ${currencyOf(currency).name}`}
             testID="prices-currency"
           />
           <ListRow
             title="Country"
-            trailing={
-              <Text variant="callout" tone="secondary" numberOfLines={1} style={Tabular}>
-                {`${place.name} (+${place.code})`}
-              </Text>
-            }
+            subtitle={`${place.name} (+${place.code})`}
+            subtitleLines={2}
             onPress={() => setPicking('country')}
             accessibilityLabel={`Country: ${place.name}, +${place.code}`}
             testID="prices-country"

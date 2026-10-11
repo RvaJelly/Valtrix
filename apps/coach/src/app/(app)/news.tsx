@@ -5,17 +5,7 @@ import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } f
 import { PersonSheet } from '@/components/person-sheet';
 import { RequestSheet } from '@/components/request-sheet';
 import { doctorUpdates, newsFirst, newsTarget, UpdateRow } from '@/components/update-row';
-import {
-  EmptyState,
-  Group,
-  Notice,
-  PageHeader,
-  Section,
-  Skeleton,
-  SkeletonRows,
-  Text,
-  useDelayed,
-} from '@/components/ui';
+import { EmptyState, Group, Notice, Section, Skeleton, SkeletonRows, Text, useDelayed } from '@/components/ui';
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { longDate } from '@/lib/format';
@@ -186,9 +176,8 @@ export default function Updates() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Updates', headerTitle: '' }} />
+      <Stack.Screen options={{ title: 'Updates' }} />
       <ScrollView contentContainerStyle={styles.content} onScroll={onScroll} scrollEventThrottle={200}>
-        <PageHeader title="Updates" />
         {failed ? (
           <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
             {data ? 'Couldn’t refresh your updates.' : 'Your updates couldn’t be loaded.'}

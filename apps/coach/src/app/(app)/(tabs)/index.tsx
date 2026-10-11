@@ -657,6 +657,7 @@ export default function Home() {
                 showEarned && earned
                   ? {
                       value: formatMoney(earned.cents, currency),
+                      plain: earned.cents === 0,
                       label: 'Earned this week',
                       spoken: `${spokenMoney(earned.cents, currency)} earned this week`,
                       onPress: () => router.push('/earnings'),

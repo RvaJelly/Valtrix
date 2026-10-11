@@ -14,7 +14,6 @@ import {
   Group,
   ListRow,
   Notice,
-  PageHeader,
   Section,
   Skeleton,
   SkeletonRows,
@@ -140,9 +139,8 @@ export default function ClientMoney() {
   if (!data) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Money', headerTitle: '' }} />
+        <Stack.Screen options={{ title: 'Money' }} />
         <ScrollView contentContainerStyle={styles.content}>
-          <PageHeader eyebrow=" " title="Money" />
           {failed ? (
             <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
               The money page couldn’t be loaded.
@@ -182,9 +180,11 @@ export default function ClientMoney() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Money', headerTitle: '' }} />
+      <Stack.Screen options={{ title: 'Money' }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <PageHeader eyebrow={name} title="Money" />
+        <Text variant="label" tone="secondary" numberOfLines={2}>
+          {name}
+        </Text>
         {failed ? (
           <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
             Couldn’t refresh the money page.

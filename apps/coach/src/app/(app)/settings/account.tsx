@@ -18,7 +18,7 @@ export default function AccountSettings() {
         </Group>
         <BiometricRow />
         <Text variant="footnote" tone="secondary">
-          Everything is saved to your account.
+          Your clients, programs and settings are saved to your account, so a new phone brings everything back.
         </Text>
       </Section>
       <Section title="Password">

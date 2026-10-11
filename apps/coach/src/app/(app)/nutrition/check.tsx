@@ -1,19 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { FoodRow, FoodSheet } from '@/components/food-sheet';
-import { Body, ErrorText, Text } from '@/components/ui';
-import { Colors, Fonts, Radius, Spacing, themed, Type } from '@/constants/theme';
+import { Body, Button, ErrorText, Group, IconTile, ListRow, SearchField, SkeletonRows, Text } from '@/components/ui';
+import { Spacing, themed } from '@/constants/theme';
 import { FOOD_CREDIT, FoodError, fullProduct, searchFoods, type Food } from '@/lib/food';
 
 // Look up any food's calories, protein, carbs and fat, by barcode or by name.
@@ -33,7 +24,7 @@ export default function CheckFood() {
     try {
       setResults({ query: q, foods: await searchFoods(q) });
     } catch (e) {
-      setError(e instanceof FoodError ? e.message : "Couldn't search right now. Try again.");
+      setError(e instanceof FoodError ? e.message : 'Couldn’t search right now. Try again.');
     }
     setSearching(false);
   }
@@ -46,65 +37,50 @@ export default function CheckFood() {
     try {
       setFood(await fullProduct(item));
     } catch (e) {
-      setError(e instanceof FoodError ? e.message : "Couldn't open that one. Try again.");
+      setError(e instanceof FoodError ? e.message : 'Couldn’t open that one. Try again.');
     }
     setOpening(null);
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Stack.Screen options={{ title: 'Check a food' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/nutrition/scan')}
-          style={({ pressed }) => [styles.scan, pressed && { backgroundColor: Colors.tint }]}>
-          <Ionicons name="barcode-outline" size={28} color={Colors.text} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.scanTitle}>Scan a barcode</Text>
-            <Text style={styles.scanDetail}>Point the camera at the pack</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-        </Pressable>
+        <Group>
+          <ListRow
+            title="Scan a barcode"
+            subtitle="Point the camera at the pack"
+            leading={<IconTile icon="barcode-outline" />}
+            onPress={() => router.push('/nutrition/scan')}
+            last
+          />
+        </Group>
 
-        <Text style={styles.or}>or search by name</Text>
+        <Text variant="label" tone="secondary" style={styles.or}>
+          or search by name
+        </Text>
         <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={20} color={Colors.textSecondary} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="For example Weet-Bix"
-              placeholderTextColor={Colors.textSecondary}
-              selectionColor={Colors.accent}
-              accessibilityLabel="Search foods"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={search}
-              style={styles.searchInput}
-            />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Search"
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="For example Weet-Bix"
+            accessibilityLabel="Search foods"
+            autoCapitalize="sentences"
+            onSubmitEditing={search}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="Search"
+            variant="secondary"
             onPress={search}
-            disabled={!query.trim() || searching}
-            style={({ pressed }) => [
-              styles.searchButton,
-              pressed && { backgroundColor: Colors.accentPressed },
-              !query.trim() && { opacity: 0.5 },
-            ]}>
-            <Text style={styles.searchButtonText}>Search</Text>
-          </Pressable>
+            loading={searching}
+            disabled={!query.trim()}
+            testID="food-search"
+          />
         </View>
 
         <ErrorText>{error}</ErrorText>
-        {searching ? (
-          <View style={styles.searching}>
-            <ActivityIndicator color={Colors.textSecondary} />
-            <Body secondary>Searching…</Body>
-          </View>
-        ) : null}
+        {searching ? <SkeletonRows count={4} /> : null}
 
         {results && !searching ? (
           results.foods.length ? (
@@ -117,7 +93,9 @@ export default function CheckFood() {
                   onPress={() => open(f, i)}
                 />
               ))}
-              <Text style={styles.credit}>{FOOD_CREDIT}. South African products show first.</Text>
+              <Text variant="footnote" tone="secondary" style={styles.credit}>
+                {FOOD_CREDIT}. South African products show first.
+              </Text>
             </View>
           ) : (
             <Body secondary>Nothing found for “{results.query}”. Try other words or scan the barcode.</Body>
@@ -140,72 +118,15 @@ const styles = themed(() => ({
     maxWidth: 640,
     alignSelf: 'center',
   },
-  scan: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 72,
-    paddingHorizontal: Spacing.gutter,
-    borderRadius: Radius.large,
-    backgroundColor: Colors.surface,
-  },
-  scanTitle: {
-    color: Colors.text,
-    fontFamily: Fonts.textSemi,
-    fontSize: 17,
-  },
-  scanDetail: {
-    color: Colors.textSecondary,
-    fontFamily: Fonts.text,
-    fontSize: 13,
-  },
   or: {
-    ...Type.label,
-    color: Colors.textSecondary,
     textAlign: 'center',
   },
   searchRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    minHeight: 52,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.tint,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    color: Colors.text,
-    fontSize: 16,
-    paddingVertical: Spacing.two,
-  },
-  searchButton: {
-    minHeight: 52,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.medium,
-    backgroundColor: Colors.accent,
-  },
-  searchButtonText: {
-    ...Type.button,
-    color: Colors.onAccent,
-  },
-  searching: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.four,
   },
   credit: {
-    color: Colors.textSecondary,
-    fontSize: 12,
     textAlign: 'center',
     marginTop: Spacing.two,
   },

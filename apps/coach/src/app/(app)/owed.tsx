@@ -5,18 +5,7 @@ import { ScrollView, View } from 'react-native';
 import { Avatar } from '@/components/avatar';
 import { MarkPaidSheet } from '@/components/mark-paid-sheet';
 import { RowWithAction } from '@/components/row-action';
-import {
-  Button,
-  Card,
-  EmptyState,
-  Group,
-  Notice,
-  PageHeader,
-  Skeleton,
-  SkeletonRows,
-  Text,
-  useDelayed,
-} from '@/components/ui';
+import { Button, Card, EmptyState, Group, Notice, Skeleton, SkeletonRows, Text, useDelayed } from '@/components/ui';
 import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { fullName } from '@/lib/clients';
@@ -72,9 +61,8 @@ export default function WhoOwes() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Who owes you', headerTitle: '' }} />
+      <Stack.Screen options={{ title: 'Who owes you' }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <PageHeader title="Who owes you" />
         {failed ? (
           <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
             {rows ? 'Couldn’t refresh who owes you.' : 'Who owes you couldn’t be loaded.'}

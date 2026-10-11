@@ -11,7 +11,6 @@ import {
   IconButton,
   ListRow,
   Notice,
-  PageHeader,
   Section,
   Skeleton,
   SkeletonRows,
@@ -103,8 +102,10 @@ export default function ClientHealth() {
 
   const header = (
     <>
-      <Stack.Screen options={{ title: 'Health form', headerTitle: '' }} />
-      <PageHeader eyebrow={data ? fullName(data) : ' '} title="Health form" />
+      <Stack.Screen options={{ title: 'Health form' }} />
+      <Text variant="label" tone="secondary" numberOfLines={2}>
+        {data ? fullName(data) : ' '}
+      </Text>
     </>
   );
 
@@ -197,7 +198,7 @@ export default function ClientHealth() {
                     <ListRow
                       key={q.key}
                       title={q.question}
-                      titleLines={4}
+                      titleLines={0}
                       status={<StatusPill tone="warning" label="Yes" />}
                       last={i === yes.length - 1}
                     />
@@ -212,7 +213,7 @@ export default function ClientHealth() {
                     <ListRow
                       key={q.key}
                       title={q.question}
-                      titleLines={4}
+                      titleLines={0}
                       trailing={
                         <Text variant="callout" tone="secondary">
                           No

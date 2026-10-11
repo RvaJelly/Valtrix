@@ -12,7 +12,6 @@ import {
   Group,
   ListRow,
   Notice,
-  PageHeader,
   Section,
   SkeletonRows,
   StatusPill,
@@ -156,7 +155,6 @@ export default function Requests() {
       <Stack.Screen
         options={{
           title: 'Requests',
-          headerTitle: '',
           headerRight: () => (
             <HeaderTextButton title="Updates" onPress={() => router.push('/news')} testID="requests-updates" />
           ),
@@ -167,7 +165,6 @@ export default function Requests() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.textSecondary} />
         }>
-        <PageHeader title="Requests" />
         {failed ? (
           <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
             {lists ? 'Couldn’t refresh your requests.' : 'Your requests couldn’t be loaded.'}

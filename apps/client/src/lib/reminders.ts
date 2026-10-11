@@ -56,14 +56,18 @@ export function buildReminders(sessions: Session[], minutes: number, now = new D
 // Set the reminder time and reschedule. Never asks for permission: signing in isn't the moment.
 export async function setReminderLead(minutes: number) {
   lead = minutes;
+  // A new sign-in starts without the last person's card; the refresh works out this person's.
+  setOffer(false);
   await refreshReminders();
 }
 
 // The reminder card on Home: shown once a session is booked, reminders are on and this phone can still ask.
 // Its Turn on is what shows the phone's question. Once answered or put away, it isn't offered again on
-// this phone; Settings > Reminders still turns them on.
+// this phone; Settings > Notifications still turns them on.
 const OFFERED_KEY = 'voltrix.reminderOffered';
 let offer = false;
+// Put away during this run (the stored flag can take a moment to be written).
+let closed = false;
 const offerListeners = new Set<() => void>();
 
 function setOffer(next: boolean) {
@@ -89,11 +93,13 @@ export function useReminderOffer(): number | null {
 }
 
 export async function closeReminderOffer() {
+  closed = true;
   setOffer(false);
   await AsyncStorage.setItem(OFFERED_KEY, '1').catch(() => {});
 }
 
 async function shouldOffer(sessions: Session[], now: Date) {
+  if (closed) return false;
   if (!sessions.some((s) => s.status === 'scheduled' && new Date(s.starts_at) > now)) return false;
   if ((await permissionState()) !== 'ask') return false;
   return !(await AsyncStorage.getItem(OFFERED_KEY).catch(() => null));

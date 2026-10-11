@@ -5,8 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ACCEPT_SCREEN, LEGAL_DOCS, TERMS_UPDATED } from '@/components/legal/legal-content';
 import { ImportantBox, Points } from '@/components/legal/legal-document';
-import { LegalReader, type ReaderDoc } from '@/components/legal/legal-reader';
+import { LegalReader, readerTitle, type ReaderDoc } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
+import { DeleteAccount } from '@/components/settings-parts';
 import { StickyFooter } from '@/components/sticky-footer';
 import { Button, Group, IconTile, ListRow, Section, Text, TextLink, type IconName } from '@/components/ui';
 import { VMark } from '@/components/v-mark';
@@ -26,13 +27,18 @@ const NONE: TermsChecks = { age: false, terms: false, health: false };
 
 // The screen everyone sees before anything else, in Voltrix and Voltrix Coach (the same file): what
 // matters most in a few lines, the terms that limit Voltrix's liability in a highlighted box (CPA s49),
-// every document in full one tap away, three ticks and one Accept button.
+// every document in full one tap away, three ticks and one Agree button.
+// - The health box can be ticked only once the Health and Safety Notice has been opened (one tap, no
+//   forced scrolling): until then, tapping it opens the Notice (CPA s49(5), s58).
+// - Someone signed in can leave from here: sign out, or delete their account (the same steps as Settings).
 // `underHeader`: inside the sign-up screen, under its see-through header and back arrow.
 export function TermsGate({ underHeader }: { underHeader?: boolean }) {
   const terms = useTerms();
-  const { signOut } = useAuth();
+  const { signOut, session, profile } = useAuth();
   const [checks, setChecks] = useState<TermsChecks>(NONE);
   const [reading, setReading] = useState<ReaderDoc | null>(null);
+  // The Health and Safety Notice has been opened on this screen.
+  const [healthRead, setHealthRead] = useState(false);
   const [busy, setBusy] = useState(false);
   const fill = (text: string) => fillApp(text, terms.appName);
   const ticked = ACCEPT_SCREEN.checks.filter((c) => checks[c.id]).length;
@@ -48,8 +54,14 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
 
   const docs: { id: ReaderDoc; title: string }[] = [
     ...LEGAL_DOCS.map((d) => ({ id: d.id as ReaderDoc, title: d.title })),
-    { id: 'privacy', title: 'Privacy' },
+    { id: 'privacy', title: readerTitle('privacy') },
   ];
+  const read = (doc: ReaderDoc) => {
+    if (doc === 'health') setHealthRead(true);
+    setReading(doc);
+  };
+  // Each app deletes its own kind of account: a trainer's in Voltrix Coach, a client's in Voltrix.
+  const ownAccount = profile?.role === (terms.app === 'coach' ? 'trainer' : 'client');
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']} testID="terms-gate">
@@ -62,7 +74,7 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
 
         <View style={styles.head}>
           <Text variant="label" tone="secondary">
-            Updated {TERMS_UPDATED}
+            Version {TERMS_UPDATED}
           </Text>
           <Text variant="largeTitle" accessibilityRole="header">
             {fill(ACCEPT_SCREEN.title)}
@@ -95,7 +107,7 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
                 key={d.id}
                 title={d.title}
                 leading={<IconTile icon={DOC_ICONS[d.id]} />}
-                onPress={() => setReading(d.id)}
+                onPress={() => read(d.id)}
                 accessibilityLabel={`Read the ${d.title}`}
                 testID={`terms-doc-${d.id}`}
                 compact
@@ -107,20 +119,37 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
 
         <Section title="To continue">
           <Group>
-            {ACCEPT_SCREEN.checks.map((c, i) => (
-              <CheckRow
-                key={c.id}
-                id={c.id}
-                label={fill(c.label)}
-                checked={checks[c.id]}
-                onToggle={() => setChecks((now) => ({ ...now, [c.id]: !now[c.id] }))}
-                last={i === ACCEPT_SCREEN.checks.length - 1}
-              />
-            ))}
+            {ACCEPT_SCREEN.checks.map((c, i) => {
+              const first = c.id === 'health' && !healthRead;
+              return (
+                <CheckRow
+                  key={c.id}
+                  id={c.id}
+                  label={fill(c.label)}
+                  hint={first ? 'Tap to read the Notice first.' : undefined}
+                  checked={checks[c.id]}
+                  onToggle={() => (first ? read('health') : setChecks((now) => ({ ...now, [c.id]: !now[c.id] })))}
+                  last={i === ACCEPT_SCREEN.checks.length - 1}
+                />
+              );
+            })}
           </Group>
         </Section>
 
-        {terms.signedIn ? <TextLink lead="Not your account?" label="Sign out" onPress={signOut} /> : null}
+        {terms.signedIn ? (
+          <Section title="Your account">
+            <View style={{ gap: Spacing.three }}>
+              <TextLink lead="Not your account?" label="Sign out" onPress={signOut} />
+              {ownAccount ? (
+                <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
+              ) : profile ? (
+                <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
+                  To delete your account, use {terms.app === 'coach' ? 'Voltrix' : 'Voltrix Coach'}.
+                </Text>
+              ) : null}
+            </View>
+          </Section>
+        ) : null}
       </ScrollView>
 
       <StickyFooter>
@@ -151,12 +180,15 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
 function CheckRow({
   id,
   label,
+  hint,
   checked,
   onToggle,
   last,
 }: {
   id: CheckId;
   label: string;
+  // What a tap does first, when it doesn't tick the box yet.
+  hint?: string;
   checked: boolean;
   onToggle: () => void;
   last?: boolean;
@@ -169,9 +201,10 @@ function CheckRow({
       // The web reads the state from aria-checked.
       aria-checked={checked}
       accessibilityLabel={label}
+      accessibilityHint={hint}
       testID={`terms-check-${id}`}
       onPress={() => {
-        haptic.select(!checked);
+        if (!hint) haptic.select(!checked);
         onToggle();
       }}
       onHoverIn={() => setHovered(true)}
@@ -184,6 +217,14 @@ function CheckRow({
         <Text variant="callout" style={{ fontFamily: Fonts.textMedium }}>
           {label}
         </Text>
+        {hint ? (
+          <View style={styles.hint}>
+            <Ionicons name="book-outline" size={14} color={Colors.textSecondary} />
+            <Text variant="footnote" tone="secondary" style={{ flex: 1 }}>
+              {hint}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -228,13 +269,13 @@ const styles = themed(() => ({
   },
   item: {
     flexDirection: 'row',
-    gap: Spacing.three,
+    gap: Spacing.tight,
     paddingVertical: Spacing.three,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
   number: {
-    width: 32,
+    width: 28,
     fontFamily: Fonts.displaySemi,
     fontSize: 15,
     lineHeight: 22,
@@ -268,6 +309,12 @@ const styles = themed(() => ({
     justifyContent: 'center',
     paddingVertical: Spacing.three,
     paddingRight: Spacing.gutter,
+  },
+  hint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    marginTop: Spacing.one,
   },
   checkLine: {
     borderBottomWidth: StyleSheet.hairlineWidth,

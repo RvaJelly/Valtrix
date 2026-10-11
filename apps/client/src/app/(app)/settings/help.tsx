@@ -1,13 +1,16 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import { Linking } from 'react-native';
 
+import { BUSINESS } from '@/components/legal/legal-content';
 import { legalDoc } from '@/components/legal/legal-document';
 import { TermsAcceptedNote } from '@/components/legal/terms-notes';
 import { SettingsPage } from '@/components/settings-parts';
 import { Group, IconTile, ListRow, Text } from '@/components/ui';
 
-// The Terms of Service, Health and Safety, the Community Rules, the Privacy page, which version of the
-// Terms the person accepted, and the app version.
+// The Terms of Service, the Health and Safety Notice, the Community Rules, the Privacy Policy, how to contact
+// Voltrix (once BUSINESS has an email address), which version of the Terms the person accepted, and the
+// app version.
 export default function HelpSettings() {
   return (
     <SettingsPage>
@@ -34,7 +37,7 @@ export default function HelpSettings() {
           testID="help-community"
         />
         <ListRow
-          title="Privacy"
+          title="Privacy Policy"
           subtitle="What Voltrix keeps and who sees it"
           leading={<IconTile icon="shield-checkmark-outline" />}
           onPress={() => router.push('/settings/privacy-policy')}
@@ -42,6 +45,18 @@ export default function HelpSettings() {
           last
         />
       </Group>
+      {BUSINESS.email ? (
+        <Group>
+          <ListRow
+            title="Contact Voltrix"
+            subtitle={BUSINESS.email}
+            leading={<IconTile icon="mail-outline" />}
+            onPress={() => Linking.openURL(`mailto:${BUSINESS.email}`).catch(() => {})}
+            testID="help-contact"
+            last
+          />
+        </Group>
+      ) : null}
       <TermsAcceptedNote />
       <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
         Voltrix {Constants.expoConfig?.version ?? ''}

@@ -600,7 +600,6 @@ function Sessions({
   // Past is what has ended. A session cancelled before its time stays with the ones to come, struck
   // through and saying who cancelled it, so a trainer's cancel is seen where the person looks.
   const ahead = sessions.filter((s) => endOf(s) > now);
-  const upcoming = ahead.filter((s) => s.status === 'scheduled');
   const shown = when === 'upcoming' ? ahead : sessions.filter((s) => endOf(s) <= now).reverse();
   // The trainer's name only matters when there are several.
   const manyTrainers = new Set(sessions.map((s) => s.client_id)).size > 1 || (trainers?.length ?? 0) > 1;
@@ -632,8 +631,9 @@ function Sessions({
       (r) => r.status === 'declined' && now.getTime() - Date.parse(r.answered_at ?? r.created_at) < 14 * 86_400_000,
     )
     .sort((a, b) => (a.starts_at < b.starts_at ? 1 : a.starts_at > b.starts_at ? -1 : 0));
-  // Nothing coming up and nothing waiting: the empty state holds the Book button instead of the card.
-  const empty = upcoming.length === 0 && waiting.length === 0;
+  // Nothing coming up and nothing waiting: the empty state holds the Book button instead of the card. A
+  // cancelled session still to come keeps the list (and the card), so it is seen at the top.
+  const empty = ahead.length === 0 && waiting.length === 0;
   const showCard = bookable.length > 0 && !(when === 'upcoming' && empty);
   const packs = booking.packs;
 

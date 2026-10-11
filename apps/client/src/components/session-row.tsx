@@ -67,7 +67,8 @@ export function SessionRow({
       subtitle={subtitle}
       leading={
         showDay ? (
-          <View style={{ minWidth: 44, alignItems: 'center' }}>
+          // Three lines with the month, so the row grows to keep air above and below them.
+          <View style={{ minWidth: 44, alignItems: 'center', paddingVertical: showMonth ? Spacing.two : 0 }}>
             <Text variant="label" tone="secondary">
               {weekdayShort(start)}
             </Text>

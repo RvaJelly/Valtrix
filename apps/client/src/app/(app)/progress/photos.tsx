@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { PhotoViewer } from '@/components/photo-viewer';
+import { SeenBy, useHasTrainer } from '@/components/seen-by';
 import { Sheet } from '@/components/sheet';
 import { Button, Card, ErrorText, Notice, Section, Segmented, Skeleton, Text, useDelayed } from '@/components/ui';
 import { Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
@@ -60,6 +61,8 @@ type Target = { day: string; pose: Pose; replacing: ProgressPhoto | null };
 // The client's progress photos: today's front, side and back, first and latest side by side,
 // and every earlier day.
 export default function ProgressPhotos() {
+  // Who sees what's logged here: the person's trainers, or only them until they have one.
+  const trainer = useHasTrainer();
   const { session } = useAuth();
   const userId = session?.user.id ?? null;
   const today = dayKey(new Date());
@@ -334,9 +337,7 @@ export default function ProgressPhotos() {
         </>
       )}
 
-      <Text variant="footnote" tone="secondary">
-        Only you and your trainers can see these.
-      </Text>
+      <SeenBy trainer={trainer} photos />
 
       <Sheet
         visible={!!target}

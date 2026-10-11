@@ -5,6 +5,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { DaySwitcher } from '@/components/day-switcher';
+import { SeenBy, useHasTrainer } from '@/components/seen-by';
 import { Sheet } from '@/components/sheet';
 import {
   Button,
@@ -95,6 +96,8 @@ function spokenSleep(minutes: number) {
 
 // Water, steps and last night's sleep, day by day, against the person's own targets.
 export default function Habits() {
+  // Who sees what's logged here: the person's trainers, or only them until they have one.
+  const trainer = useHasTrainer();
   const { settings } = useSettings();
   const unit = settings.units;
   const [day, setDay] = useState(() => dayKey(new Date()));
@@ -307,9 +310,7 @@ export default function Habits() {
         onPress={() => open('targets')}
         testID="habit-targets"
       />
-      <Text variant="footnote" tone="secondary">
-        Your trainers can see this.
-      </Text>
+      <SeenBy trainer={trainer} />
 
       <Sheet visible={sheet.open === 'steps'} onClose={close} title="Set steps">
         <StepsForm

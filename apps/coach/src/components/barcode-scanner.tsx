@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult, type BarcodeType } from 'expo-camera';
+import Constants from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -8,6 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Body, Button, EmptyState, ErrorText, IconButton, Text, TextField } from '@/components/ui';
 import { BRAND, Colors, Fonts, Layout, Radius, Spacing, themed } from '@/constants/theme';
 import { isBarcode } from '@/lib/food';
+
+// This file is the same in both apps: the camera setting to change is the one under this app's own name.
+const APP_NAME = Constants.expoConfig?.name ?? 'Voltrix';
 
 // Food packs use these barcodes. Leaving out QR codes and the rest keeps scanning quick.
 const BARCODE_TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e'];
@@ -157,7 +161,7 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
     body = (
       <Explain
         icon="videocam-off-outline"
-        title="The camera didn't start"
+        title="The camera didn’t start"
         text="Close any other app using the camera and try again, or type the number under the barcode.">
         <Button title="Try again" onPress={turnOn} />
         <Button title="Type the barcode number" variant="secondary" onPress={() => setTyping(true)} />
@@ -170,8 +174,8 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
         title="Your camera is off"
         text={
           Platform.OS === 'web'
-            ? 'This browser is not letting Voltrix use the camera. Allow the camera for this site in your browser settings, or type the number under the barcode.'
-            : 'Voltrix is not allowed to use your camera. Turn it on in your phone’s Settings, or type the number under the barcode.'
+            ? `This browser is not letting ${APP_NAME} use the camera. Allow the camera for this site in your browser settings, or type the number under the barcode.`
+            : `${APP_NAME} is not allowed to use your camera. Turn it on in your phone’s Settings, or type the number under the barcode.`
         }>
         {Platform.OS !== 'web' ? <Button title="Open Settings" onPress={() => Linking.openSettings()} /> : null}
         <Button
@@ -186,7 +190,7 @@ export function BarcodeScanner({ onCode, busy, message, onClose }: Props) {
       <Explain
         icon="barcode-outline"
         title="Scan food barcodes"
-        text="Point your camera at the barcode on the pack to see its calories. Voltrix only uses the camera while this screen is open.">
+        text={`Point your camera at the barcode on the pack to see its calories. ${APP_NAME} only uses the camera while this screen is open.`}>
         <Button title="Turn on camera" onPress={turnOn} />
         <Button title="Type the barcode number" variant="secondary" onPress={() => setTyping(true)} />
       </Explain>

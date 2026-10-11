@@ -1,4 +1,7 @@
-import { askPermission, replaceReminders } from '@/lib/notify';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSyncExternalStore } from 'react';
+
+import { permissionState, replaceReminders } from '@/lib/notify';
 import { formatTime, loadSessions, trainerName, type Session } from '@/lib/sessions';
 
 export type Reminder = {
@@ -50,11 +53,50 @@ export function buildReminders(sessions: Session[], minutes: number, now = new D
     .filter((r) => r.at > now);
 }
 
-// Set the reminder time and reschedule. Asks for permission the first time.
+// Set the reminder time and reschedule. Never asks for permission: signing in isn't the moment.
 export async function setReminderLead(minutes: number) {
   lead = minutes;
-  if (minutes !== 0 && !(await askPermission())) return;
   await refreshReminders();
+}
+
+// The reminder card on Home: shown once a session is booked, reminders are on and this phone can still ask.
+// Its Turn on is what shows the phone's question. Once answered or put away, it isn't offered again on
+// this phone; Settings > Reminders still turns them on.
+const OFFERED_KEY = 'voltrix.reminderOffered';
+let offer = false;
+const offerListeners = new Set<() => void>();
+
+function setOffer(next: boolean) {
+  if (offer === next) return;
+  offer = next;
+  offerListeners.forEach((listener) => listener());
+}
+
+function subscribeOffer(listener: () => void) {
+  offerListeners.add(listener);
+  return () => {
+    offerListeners.delete(listener);
+  };
+}
+
+// The reminder time to offer, or null when there's nothing to offer.
+export function useReminderOffer(): number | null {
+  return useSyncExternalStore(
+    subscribeOffer,
+    () => (offer ? lead : null),
+    () => null,
+  );
+}
+
+export async function closeReminderOffer() {
+  setOffer(false);
+  await AsyncStorage.setItem(OFFERED_KEY, '1').catch(() => {});
+}
+
+async function shouldOffer(sessions: Session[], now: Date) {
+  if (!sessions.some((s) => s.status === 'scheduled' && new Date(s.starts_at) > now)) return false;
+  if ((await permissionState()) !== 'ask') return false;
+  return !(await AsyncStorage.getItem(OFFERED_KEY).catch(() => null));
 }
 
 // One refresh at a time: two at once (like a booking saved as the app comes back to the
@@ -84,10 +126,14 @@ export function refreshReminders(): Promise<void> {
 
 async function refreshOnce() {
   try {
-    if (lead === 0) return await replaceReminders([]);
+    if (lead === 0) {
+      setOffer(false);
+      return await replaceReminders([]);
+    }
     const now = new Date();
-    const data = await loadSessions(now, new Date(now.getTime() + DAYS_AHEAD * 86_400_000));
-    await replaceReminders(buildReminders(data, lead, now));
+    const sessions = await loadSessions(now, new Date(now.getTime() + DAYS_AHEAD * 86_400_000));
+    await replaceReminders(buildReminders(sessions, lead, now));
+    setOffer(await shouldOffer(sessions, now));
   } catch {
     // Reminders are a convenience; never break the app over them.
   }

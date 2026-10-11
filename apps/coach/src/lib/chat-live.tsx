@@ -19,6 +19,7 @@ import { CHAT_ROLE } from '@/lib/chat-role';
 import { loadChats, type ChatSummary, type Message } from '@/lib/chat';
 import type { NewsKind } from '@/lib/news';
 import { currentCall, fetchCall, isOver, rememberCall, RING_SECONDS, ringingCalls, type Call } from '@/lib/calls';
+import { refreshReminders } from '@/lib/reminders';
 import { playTone, stopTone } from '@/lib/ring';
 import { supabase } from '@/lib/supabase';
 
@@ -211,6 +212,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
             client_id: payload?.client_id ?? null,
             request_id: payload?.request_id ?? null,
           });
+          // A client booked or cancelled in Voltrix: the session reminders on this phone follow at
+          // once, so a cancelled session doesn't still ring and a new one gets its reminder.
+          if (payload?.kind === 'booked' || payload?.kind === 'cancelled') refreshReminders().catch(() => {});
         })
         .on('broadcast', { event: 'progress' }, ({ payload }) => {
           emit({

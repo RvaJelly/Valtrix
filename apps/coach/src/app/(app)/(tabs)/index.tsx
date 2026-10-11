@@ -9,6 +9,7 @@ import { canJoin, JoinCall } from '@/components/join-call';
 import { MarkPaidSheet } from '@/components/mark-paid-sheet';
 import { NeedsYouRow } from '@/components/needs-you-row';
 import { PersonSheet } from '@/components/person-sheet';
+import { ReminderOffer } from '@/components/reminder-offer';
 import { PersonRequestRow, TimeRequestRow } from '@/components/request-rows';
 import { RequestSheet, type RequestOpening } from '@/components/request-sheet';
 import { SellPackSheet } from '@/components/sell-pack-sheet';
@@ -537,6 +538,8 @@ export default function Home() {
             </View>
           )}
         </Section>
+
+        <ReminderOffer />
 
         {shownUpdates.length ? (
           <EnterUp>

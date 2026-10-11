@@ -32,7 +32,7 @@ import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
 import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
 import { removeProgressPhotoFiles } from '@/lib/progress';
-import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
+import { closeReminderOffer, leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
 import { serial } from '@/lib/serial';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +62,7 @@ function options<T extends string>(record: Record<T, string>) {
 // A settings page: one column of groups, room to breathe, the keyboard pushing it up.
 export function SettingsPage({ children }: PropsWithChildren) {
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
@@ -371,7 +371,12 @@ export function ReminderPicker() {
   async function choose(key: string | null) {
     const minutes = Number(key ?? 0);
     save({ reminder: minutes });
-    setBlocked(minutes > 0 && !(await askPermission()));
+    if (minutes === 0) return setBlocked(false);
+    // Picking a time here is asking for reminders, so the phone's question comes now, and Home's card is done.
+    const granted = await askPermission();
+    setBlocked(!granted);
+    closeReminderOffer();
+    if (granted) refreshReminders();
   }
 
   return (

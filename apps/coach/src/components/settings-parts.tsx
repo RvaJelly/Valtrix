@@ -27,7 +27,7 @@ import { plainError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
 import { askPermission } from '@/lib/notify';
 import { loadBlocked, unblockPerson, type Blocked } from '@/lib/posts';
-import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
+import { closeReminderOffer, leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
 
@@ -73,7 +73,7 @@ export function planLabel(profile: Profile | null) {
 // (a sticky Save) sits under the scrolling part.
 export function SettingsPage({ children, footer }: PropsWithChildren<{ footer?: ReactNode }>) {
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
@@ -103,7 +103,12 @@ export function ReminderPicker() {
   async function choose(key: string | null) {
     const minutes = Number(key ?? 0);
     save({ reminder: minutes });
-    setBlocked(minutes > 0 && !(await askPermission()));
+    if (minutes === 0) return setBlocked(false);
+    // Picking a time here is asking for reminders, so the phone's question comes now, and Home's card is done.
+    const granted = await askPermission();
+    setBlocked(!granted);
+    closeReminderOffer();
+    if (granted) refreshReminders();
   }
 
   return (
@@ -275,7 +280,7 @@ export function BiometricRow() {
   async function toggle(on: boolean) {
     setError(null);
     if (on && !(await confirmIdentity(`Turn on ${name} for Voltrix Coach`))) {
-      return setError(`${name} didn't work, so it is still off.`);
+      return setError(`${name} didn’t work, so it is still off.`);
     }
     setLocked(false);
     save({ biometric: on });

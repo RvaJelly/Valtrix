@@ -11,6 +11,14 @@ function supported() {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
+// Whether reminders can show in this browser: 'granted'; 'ask' when it can still ask; 'blocked' otherwise.
+export async function permissionState(): Promise<'granted' | 'ask' | 'blocked'> {
+  if (!supported()) return 'blocked';
+  if (Notification.permission === 'granted') return 'granted';
+  return Notification.permission === 'denied' ? 'blocked' : 'ask';
+}
+
+// Only from a button the person pressed: browsers quietly hide a question nobody asked for.
 export async function askPermission() {
   if (!supported()) return false;
   if (Notification.permission === 'granted') return true;

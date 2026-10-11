@@ -11,6 +11,7 @@ import { Avatar } from '@/components/avatar';
 import { InviteCard } from '@/components/invite-card';
 import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
+import { ReminderOffer } from '@/components/reminder-offer';
 import { SessionRow } from '@/components/session-row';
 import { SessionSheet } from '@/components/session-sheet';
 import { StoriesRow } from '@/components/stories-row';
@@ -526,6 +527,8 @@ export default function Home() {
                 }
               />
             )}
+
+            <ReminderOffer />
 
             {later.length ? (
               <Section

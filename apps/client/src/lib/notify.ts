@@ -16,14 +16,30 @@ Notifications.setNotificationHandler({
 });
 
 const CHANNEL = 'sessions';
+let channelReady = false;
 
+// Android needs the reminders' channel before a reminder can be set. Making it asks the person nothing.
+async function ensureChannel() {
+  if (Platform.OS !== 'android' || channelReady) return;
+  await Notifications.setNotificationChannelAsync(CHANNEL, {
+    name: 'Session reminders',
+    importance: Notifications.AndroidImportance.HIGH,
+  });
+  channelReady = true;
+}
+
+// Whether reminders can show: 'granted'; 'ask' when the phone can still ask the person; 'blocked' when
+// only the phone's settings can turn them on.
+export async function permissionState(): Promise<'granted' | 'ask' | 'blocked'> {
+  const current = await Notifications.getPermissionsAsync();
+  if (current.granted) return 'granted';
+  return current.canAskAgain ? 'ask' : 'blocked';
+}
+
+// The phone's own question. Only ever from a button the person pressed (Turn on in the reminder card on
+// Home, or a reminder time in Settings): asked cold, many say no, and after two refusals Android stops asking.
 export async function askPermission() {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(CHANNEL, {
-      name: 'Session reminders',
-      importance: Notifications.AndroidImportance.HIGH,
-    });
-  }
+  await ensureChannel();
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
@@ -41,6 +57,7 @@ export function replaceReminders(reminders: Reminder[]) {
 }
 
 async function setReminders(reminders: Reminder[]) {
+  await ensureChannel();
   // Only session reminders are replaced: a rest-over alert scheduled during a workout stays.
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   for (const n of scheduled) {
@@ -96,11 +113,20 @@ export async function cancelRestAlert(id: string | null): Promise<void> {
   }
 }
 
-// Tapping a reminder opens the sessions in the Plan tab.
+// The reminder tap already acted on. The phone keeps the last tap until it is cleared, and every
+// screen is drawn again after a theme change or a new sign-in, so it would open the sessions again.
+let handled: string | null = null;
+
+// Tapping a reminder opens the sessions in the Plan tab, once.
 export function useOpenFromReminder() {
   const response = Notifications.useLastNotificationResponse();
   useEffect(() => {
-    if (response?.notification.request.content.data?.sessionId) {
+    if (!response || response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+    const key = response.notification.request.identifier;
+    if (key === handled) return;
+    handled = key;
+    Notifications.clearLastNotificationResponse();
+    if (response.notification.request.content.data?.sessionId) {
       router.navigate({ pathname: '/plan', params: { view: 'sessions' } });
     }
   }, [response]);

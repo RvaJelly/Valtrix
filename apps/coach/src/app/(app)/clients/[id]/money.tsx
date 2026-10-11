@@ -274,7 +274,7 @@ export default function ClientMoney() {
               {data.packs.length ? (
                 <Group>
                   {data.packs.map((p, n) => {
-                    const ends = p.expires_on ? `ends ${dayMonth(dayFromKey(p.expires_on))}` : 'no end';
+                    const ends = p.expires_on ? `ends ${dayMonth(dayFromKey(p.expires_on))}` : 'no end date';
                     const paid = p.paid_on ? ` · paid by ${paidWords(p.paid_method, p.paid_on)}` : ' · not paid';
                     return (
                       <ListRow

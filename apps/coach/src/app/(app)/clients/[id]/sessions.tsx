@@ -29,8 +29,8 @@ function showOf(value: string | undefined): Show | null {
 
 type Counts = { done: number; noShows: number; cancelled: number };
 
-// Every session with one client, a month at a time, with what they cost: all of them, or just the
-// upcoming, done, no-show or cancelled ones.
+// Every session with one client, a month at a time, with what they cost: all of them (what's coming up
+// first, soonest first, then the past, newest first), or just the upcoming, done, no-show or cancelled ones.
 export default function ClientSessions() {
   const params = useLocalSearchParams<{ id: string; show?: string }>();
   const id = params.id;
@@ -38,6 +38,8 @@ export default function ClientSessions() {
   const toast = useToast();
   const [client, setClient] = useState<{ first_name: string; last_name: string | null; status: string } | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  // "All" only: the sessions still to come, above the past ones.
+  const [upcoming, setUpcoming] = useState<Session[]>([]);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [more, setMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -51,6 +53,7 @@ export default function ClientSessions() {
       let q = supabase.from('sessions').select(SESSION_COLUMNS).eq('client_id', id);
       if (show === 'upcoming') q = q.eq('status', 'scheduled').gte('starts_at', new Date().toISOString());
       else if (show) q = q.eq('status', show);
+      else q = q.lt('starts_at', new Date().toISOString());
       return q.order('starts_at', { ascending: show === 'upcoming' }).range(from, from + PAGE - 1);
     },
     [id, show],
@@ -58,7 +61,7 @@ export default function ClientSessions() {
 
   const load = useCallback(async () => {
     const n = ++loads.current;
-    const [person, list, overview, cancelled] = await Promise.all([
+    const [person, list, overview, cancelled, ahead] = await Promise.all([
       supabase.from('clients').select('first_name, last_name, status').eq('id', id).maybeSingle(),
       query(0),
       loadOverview(dayKey(new Date()), id).catch(() => null),
@@ -67,9 +70,19 @@ export default function ClientSessions() {
         .select('id', { count: 'exact', head: true })
         .eq('client_id', id)
         .eq('status', 'cancelled'),
+      show
+        ? null
+        : supabase
+            .from('sessions')
+            .select(SESSION_COLUMNS)
+            .eq('client_id', id)
+            .gte('starts_at', new Date().toISOString())
+            .order('starts_at')
+            .limit(100),
     ]);
     if (n !== loads.current) return;
-    if (list.error || person.error) return setFailed(true);
+    if (list.error || person.error || ahead?.error) return setFailed(true);
+    setUpcoming((ahead?.data ?? []) as unknown as Session[]);
     setFailed(false);
     if (person.data) setClient(person.data as { first_name: string; last_name: string | null; status: string });
     const rows = (list.data ?? []) as unknown as Session[];
@@ -77,7 +90,7 @@ export default function ClientSessions() {
     setMore(rows.length === PAGE);
     const row = overview?.[0];
     setCounts(row ? { done: row.sessions_done, noShows: row.no_shows, cancelled: cancelled.count ?? 0 } : null);
-  }, [id, query]);
+  }, [id, query, show]);
 
   useFocusEffect(
     useCallback(() => {
@@ -108,14 +121,22 @@ export default function ClientSessions() {
   }
 
   // A group per month, in the order loaded.
-  const months: { key: string; label: string; rows: Session[] }[] = [];
-  for (const s of sessions ?? []) {
-    const date = new Date(s.starts_at);
-    const key = `${date.getFullYear()}-${date.getMonth()}`;
-    const month = months[months.length - 1];
-    if (month?.key === key) month.rows.push(s);
-    else months.push({ key, label: monthYear(date), rows: [s] });
-  }
+  const byMonth = (list: Session[]) => {
+    const months: { key: string; label: string; rows: Session[] }[] = [];
+    for (const s of list) {
+      const date = new Date(s.starts_at);
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const month = months[months.length - 1];
+      if (month?.key === key) month.rows.push(s);
+      else months.push({ key, label: monthYear(date), rows: [s] });
+    }
+    return months;
+  };
+  const ahead = show ? [] : upcoming;
+  const parts = [
+    { key: 'upcoming', title: ahead.length ? 'Upcoming' : null, months: byMonth(ahead) },
+    { key: 'past', title: ahead.length && sessions?.length ? 'Past' : null, months: byMonth(sessions ?? []) },
+  ];
   const first = client?.first_name ?? '';
 
   return (
@@ -144,7 +165,7 @@ export default function ClientSessions() {
               <SkeletonRows count={6} />
             </Group>
           ) : null
-        ) : sessions.length === 0 ? (
+        ) : sessions.length === 0 && ahead.length === 0 ? (
           <EmptyState
             icon="calendar-outline"
             title={show ? `No ${SHOWS[show].toLowerCase()} sessions` : 'No sessions yet'}
@@ -161,18 +182,32 @@ export default function ClientSessions() {
           />
         ) : (
           <View style={{ gap: Spacing.four }}>
-            {months.map((m) => (
-              <View key={m.key} style={{ gap: Spacing.two }}>
-                <Text variant="label" tone="secondary" accessibilityRole="header">
-                  {m.label}
+            {parts.map((part) => [
+              part.title ? (
+                <Text key={part.key} variant="headline" accessibilityRole="header" testID={`sessions-${part.key}`}>
+                  {part.title}
                 </Text>
-                <Group>
-                  {m.rows.map((s, i) => (
-                    <SessionRow key={s.id} session={s} variant="grouped" showDay price last={i === m.rows.length - 1} />
-                  ))}
-                </Group>
-              </View>
-            ))}
+              ) : null,
+              ...part.months.map((m) => (
+                <View key={`${part.key}-${m.key}`} style={{ gap: Spacing.two }}>
+                  <Text variant="label" tone="secondary" accessibilityRole="header">
+                    {m.label}
+                  </Text>
+                  <Group>
+                    {m.rows.map((s, i) => (
+                      <SessionRow
+                        key={s.id}
+                        session={s}
+                        variant="grouped"
+                        showDay
+                        price
+                        last={i === m.rows.length - 1}
+                      />
+                    ))}
+                  </Group>
+                </View>
+              )),
+            ])}
             {more ? (
               <Button
                 title="Show more"

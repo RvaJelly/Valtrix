@@ -21,7 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { addDaysKey, dayFromKey, HOME_ZONE, zonedParts } from '@/lib/zones';
 
 const SIZES = { '5': '5', '10': '10', '20': '20', other: 'Other' } as const;
-const ENDS = { none: 'No end', '1': '1 month', '3': '3 months', '6': '6 months', pick: 'Pick a day' } as const;
+const ENDS = { none: 'No end date', '1': '1 month', '3': '3 months', '6': '6 months', pick: 'Pick a day' } as const;
 type SizeKey = keyof typeof SIZES;
 type EndKey = keyof typeof ENDS;
 

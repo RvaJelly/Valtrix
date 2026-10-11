@@ -113,9 +113,12 @@ export function inviteMessage({ first, trainerFirst, business, code, email, stat
   const from = business && business.trim() && business.trim().toLowerCase() !== trainerFirst.trim().toLowerCase();
   const who = `Hi ${first}, it’s ${trainerFirst}${from ? ` from ${business!.trim()}` : ''}.`;
   const formatted = shown(code);
-  if (status === 'invited' && email) {
+  // Someone who has Voltrix already (invited with their account's email, or who declined or left before)
+  // only needs to open it: no download or sign-up steps.
+  const again = status === 'declined' || status === 'left';
+  if ((status === 'invited' && email) || again) {
     return [
-      `${who} I’ve invited you to connect in Voltrix.`,
+      `${who} I’ve invited you ${again ? 'again ' : ''}to connect in Voltrix.`,
       `Open Voltrix and accept my invite on Home. If it isn’t there, tap “I have an invite code” and enter ${formatted}.`,
     ].join('\n\n');
   }

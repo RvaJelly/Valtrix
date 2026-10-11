@@ -804,8 +804,9 @@ function Packs({ packs, many }: { packs: MyPack[]; many: boolean }) {
                   {details.charAt(0).toUpperCase() + details.slice(1)}
                 </Text>
                 {p.ended ? null : (
+                  // How much of the pack is used or booked, as the trainer's bar in Voltrix Coach shows it.
                   <ProgressBar
-                    progress={p.sessions_total ? p.sessions_left / p.sessions_total : 0}
+                    progress={p.sessions_total ? (p.sessions_total - p.sessions_left) / p.sessions_total : 0}
                     color={Colors.text}
                   />
                 )}

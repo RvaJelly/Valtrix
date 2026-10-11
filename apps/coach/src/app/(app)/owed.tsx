@@ -21,7 +21,7 @@ import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { fullName } from '@/lib/clients';
 import { formatMoney } from '@/lib/money';
-import { loadOverview, type ClientOverview } from '@/lib/overview';
+import { loadArchivedOwing, loadOverview, type ClientOverview } from '@/lib/overview';
 import { itemCount, owedWords } from '@/lib/paid';
 import { HOME_ZONE, zonedParts } from '@/lib/zones';
 
@@ -39,12 +39,13 @@ export default function WhoOwes() {
 
   const load = useCallback(() => {
     const n = ++loads.current;
-    return loadOverview(today).then(
-      (found) => {
+    // Archived clients who still owe stay here too, as in Earnings' "Owed to you now".
+    return Promise.all([loadOverview(today), loadArchivedOwing(today)]).then(
+      ([found, archived]) => {
         if (n !== loads.current) return;
         setFailed(false);
         setRows(
-          (found ?? [])
+          [...(found ?? []), ...archived]
             .filter((r) => r.owed_cents > 0 || r.owed_other)
             .sort((a, b) => ((a.owed_since ?? '9') < (b.owed_since ?? '9') ? -1 : 1)),
         );
@@ -114,7 +115,7 @@ export default function WhoOwes() {
                       key={r.client_id}
                       title={name}
                       // Count first, as on the client's page; a count never breaks from its word.
-                      subtitle={owedWords(itemCount(r.owed_count), r.owed_since, r.owed_other)}
+                      subtitle={`${r.status === 'archived' ? 'Archived · ' : ''}${owedWords(itemCount(r.owed_count), r.owed_since, r.owed_other)}`}
                       subtitleLines={2}
                       leading={<Avatar name={name} size={40} />}
                       stacked

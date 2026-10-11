@@ -107,3 +107,12 @@ export async function loadOverview(today: string, clientId?: string): Promise<Cl
     booking_requests: Number(row.booking_requests ?? 0),
   }));
 }
+
+// Archived clients who still owe something (archived_owing names them), for Who owes you, so it
+// agrees with Earnings. None on an older database without that function.
+export async function loadArchivedOwing(today: string): Promise<ClientOverview[]> {
+  const ids = await callRpc<string[]>('archived_owing');
+  if (ids.missing || !ids.data?.length) return [];
+  const rows = await Promise.all(ids.data.map((id) => loadOverview(today, id)));
+  return rows.flatMap((found) => found ?? []);
+}

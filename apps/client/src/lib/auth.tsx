@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 
+import { useAuthLinks } from '@/lib/auth-links';
 import { replaceReminders } from '@/lib/notify';
 import { supabase } from '@/lib/supabase';
 
@@ -48,6 +49,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [recovering, setRecovering] = useState(false);
   const [locked, setLocked] = useState(true);
   const loadedUserId = useRef<string | null>(null);
+  // A sign-up or password link from an email, opening the app on a phone.
+  useAuthLinks(setRecovering);
 
   const loadProfile = useCallback(async (next: Session | null) => {
     if (!next) {

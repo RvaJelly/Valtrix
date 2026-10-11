@@ -61,20 +61,20 @@ export function fromCm(cm: number, unit: LengthUnit): number {
 export function formatWeight(kg: number | null, unit: WeightUnit, withUnit = true): string {
   if (kg === null || !Number.isFinite(kg)) return '–';
   const value = formatNumber(fromKg(kg, unit), 2);
-  return withUnit ? `${value} ${unit}` : value;
+  return withUnit ? `${value}\u00a0${unit}` : value;
 }
 
 // An estimated one-rep max, rounded to 0.5 kg or to 1 lb: '80 kg', '77.5 kg', '176 lb'.
 export function formatEstimate(kg: number, unit: WeightUnit): string {
-  if (unit === 'lb') return `${formatNumber(Math.round(kg * LB_PER_KG))} lb`;
-  return `${formatNumber(Math.round(kg * 2) / 2, 1)} kg`;
+  if (unit === 'lb') return `${formatNumber(Math.round(kg * LB_PER_KG))}\u00a0lb`;
+  return `${formatNumber(Math.round(kg * 2) / 2, 1)}\u00a0kg`;
 }
 
 // '82.5 cm', '32.5 in'; null → '–'.
 export function formatLength(cm: number | null, unit: LengthUnit, withUnit = true): string {
   if (cm === null || !Number.isFinite(cm)) return '–';
   const value = formatNumber(fromCm(cm, unit), 2);
-  return withUnit ? `${value} ${unit}` : value;
+  return withUnit ? `${value}\u00a0${unit}` : value;
 }
 
 // For a TextInput: '' for null, else the weight in the person's unit.
@@ -98,8 +98,8 @@ export function waterToMl(value: number, unit: WeightUnit): number {
 
 // Short labels and averages: '750 ml' below 1 000 ml, else '2.1 L'; for lb, '25 oz'.
 export function formatWater(ml: number, unit: WeightUnit): string {
-  if (unit === 'lb') return `${formatNumber(ml / ML_PER_FL_OZ)} oz`;
-  return ml < 1000 ? `${formatNumber(ml)} ml` : `${formatNumber(ml / 1000, 1)} L`;
+  if (unit === 'lb') return `${formatNumber(ml / ML_PER_FL_OZ)}\u00a0oz`;
+  return ml < 1000 ? `${formatNumber(ml)}\u00a0ml` : `${formatNumber(ml / 1000, 1)}\u00a0L`;
 }
 
 // One quick add of water in ml: a glass of 250 ml, or 8 fl oz.
@@ -113,8 +113,8 @@ export function formatSleep(minutes: number | null): string {
   const total = Math.max(0, Math.round(minutes));
   const hours = Math.floor(total / 60);
   const rest = total % 60;
-  if (!hours) return `${rest} min`;
-  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+  if (!hours) return `${rest}\u00a0min`;
+  return rest ? `${hours}\u00a0h ${rest}\u00a0min` : `${hours}\u00a0h`;
 }
 
 export function formatSteps(steps: number): string {
@@ -128,13 +128,13 @@ export function rangeLabel(min: number, max: number, decimals: number, unit: str
   // The small nudge keeps floating point noise (78.69999…) from rounding the wrong way.
   const low = Math.ceil(min * factor - 1e-9) / factor;
   const high = Math.floor(max * factor + 1e-9) / factor;
-  return `${formatNumber(low, decimals)}–${formatNumber(high, decimals)}${unit ? ` ${unit}` : ''}`;
+  return `${formatNumber(low, decimals)}–${formatNumber(high, decimals)}${unit ? `\u00a0${unit}` : ''}`;
 }
 
 // "45 s", "90 s", "2 min", "2:30 min": short enough for a small box on any phone.
 export function restLabel(seconds: number): string {
-  if (seconds < 120) return `${seconds} s`;
+  if (seconds < 120) return `${seconds}\u00a0s`;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  return rest ? `${minutes}:${String(rest).padStart(2, '0')} min` : `${minutes} min`;
+  return rest ? `${minutes}:${String(rest).padStart(2, '0')}\u00a0min` : `${minutes}\u00a0min`;
 }

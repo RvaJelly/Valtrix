@@ -106,8 +106,8 @@ export default function Settings() {
     },
     {
       icon: 'hand-left-outline',
-      title: 'Privacy and blocked people',
-      subtitle: 'Who sees what you share',
+      title: 'Privacy',
+      subtitle: 'Blocked people and who sees what you share',
       href: '/settings/privacy',
     },
     {
@@ -187,6 +187,8 @@ export default function Settings() {
             key={row.title}
             title={row.title}
             subtitle={row.subtitle}
+            // Two lines when a phone is narrow or its text is large, so nothing is cut off.
+            subtitleLines={2}
             leading={<IconTile icon={row.icon} />}
             onPress={() => router.push(row.href)}
             testID={row.testID}

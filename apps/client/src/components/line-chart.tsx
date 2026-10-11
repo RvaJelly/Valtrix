@@ -70,6 +70,27 @@ function thinned(points: LinePoint[]): LinePoint[] {
   return [...averaged, ...recent];
 }
 
+// Three evenly spaced round values that take in min and max: steps of 1, 2, 2.5 or 5 times a power of
+// ten and never under 0.5 (half a kilo or a centimetre), so the axis reads 67.5 / 70 / 72.5 rather than
+// 69.7 / 71.1 / 72.5. Never below zero when nothing is.
+export function niceTicks(min: number, max: number): [number, number, number] {
+  const round = (v: number) => Math.round(v * 1e6) / 1e6;
+  let power = 10 ** Math.floor(Math.log10(Math.max(max - min, 1) / 2));
+  for (let i = 0; i < 20; i++) {
+    for (const m of [1, 2, 2.5, 5]) {
+      const step = m * power;
+      if (step < 0.5) continue;
+      let bottom = Math.floor(round(min / step)) * step;
+      // A flat line sits in the middle, not on the bottom edge.
+      if (max - min < 1e-9 && bottom + step > min) bottom -= step;
+      if (min >= 0 && bottom < 0) bottom = 0;
+      if (bottom + 2 * step >= max - 1e-9) return [round(bottom), round(bottom + step), round(bottom + 2 * step)];
+    }
+    power *= 10;
+  }
+  return [min, (min + max) / 2, max];
+}
+
 export function LineChart({ points, height = 160, format, target, accessibilityLabel }: LineChartProps) {
   const [width, setWidth] = useState(0);
   const shown = thinned(points.filter((p) => Number.isFinite(p.value)));
@@ -78,12 +99,10 @@ export function LineChart({ points, height = 160, format, target, accessibilityL
 
   const values = shown.map((p) => p.value);
   if (target != null && Number.isFinite(target)) values.push(target);
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 1;
-  const span = max - min || Math.max(1, Math.abs(max) * 0.05);
-  const pad = span * 0.1;
-  const lo = min - pad;
-  const hi = max + pad;
+  const ticks = niceTicks(values.length ? Math.min(...values) : 0, values.length ? Math.max(...values) : 1);
+  const pad = (ticks[2] - ticks[0]) * 0.05;
+  const lo = ticks[0] - pad;
+  const hi = ticks[2] + pad;
   const yOf = (value: number) => INSET + ((hi - value) / (hi - lo)) * plotHeight;
 
   const first = shown.length ? dayTime(shown[0].day) : 0;
@@ -92,8 +111,8 @@ export function LineChart({ points, height = 160, format, target, accessibilityL
     last === first ? INSET + plotWidth / 2 : INSET + ((dayTime(day) - first) / (last - first)) * plotWidth;
   const xy = shown.map((p) => ({ x: xOf(p.day), y: yOf(p.value) }));
 
-  // Three grid lines: top, middle and bottom of the plot.
-  const grid = [hi - pad / 2, (hi + lo) / 2, lo + pad / 2].map((value) => ({ value, y: yOf(value) }));
+  // Three grid lines on round values (67.5, 70, 72.5 kg), top to bottom.
+  const grid = [ticks[2], ticks[1], ticks[0]].map((value) => ({ value, y: yOf(value) }));
   const dashes = target != null && Number.isFinite(target) && width > 0 ? Math.floor(plotWidth / 10) : 0;
 
   return (

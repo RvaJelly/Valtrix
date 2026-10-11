@@ -51,7 +51,7 @@ const SEGMENT_INSET = 3;
 // The font size that keeps a short label (a switch choice, a shortcut) whole on one line in `width`,
 // from `base` down to three quarters of it. The phone's text size scales it again, so it counts too.
 // Inter's letters average a little under 0.6 of the size; 0.62 leaves room for wide ones (W, M).
-function fitFont(label: string, width: number, base: number, fontScale: number) {
+export function fitFont(label: string, width: number, base: number, fontScale: number) {
   if (width <= 0 || !label) return base;
   const fits = width / (label.length * 0.62 * Math.max(1, fontScale));
   return Math.max(Math.round(base * 0.75), Math.min(base, Math.floor(fits * 2) / 2));
@@ -850,6 +850,7 @@ type ListRowProps = {
   last?: boolean;
   compact?: boolean;
   titleTone?: Tone;
+  // Lines the title may take; 0 lets it wrap in full (a medical question must never be cut).
   titleLines?: number;
   titleStyle?: StyleProp<TextStyle>;
   // Lines a string subtitle may take (one by default, two with large text).
@@ -892,7 +893,7 @@ export function ListRow({
           <Text
             variant="rowTitle"
             tone={titleTone}
-            numberOfLines={large ? Math.max(titleLines, 2) : titleLines}
+            numberOfLines={titleLines === 0 ? undefined : large ? Math.max(titleLines, 2) : titleLines}
             style={titleStyle}>
             {title}
           </Text>
@@ -1159,6 +1160,9 @@ export function StatStrip({
     value: string | number | null | undefined;
     label: string;
     spoken?: string;
+    // The value in the text face: an amount of zero ("R0"), where the display face's square 0 reads as
+    // the letter O.
+    plain?: boolean;
     onPress?: () => void;
     testID?: string;
   }[];
@@ -1181,7 +1185,11 @@ export function StatStrip({
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.7}
-              style={[Tabular, size ? { fontSize: size, lineHeight: size + 4 } : null]}>
+              style={[
+                Tabular,
+                size ? { fontSize: size, lineHeight: size + 4 } : null,
+                item.plain && { fontFamily: Fonts.textSemi },
+              ]}>
               {item.value ?? '–'}
             </Text>
             <Text variant="footnote" tone="secondary" numberOfLines={2} style={{ fontFamily: Fonts.textMedium }}>

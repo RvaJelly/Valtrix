@@ -318,9 +318,10 @@ export default function Home() {
     setRefreshing(false);
   }
 
+  // Also asks for the person's account again when it couldn't be loaded.
   async function retry() {
     setRetrying(true);
-    await Promise.all([load(true, true), loadTodayInOrder(true)]);
+    await Promise.all([load(true, true), loadTodayInOrder(true), profile ? null : refreshProfile()]);
     setRetrying(false);
   }
 
@@ -421,7 +422,13 @@ export default function Home() {
             {error}
           </Notice>
         ) : null}
-        {data && !profile ? <Notice>Your account details could not be loaded. Pull down to try again.</Notice> : null}
+        {data && !profile ? (
+          <Notice
+            tone="danger"
+            action={{ label: 'Try again', onPress: retry, loading: retrying, testID: 'home-profile-retry' }}>
+            Your account details could not be loaded. Check your connection.
+          </Notice>
+        ) : null}
         {!data && !error && showSkeleton ? (
           <View style={{ gap: Spacing.tight }}>
             <Skeleton height={200} radius={Radius.large} />

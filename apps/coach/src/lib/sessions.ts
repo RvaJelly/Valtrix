@@ -70,9 +70,10 @@ export const DURATIONS: Record<string, string> = {
   '120': '2 hours',
 };
 
-// Bookable start times, every 30 minutes from 05:00 to 21:30.
-export const START_TIMES = Array.from({ length: 34 }, (_, i) => {
-  const minutes = 5 * 60 + i * 30;
+// Bookable start times, every 15 minutes from 04:00 to 23:00, as clients booking online can pick quarter
+// hours too (06:45 after a 45-minute session).
+export const START_TIMES = Array.from({ length: 77 }, (_, i) => {
+  const minutes = 4 * 60 + i * 15;
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 });
 

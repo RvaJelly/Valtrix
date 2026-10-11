@@ -59,13 +59,15 @@ export function SessionRow({
       : priceLabel(session.price_cents, session.currency ?? 'ZAR')
     : null;
   const repeats = !!session.series_id;
+  // With a pill too, the price moves under the place, so the day and the place keep their room.
+  const costBelow = !!pill && !!cost;
   const row = (
     <>
       <ListRow
         title={title}
         titleStyle={cancelled ? { color: Colors.textTertiary, textDecorationLine: 'line-through' } : undefined}
-        subtitle={where}
-        // With a pill and "From pack" beside it, the place may take a second line rather than be cut.
+        subtitle={costBelow ? `${where} · ${cost}` : where}
+        // A long place takes a second line rather than being cut.
         subtitleLines={2}
         leading={
           <View style={styles.time}>
@@ -82,7 +84,7 @@ export function SessionRow({
         }
         status={pill ? <StatusPill tone={pill} label={SESSION_STATUS[session.status]} /> : null}
         trailing={
-          cost ? (
+          cost && !costBelow ? (
             <Text variant="footnote" tone="secondary" style={Tabular}>
               {cost}
             </Text>

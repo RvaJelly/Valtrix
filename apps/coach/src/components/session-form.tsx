@@ -82,7 +82,7 @@ export type RepeatChoice = { until: string | null; skip: string[]; count: number
 
 // No end first. The week keys start with a letter: number-like keys would come first in the chips.
 const UNTIL: Record<string, string> = {
-  none: 'No end',
+  none: 'No end date',
   w4: '4 weeks',
   w8: '8 weeks',
   w12: '12 weeks',
@@ -114,7 +114,7 @@ function orNull(value: string) {
   return trimmed ? trimmed : null;
 }
 
-// Where the start times open: the chosen time, or else the first free half hour from now (today)
+// Where the start times open: the chosen time, or else the first free quarter hour from now (today)
 // or from 06:00 (another day), so the trainer doesn't scroll past times that make no sense.
 function sensibleTime(day: Date, duration: number, bookings: Session[], now = new Date()) {
   const from = startOfDay(day).getTime() === startOfDay(now).getTime() ? timeKey(now) : '06:00';
@@ -347,7 +347,7 @@ export function SessionForm({
     until == null
       ? untilChoice === 'pick'
         ? 'Pick a day'
-        : 'No end'
+        : 'No end date'
       : `Until ${dayMonth(dayFromKeyLocal(until))} · ${count === 1 ? '1 session' : `${count} sessions`}`;
 
   const repeatBlock =
@@ -656,7 +656,7 @@ export function SessionForm({
           testIDPrefix="until-"
         />
         <Text variant="footnote" tone="secondary">
-          With no end, Voltrix keeps booking 12 weeks ahead until you stop it.
+          With no end date, Voltrix keeps booking 12 weeks ahead until you stop it.
         </Text>
       </Sheet>
       <DayPickSheet

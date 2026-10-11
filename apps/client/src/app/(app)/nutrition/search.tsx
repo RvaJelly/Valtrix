@@ -124,7 +124,7 @@ export default function SearchFood() {
     ) : null;
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Stack.Screen options={{ title: recentFirst ? 'Recent foods' : 'Search foods' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SearchField

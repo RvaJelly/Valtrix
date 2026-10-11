@@ -158,7 +158,7 @@ export default function CustomFood() {
   const rowBad = (field: Field) => (invalid?.field === field ? styles.inputBad : null);
   const macroError = invalid && ['protein', 'carbs', 'fat'].includes(invalid.field) ? invalid.message : null;
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Stack.Screen options={{ title: 'Enter it yourself' }} />
       <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {scanned ? (

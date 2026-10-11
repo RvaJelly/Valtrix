@@ -59,9 +59,11 @@ export function Sheet({ visible, onClose, onClosed, title, children }: Props) {
   const translateY = shown.interpolate({ inputRange: [0, 1], outputRange: [travel, 0] });
   return (
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose} onDismiss={onClosed}>
+      {/* 'padding' on Android too: the app draws edge to edge, so Android doesn't make the window
+          smaller for the keyboard and the sheet would sit behind it. */}
       <KeyboardAvoidingView
         style={[styles.wrap, wide && styles.wrapWide]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: shown }]}>
           <Pressable
             style={StyleSheet.absoluteFill}

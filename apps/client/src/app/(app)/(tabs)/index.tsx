@@ -64,7 +64,7 @@ import { serial, type Current } from '@/lib/serial';
 import { addDays, dayKey, endOf, formatDay, loadSessions, trainerName, type Session } from '@/lib/sessions';
 import { loadToday, mergeToday, type TodayData } from '@/lib/today';
 import {
-  listTrainers,
+  listTrainersForMe,
   loadInvites,
   loadMyAsks,
   loadTrainers,
@@ -111,6 +111,13 @@ type HomeData = {
   // The person's health form: null when not filled in, undefined when it isn't known.
   health: HealthForm | null | undefined;
 };
+
+// Trainers on Voltrix for someone without a trainer, as the Trainers list has them: none a block hides,
+// and those taking new clients first.
+async function loadEveryone(): Promise<PublicTrainer[]> {
+  const listed = await listTrainersForMe();
+  return [...listed.filter((t) => t.accepting_clients), ...listed.filter((t) => !t.accepting_clients)];
+}
 
 // The trainers the person has, and what each allows them in the app.
 async function loadLinked() {
@@ -206,7 +213,7 @@ export default function Home() {
         loadLinked(),
         loadInvites().catch(() => null),
         loadSessions(monthStart, addDays(start, 90)).catch(() => null),
-        listTrainers().catch(() => null),
+        loadEveryone().catch(() => null),
         loadStories().catch(() => null),
         loadSeen(),
         loadMyTimeRequests().catch(() => undefined),

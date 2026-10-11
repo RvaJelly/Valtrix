@@ -75,7 +75,8 @@ export function SessionRow({
             <Text variant="title">{start.getDate()}</Text>
             {showMonth ? (
               <Text variant="label" tone="secondary">
-                {dayMonthShort(start).split(' ')[1]}
+                {/* The month after the day ('18 Oct'), which a no-break space joins to it. */}
+                {dayMonthShort(start).split(/\s/)[1]}
               </Text>
             ) : null}
           </View>

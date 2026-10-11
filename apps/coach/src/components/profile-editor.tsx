@@ -19,8 +19,8 @@ type Props = { profile: Profile; onSaved: () => Promise<void> };
 
 const LOCATION_DENIED =
   Platform.OS === 'web'
-    ? "Your browser didn't share your location. Allow location for this site, then try again."
-    : "Voltrix Coach can't see your location. Allow it in your phone's settings, then try again.";
+    ? 'Your browser didn’t share your location. Allow location for this site, then try again.'
+    : 'Voltrix Coach can’t see your location. Allow it in your phone’s settings, then try again.';
 
 // The trainer's profile, as clients see it in the Voltrix app: the photo and location save at once,
 // the rest with the Save button that stays at the bottom.
@@ -35,7 +35,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState<'change' | 'remove' | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<{ business?: string; years?: string; specialties?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; business?: string; years?: string; specialties?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   const [location, setLocation] = useState<Coords | null>(
@@ -89,7 +89,7 @@ export function ProfileEditor({ profile, onSaved }: Props) {
     if ('problem' in found) {
       setLocating(false);
       return setLocationError(
-        found.problem === 'denied' ? LOCATION_DENIED : "We couldn't find your location. Try again in a moment.",
+        found.problem === 'denied' ? LOCATION_DENIED : 'We couldn’t find your location. Try again in a moment.',
       );
     }
     const town = city.trim() ? null : await townAt(found.coords);
@@ -129,7 +129,9 @@ export function ProfileEditor({ profile, onSaved }: Props) {
   async function save() {
     setError(null);
     const yearsNumber = years.trim() ? Number(years.trim()) : null;
+    // Clients see the trainer's name everywhere, so it can't go empty (as at sign-up).
     const found = {
+      name: name.trim() ? undefined : 'Enter your name, as clients will see it.',
       business: business.trim() ? undefined : 'Enter the name clients will know your business by.',
       years:
         yearsNumber !== null && (!Number.isInteger(yearsNumber) || yearsNumber < 0 || yearsNumber > 60)
@@ -137,12 +139,12 @@ export function ProfileEditor({ profile, onSaved }: Props) {
           : undefined,
     };
     setErrors(found);
-    if (found.business || found.years) return;
+    if (found.name || found.business || found.years) return;
     setBusy(true);
     const { error } = await supabase
       .from('profiles')
       .update({
-        full_name: name.trim() || null,
+        full_name: name.trim(),
         business_name: business.trim(),
         specialties,
         city: city.trim() || null,
@@ -196,7 +198,11 @@ export function ProfileEditor({ profile, onSaved }: Props) {
         <TextField
           label="Your name"
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            setName(text);
+            if (errors.name) setErrors((e) => ({ ...e, name: undefined }));
+          }}
+          error={errors.name}
           autoCapitalize="words"
           autoComplete="name"
           enterKeyHint="next"

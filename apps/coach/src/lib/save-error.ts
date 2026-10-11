@@ -3,8 +3,9 @@ import { supabase } from '@/lib/supabase';
 
 type DbError = { code?: string; message: string };
 
+// It leads to the plan screen, where (until card payments open) Keep going free starts it again.
 export const PLAN_NOT_ACTIVE =
-  'Your Voltrix Coach plan isn’t active. Subscribe to keep adding clients, workouts and sessions.';
+  'Your Voltrix Coach plan isn’t active. Keep going free to add clients, workouts and sessions again.';
 
 // A plain message for a refused save. A broken check (23514) means something is too long
 // or not allowed, which the form should normally stop before it gets that far.
@@ -17,7 +18,7 @@ export function saveError(error: DbError, options?: { inUse?: boolean }) {
 
 // The same for adding something new: a client, workout, exercise, session, plan or video.
 // Only a trainer with a trial, plan or free access can add these, and the database turns
-// the rest away (42501). The app shows the Subscribe screen first, but a trial or plan can
+// the rest away (42501). The app shows the plan screen first, but a trial or plan can
 // end, or free access be switched off, while the app is open.
 export async function addError(error: DbError) {
   if (error.code === '42501') return accessRefused();
@@ -35,7 +36,7 @@ export function onAccessRefused(listener: () => void) {
 }
 
 // Something new was turned away. Asks the database whether the trainer can still add
-// things: if not, their account is checked again, which moves them to the Subscribe
+// things: if not, their account is checked again, which moves them to the plan
 // screen. Returns the message to show.
 export async function accessRefused() {
   const { data, error } = await supabase.rpc('has_coach_access');

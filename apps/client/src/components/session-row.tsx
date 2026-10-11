@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { JoinCall } from '@/components/join-call';
 import { Divider, Group, ListRow, StatusPill, Text, type StatusTone } from '@/components/ui';
 import { Colors, Spacing, Tabular } from '@/constants/theme';
-import { weekdayShort } from '@/lib/format';
+import { dayMonthShort, shortDate, weekdayShort } from '@/lib/format';
 import { endOf, formatTime, SESSION_STATUS, trainerName, type Session, type SessionStatus } from '@/lib/sessions';
 
 const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
@@ -13,8 +13,9 @@ const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
   no_show: 'neutral',
 };
 
-// One session in a list. With `showDay` a date block (MON / 12) leads the row; otherwise the
-// time does. The trainer's name shows when `showTrainer` (the client may have several).
+// One session in a list. With `showDay` a date block (MON / 12) leads the row, and with `showMonth`
+// the month under it (a list with no month headers); otherwise the time does. The trainer's name shows
+// when `showTrainer` (the client may have several). A cancelled one says who cancelled it.
 // `card` stands on its own; `grouped` is a row inside a Group (`last` drops its hairline).
 // `muted` quietens a past session. With `join`, an online session's "Join video call" shows
 // under its row, inside the group, while the call is open. With `onPress` the row opens the
@@ -22,6 +23,7 @@ const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
 export function SessionRow({
   session,
   showDay,
+  showMonth,
   showTrainer = true,
   variant = 'card',
   last,
@@ -31,6 +33,7 @@ export function SessionRow({
 }: {
   session: Session;
   showDay?: boolean;
+  showMonth?: boolean;
   showTrainer?: boolean;
   variant?: 'card' | 'grouped';
   last?: boolean;
@@ -43,14 +46,16 @@ export function SessionRow({
   const cancelled = session.status === 'cancelled';
   const pill = PILLS[session.status];
   const where = session.online ? 'Video call' : session.location || `${session.duration_minutes} min`;
-  const who = showTrainer ? trainerName(session).split(' ')[0] : null;
-  const subtitle = [where, who].filter(Boolean).join(' · ');
+  const first = trainerName(session).split(' ')[0];
+  const by = cancelled ? (session.cancelled_by_me ? 'You cancelled' : `${first} cancelled`) : null;
+  const who = showTrainer && !by ? first : null;
+  const subtitle = [by, where, who].filter(Boolean).join(' · ');
   const spoken = [
-    showDay ? `${weekdayShort(start)} ${start.getDate()}` : null,
+    showDay ? (showMonth ? shortDate(start) : `${weekdayShort(start)} ${start.getDate()}`) : null,
     range,
     subtitle,
     session.repeats ? 'repeats every week' : null,
-    pill ? SESSION_STATUS[session.status] : null,
+    pill && !by ? SESSION_STATUS[session.status] : null,
   ]
     .filter(Boolean)
     .join(', ');
@@ -67,6 +72,11 @@ export function SessionRow({
               {weekdayShort(start)}
             </Text>
             <Text variant="title">{start.getDate()}</Text>
+            {showMonth ? (
+              <Text variant="label" tone="secondary">
+                {dayMonthShort(start).split(' ')[1]}
+              </Text>
+            ) : null}
           </View>
         ) : undefined
       }

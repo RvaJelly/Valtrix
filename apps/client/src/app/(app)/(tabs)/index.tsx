@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnswerNotice } from '@/components/answer-notice';
 import { Avatar } from '@/components/avatar';
+import { CancelledNotice } from '@/components/cancelled-notice';
 import { InviteCard } from '@/components/invite-card';
 import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
@@ -94,6 +95,8 @@ type HomeData = {
   everyone: PublicTrainer[];
   // Booked sessions that hadn't ended when they were loaded; null when they couldn't be loaded.
   sessions: Session[] | null;
+  // Sessions still to come that a trainer cancelled.
+  cancelled: Session[];
   doneThisMonth: number;
   stories: StoryGroup[];
   seen: Set<string>;
@@ -232,6 +235,9 @@ export default function Home() {
       sessions: sessions
         ? sessions.filter((s) => s.status === 'scheduled' && endOf(s) > start)
         : (old?.sessions ?? null),
+      cancelled: sessions
+        ? sessions.filter((s) => s.status === 'cancelled' && !s.cancelled_by_me && new Date(s.starts_at) > start)
+        : (old?.cancelled ?? []),
       doneThisMonth: sessions ? sessions.filter((s) => s.status === 'completed').length : (old?.doneThisMonth ?? 0),
       stories: stories ?? old?.stories ?? [],
       seen,
@@ -415,6 +421,7 @@ export default function Home() {
         </View>
 
         {isClient ? <AnswerNotice place="home" testID="home-answer" /> : null}
+        <CancelledNotice sessions={data?.cancelled ?? null} testID="home-cancelled" />
 
         {/* A web page can't be pulled down to refresh, so there's always a button. */}
         {error && !sessionsMissing ? (
@@ -547,6 +554,7 @@ export default function Home() {
                       key={s.id}
                       session={s}
                       showDay
+                      showMonth
                       showTrainer={data.trainers!.length > 1}
                       variant="grouped"
                       last={i === later.length - 1}

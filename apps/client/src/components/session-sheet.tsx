@@ -158,6 +158,7 @@ export function SessionSheet({
           {s.on_pack ? <ListRow title="On your pack" leading={<IconTile icon="albums-outline" />} compact /> : null}
           <ListRow
             title={status.words}
+            titleLines={2}
             leading={<IconTile icon={status.icon} />}
             status={<StatusPill tone={status.tone} label={status.pill} />}
             compact

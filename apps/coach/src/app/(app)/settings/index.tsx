@@ -111,7 +111,7 @@ export default function Settings() {
     {
       icon: 'help-circle-outline',
       title: 'Help',
-      subtitle: 'Privacy, rules and app version',
+      subtitle: 'Terms, privacy and app version',
       href: '/settings/help',
     },
   ];

@@ -1,17 +1,21 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { TermsGate } from '@/components/legal/terms-gate';
+import { TermsAcceptedLine } from '@/components/legal/terms-notes';
 import { AuthPage, CheckEmailActions } from '@/components/auth-page';
 import { Button, ErrorText, Text, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { Spacing } from '@/constants/theme';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
+import { useTerms } from '@/lib/terms';
 
 type Field = 'name' | 'email' | 'password' | 'form';
 type Problem = { field: Field; text: string } | null;
 
 export default function SignUp() {
+  const terms = useTerms();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,16 +33,26 @@ export default function SignUp() {
     if (!fullName.trim()) return setProblem({ field: 'name', text: 'Enter your name.' });
     if (!email.trim()) return setProblem({ field: 'email', text: 'Enter your email.' });
     if (password.length < 8) return setProblem({ field: 'password', text: 'Use at least 8 characters.' });
+    // The Terms this device accepted go with the sign-up, and the database records them as it makes the
+    // account (handle_new_user).
+    const accepted = terms.signUpPayload();
+    if (!accepted) return setProblem({ field: 'form', text: 'Accept the Terms to create an account.' });
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim(), role: 'client' }, emailRedirectTo: emailRedirect() },
+      options: {
+        data: { full_name: fullName.trim(), role: 'client', terms: accepted },
+        emailRedirectTo: emailRedirect(),
+      },
     });
     setBusy(false);
     if (error) {
       setProblem({ field: 'form', text: plainError(error) });
-    } else if (data.user && !data.user.identities?.length) {
+      return;
+    }
+    if (data.user?.identities?.length) terms.claimForSignUp(data.user.id);
+    if (data.user && !data.user.identities?.length) {
       // Supabase answers this way when the email already has an account, for example a trainer's.
       setProblem({
         field: 'email',
@@ -74,6 +88,10 @@ export default function SignUp() {
       />
     );
   }
+
+  // This device's acceptance already went with another account: whoever signs up now accepts for
+  // themselves first.
+  if (terms.needsFreshForSignUp) return <TermsGate underHeader />;
 
   const errorFor = (field: Field) => (problem?.field === field ? problem.text : undefined);
   return (
@@ -121,6 +139,7 @@ export default function SignUp() {
         onSubmitEditing={signUp}
         error={errorFor('password')}
       />
+      <TermsAcceptedLine />
       <ErrorText>{errorFor('form')}</ErrorText>
     </AuthPage>
   );

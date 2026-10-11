@@ -39,6 +39,10 @@ export type Profile = {
   charge_no_shows: boolean;
   // True when the database doesn't have this version's changes yet (the app waits on a calm screen).
   older_database?: boolean;
+  // The newest version of the Terms the account accepted, and when (null: none yet; undefined: a
+  // database without the Terms yet, so the acceptance kept on the phone counts until it can be sent).
+  terms_version?: string | null;
+  terms_accepted_at?: string | null;
 };
 
 type AuthState = {
@@ -64,12 +68,19 @@ const AuthContext = createContext<AuthState | null>(null);
 const PROFILE_COLUMNS =
   'id, role, full_name, business_name, trial_ends_at, subscription_status, subscription_expires_at, is_admin, free_access, preferences, avatar_url, specialties, bio, city, years_experience, latitude, longitude';
 
+const ROUND3_COLUMNS = `${PROFILE_COLUMNS}, country, currency, session_price_cents, time_zone, accepting_clients, charge_no_shows`;
+
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
-    .select(`${PROFILE_COLUMNS}, country, currency, session_price_cents, time_zone, accepting_clients, charge_no_shows`)
+    .select(`${ROUND3_COLUMNS}, terms_version, terms_accepted_at`)
     .eq('id', userId)
     .maybeSingle();
+  // A database without the Terms columns yet: the rest loads as before, and the Terms acceptance kept
+  // on the phone is sent once the database has them (lib/terms.tsx).
+  if (error?.code === '42703') {
+    ({ data, error } = await supabase.from('profiles').select(ROUND3_COLUMNS).eq('id', userId).maybeSingle());
+  }
   // An older database without this version's columns yet (42703: no such column). The profile still
   // loads, so sign-in and set-up work, but the app waits on the update screen until the database
   // catches up, because most screens read the new columns.

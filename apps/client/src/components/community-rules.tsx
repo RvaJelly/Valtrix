@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Text } from '@/components/ui';
+import { LegalReader } from '@/components/legal/legal-reader';
+import { Text, TextLink } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
 
 const RULES = [
@@ -11,8 +13,10 @@ const RULES = [
   'No spam or scams.',
 ];
 
-// The rules everyone agrees to before their first story or reel: a calm numbered list.
+// The rules everyone agrees to before their first story or reel: a calm numbered list, and the full
+// Community Rules (the ones accepted with the Terms) one tap away, over the new-post screen.
 export function CommunityRules() {
+  const [reading, setReading] = useState(false);
   return (
     <View style={{ gap: Spacing.four }}>
       <View>
@@ -31,6 +35,8 @@ export function CommunityRules() {
         Posts that break these rules are removed, and people who keep breaking them lose access to Voltrix. Report
         anything that doesn&apos;t belong, and block anyone you don&apos;t want to see.
       </Text>
+      <TextLink label="Read the full Community Rules" onPress={() => setReading(true)} testID="rules-full" />
+      <LegalReader doc={reading ? 'community' : null} onClose={() => setReading(false)} />
     </View>
   );
 }

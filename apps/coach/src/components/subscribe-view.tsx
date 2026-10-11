@@ -2,10 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { SUBSCRIPTION_SUMMARY } from '@/components/legal/legal-content';
+import { LegalReader } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
 import { StickyFooter } from '@/components/sticky-footer';
 import { Button, Card, Divider, StatusPill, Text, type IconName } from '@/components/ui';
-import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { PRICE_LABEL, TRIAL_DAYS } from '@/lib/access';
 import { dayMonth } from '@/lib/format';
 
@@ -34,6 +36,7 @@ type Props = {
 // after that the monthly plan starts on its own.
 export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, onSignOut }: Props) {
   const [notice, setNotice] = useState(false);
+  const [reading, setReading] = useState(false);
   const starting = mode === 'start';
   const inTrial = mode === 'trial';
   const [chargeDate] = useState(() =>
@@ -139,7 +142,20 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
             ? `No charge until ${chargeDate}, then ${PRICE_LABEL} a month until you cancel.`
             : `${PRICE_LABEL} a month until you cancel.`}
         </Text>
+        {/* What the subscription terms say in brief, right where the trainer decides, and the Terms in full. */}
+        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} testID="subscription-summary">
+          {SUBSCRIPTION_SUMMARY.join(' ')}{' '}
+          <Text
+            tone="primary"
+            accessibilityRole="link"
+            onPress={() => setReading(true)}
+            testID="subscription-terms"
+            style={{ fontFamily: Fonts.textMedium, textDecorationLine: 'underline' }}>
+            Terms of Service
+          </Text>
+        </Text>
       </StickyFooter>
+      <LegalReader doc={reading ? 'terms' : null} onClose={() => setReading(false)} />
     </View>
   );
 }

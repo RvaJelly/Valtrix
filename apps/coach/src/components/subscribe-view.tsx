@@ -2,12 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { DeleteAccountLink } from '@/components/delete-account';
 import { Logo } from '@/components/logo';
 import { StickyFooter } from '@/components/sticky-footer';
-import { Button, Card, Divider, StatusPill, Text, type IconName } from '@/components/ui';
+import { Button, Card, Divider, ErrorText, Notice, StatusPill, Text, type IconName } from '@/components/ui';
 import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
-import { PRICE_LABEL, TRIAL_DAYS } from '@/lib/access';
+import { PRICE_LABEL, startTrial, trialLeft, TRIAL_DAYS } from '@/lib/access';
+import { useAuth } from '@/lib/auth';
+import { plainError } from '@/lib/errors';
 import { dayMonth } from '@/lib/format';
+import { NOT_YET } from '@/lib/rpc';
 
 const BENEFITS: { icon: IconName; text: string }[] = [
   { icon: 'people-outline', text: 'Unlimited clients, goals and notes' },
@@ -19,41 +23,55 @@ const BENEFITS: { icon: IconName; text: string }[] = [
 type Props = {
   // 'start' before the free trial, 'trial' while it runs, 'ended' once it has run out.
   mode: 'start' | 'trial' | 'ended';
-  // Days left in a running trial.
+  // Whole days left after today in a running trial (0 on its last day).
   daysLeft?: number;
   // The trainer's name, for the headline.
   name?: string | null;
-  // When the running trial ends, so the first charge shows the right day.
+  // When the running trial ends.
   trialEndsAt?: Date;
-  // The full-screen version (no header above it) shows the logo, the step and Sign out.
+  // The full-screen version (no header above it) shows the logo, the step, Sign out and Delete account.
   standalone?: boolean;
   onSignOut?: () => void;
 };
 
-// Trainers add a card here before they get into the app. Nothing is charged for the first TRIAL_DAYS (14) days;
-// after that the monthly plan starts on its own.
+// The plan, and how to start. Card payments aren't connected yet, so for now the free trial starts without a
+// card (TRIAL_DAYS, 14 days), and a trainer whose trial has ended keeps going free for another 14 days: nobody
+// is locked out while there is no way to pay. Nothing on this page charges anything.
 export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, onSignOut }: Props) {
-  const [notice, setNotice] = useState(false);
+  const { refreshProfile } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const starting = mode === 'start';
   const inTrial = mode === 'trial';
-  const [chargeDate] = useState(() =>
-    dayMonth(trialEndsAt ?? new Date(new Date().getTime() + TRIAL_DAYS * 86_400_000)),
-  );
+  const ended = mode === 'ended';
+  const [endDate] = useState(() => dayMonth(trialEndsAt ?? new Date(new Date().getTime() + TRIAL_DAYS * 86_400_000)));
   const first = name?.trim().split(/\s+/)[0];
   const headline = starting
     ? first
       ? `Build your business, ${first}`
       : 'Build your business'
     : inTrial
-      ? daysLeft === 1
-        ? 'Last day of your trial'
-        : `${daysLeft ?? TRIAL_DAYS} days left in your trial`
+      ? `${trialLeft(daysLeft ?? TRIAL_DAYS)} in your trial`
       : `Welcome back, ${first || 'coach'}`;
   const intro = starting
     ? 'Win clients, keep them and get paid.'
     : inTrial
-      ? `Subscribe now and nothing changes when your trial ends on ${chargeDate}.`
+      ? `Your free trial runs until ${endDate}.`
       : 'Your trial has ended. Everything is saved.';
+
+  // Starts the trial (or 14 more days); the root layout then opens the app.
+  async function start() {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      if (!(await startTrial())) throw new Error(NOT_YET);
+      await refreshProfile();
+    } catch (e) {
+      setError(plainError(e));
+    }
+    setBusy(false);
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -67,7 +85,7 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
             </Text>
           ) : null}
           {starting ? <StatusPill tone="success" label={`${TRIAL_DAYS} days free`} /> : null}
-          {inTrial ? <StatusPill tone="success" label={`Free until ${chargeDate}`} /> : null}
+          {inTrial ? <StatusPill tone="success" label={`Free until ${endDate}`} /> : null}
           <Text variant="largeTitle" accessibilityRole="header" style={{ textAlign: 'center' }}>
             {headline}
           </Text>
@@ -111,35 +129,45 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
 
         {starting ? (
           <View style={styles.timeline} accessibilityRole="list">
-            <Step icon="lock-open-outline" title="Today" text="Full access to everything. Nothing to pay today." />
-            <Step icon="notifications-outline" title="Any time" text="Cancel in a few taps if it isn’t for you." />
-            <Step icon="card-outline" title={chargeDate} text={`Your plan starts at ${PRICE_LABEL} a month.`} last />
+            <Step icon="lock-open-outline" title="Today" text="Full access to everything. No card needed." />
+            <Step
+              icon="card-outline"
+              title={endDate}
+              text={`Your free trial ends. Stay on for ${PRICE_LABEL} a month once card payments open.`}
+              last
+            />
           </View>
         ) : null}
-        {inTrial ? (
-          <View style={styles.timeline} accessibilityRole="list">
-            <Step icon="lock-open-outline" title="Until then" text="Your free trial keeps running. Nothing to pay." />
-            <Step icon="card-outline" title={chargeDate} text={`Your plan starts at ${PRICE_LABEL} a month.`} last />
-          </View>
+        {inTrial || ended ? (
+          <Notice>
+            {inTrial
+              ? `Card payments open soon. Until then there’s nothing to pay, and you can keep going free when your trial ends.`
+              : `Card payments open soon. Until then, keep using Voltrix Coach free.`}
+          </Notice>
         ) : null}
 
-        {standalone && onSignOut ? <Button title="Sign out" variant="ghost" onPress={onSignOut} /> : null}
+        {standalone && onSignOut ? (
+          <View style={{ gap: Spacing.two }}>
+            <Button title="Sign out" variant="ghost" onPress={onSignOut} />
+            <DeleteAccountLink />
+          </View>
+        ) : null}
       </ScrollView>
 
-      <StickyFooter>
-        {notice ? (
+      {inTrial ? null : (
+        <StickyFooter>
+          <ErrorText>{error}</ErrorText>
+          <Button
+            title={starting ? 'Start my free trial' : 'Keep going free'}
+            onPress={start}
+            loading={busy}
+            testID="start-trial"
+          />
           <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
-            Card payments are being connected. You’ll be able to start here very soon.
+            {starting ? `No card needed. Free until ${endDate}.` : `${TRIAL_DAYS} more days, free. No card needed.`}
           </Text>
-        ) : null}
-        {/* Card payments are not connected yet; the provider is still being chosen. */}
-        <Button title={starting ? 'Start my free trial' : 'Subscribe now'} onPress={() => setNotice(true)} />
-        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
-          {starting || inTrial
-            ? `No charge until ${chargeDate}, then ${PRICE_LABEL} a month until you cancel.`
-            : `${PRICE_LABEL} a month until you cancel.`}
-        </Text>
-      </StickyFooter>
+        </StickyFooter>
+      )}
     </View>
   );
 }

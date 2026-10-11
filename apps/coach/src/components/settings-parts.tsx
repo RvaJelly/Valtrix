@@ -20,13 +20,10 @@ import {
   Toggle,
 } from '@/components/ui';
 import { ACCENTS, Colors, Layout, Spacing, themed, type AccentName } from '@/constants/theme';
-import { coachAccess, PRICE_LABEL } from '@/lib/access';
+import { coachAccess, PRICE_LABEL, trialLeft } from '@/lib/access';
 import { useAuth, type Profile } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
-import { removeMyChatPhotos } from '@/lib/chat';
-import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
-import { removeAllMyFiles } from '@/lib/files';
 import { haptic } from '@/lib/haptics';
 import { askPermission } from '@/lib/notify';
 import { loadBlocked, unblockPerson, type Blocked } from '@/lib/posts';
@@ -66,7 +63,7 @@ export function planLabel(profile: Profile | null) {
     case 'subscribed':
       return `Voltrix Coach, ${PRICE_LABEL} a month`;
     case 'trial':
-      return `Free trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left, then ${PRICE_LABEL} a month`;
+      return `Free trial, ${trialLeft(access.daysLeft).toLowerCase()}`;
     default:
       return 'No active plan';
   }
@@ -335,44 +332,6 @@ export function PasswordForm() {
         error={error ?? undefined}
       />
       <Button title="Change password" variant="secondary" onPress={save} loading={busy} disabled={!password} />
-    </View>
-  );
-}
-
-export function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () => Promise<void> }) {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function remove() {
-    const sure = await confirm(
-      'Delete your account?',
-      'This permanently deletes your account, your clients, calendar, workouts and exercises, your chats and the photos you sent, and your stories, reels and photos. It cannot be undone.',
-      'Delete account',
-    );
-    if (!sure) return;
-    setError(null);
-    setBusy(true);
-    await removeMyChatPhotos().catch(() => {});
-    if (userId) await removeAllMyFiles(userId).catch(() => {});
-    const { error } = await supabase.rpc('delete_my_account');
-    setBusy(false);
-    if (error) return setError(plainError(error));
-    await onDeleted();
-  }
-
-  return (
-    <View style={{ gap: Spacing.two }}>
-      <ErrorText>{error}</ErrorText>
-      <Group>
-        <ListRow
-          title={busy ? 'Deleting…' : 'Delete account'}
-          titleTone="danger"
-          leading={<IconTile icon="trash-outline" color={Colors.danger} />}
-          chevron={false}
-          onPress={busy ? undefined : remove}
-          last
-        />
-      </Group>
     </View>
   );
 }

@@ -37,7 +37,7 @@ import {
   type IconName,
 } from '@/components/ui';
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
-import { coachAccess, PRICE_LABEL } from '@/lib/access';
+import { coachAccess, trialLeft } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { earnedFrom, loadMoneyTotals, loadTotals, totalsIn, type MoneyTotals, type Totals } from '@/lib/earnings';
@@ -389,8 +389,8 @@ export default function Home() {
   if (access.kind === 'trial') {
     account.push({
       key: 'trial',
-      title: access.daysLeft === 1 ? 'Last day of your free trial' : `${access.daysLeft} days left in your free trial`,
-      subtitle: `Then ${PRICE_LABEL} a month from ${dayMonth(access.endsAt)}`,
+      title: access.daysLeft === 0 ? 'Last day of your free trial' : `${trialLeft(access.daysLeft)} in your free trial`,
+      subtitle: `Free until ${dayMonth(access.endsAt)}`,
       icon: 'time-outline',
       color: access.daysLeft <= 3 ? Colors.warning : undefined,
       href: '/settings',

@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
+import { SeenBy, useHasTrainer } from '@/components/seen-by';
 import {
   Button,
   EmptyState,
@@ -44,6 +45,8 @@ const PAGE = 20;
 
 // The client's saved workouts, newest first, and their personal bests.
 export default function WorkoutHistory() {
+  // Who sees what's logged here: the person's trainers, or only them until they have one.
+  const trainer = useHasTrainer();
   const { settings } = useSettings();
   const unit = settings.units;
   const [view, setView] = useState<Tab>('workouts');
@@ -226,9 +229,7 @@ export default function WorkoutHistory() {
           </Section>
         </>
       )}
-      <Text variant="footnote" tone="secondary">
-        Your trainers can see this.
-      </Text>
+      <SeenBy trainer={trainer} />
     </ScrollView>
   );
 }

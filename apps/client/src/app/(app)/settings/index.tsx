@@ -78,7 +78,8 @@ export default function Settings() {
           {
             icon: 'link-outline' as const,
             title: 'Calendar link',
-            subtitle: calendarOn ? 'On' : 'Off',
+            // A trainer's link is the one in Voltrix Coach.
+            subtitle: profile?.role === 'trainer' ? 'In Voltrix Coach' : calendarOn ? 'On' : 'Off',
             href: '/settings/calendar' as const,
             testID: 'settings-calendar',
           },
@@ -116,7 +117,12 @@ export default function Settings() {
       subtitle: email || 'Email and password',
       href: '/settings/account',
     },
-    { icon: 'help-circle-outline', title: 'Help', subtitle: 'Community rules and app version', href: '/settings/help' },
+    {
+      icon: 'help-circle-outline',
+      title: 'Help',
+      subtitle: 'Community rules, privacy and app version',
+      href: '/settings/help',
+    },
   ];
 
   return (

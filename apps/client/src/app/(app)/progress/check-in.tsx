@@ -259,7 +259,6 @@ function CheckInForm({
         value={weight}
         onChangeText={setWeight}
         keyboardType="decimal-pad"
-        placeholder={unit === 'lb' ? '170' : '75.5'}
       />
       <ErrorText>{problem}</ErrorText>
       <Button

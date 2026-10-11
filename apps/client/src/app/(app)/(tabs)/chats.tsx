@@ -78,8 +78,9 @@ export default function Chats() {
             : {
                 title: 'No chats yet',
                 message: 'Once you accept your trainer’s invite, you can message and call them here.',
+                // The screen's one action, as on Plan.
                 action: trainers ? (
-                  <Button title="Find a trainer" variant="secondary" onPress={() => router.push('/trainers')} />
+                  <Button title="Find a trainer" size="medium" onPress={() => router.push('/trainers')} />
                 ) : undefined,
               }
       }

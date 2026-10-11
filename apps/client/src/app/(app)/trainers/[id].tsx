@@ -34,6 +34,7 @@ import {
   displayName,
   distanceLabel,
   listTrainers,
+  listTrainersV2,
   loadInvites,
   loadRequestState,
   loadTrainers,
@@ -82,10 +83,14 @@ export default function TrainerProfile() {
 
   const loadOnce = useCallback(
     (current: Current) =>
-      Promise.all([listTrainers(), loadTrainers(), loadInvites().catch(() => null)])
-        .then(([all, mine, invites]) => {
+      Promise.all([listTrainers(), listTrainersV2(), loadTrainers(), loadInvites().catch(() => null)])
+        .then(([all, listed, mine, invites]) => {
           // A newer load has shown its answer already, so this one's is older.
           if (!current()) return;
+          // Someone without a trainer sees whom the Trainers list shows them, so a trainer a block hides
+          // stays hidden here too. That list is empty for someone with a trainer (and missing on an older
+          // database): then every trainer's public profile shows.
+          const pool = listed && !mine.length ? listed : all;
           const link = mine.find((t) => t.trainer_id === id);
           const asked = invites?.find((t) => t.trainer_id === id) ?? null;
           // The list only has trainers on an active plan with a business name. The client's
@@ -104,7 +109,7 @@ export default function TrainerProfile() {
               }
             : null;
           // A trainer known only from their invite stays while the invites can't be loaded.
-          setTrainer((shown) => all.find((t) => t.id === id) ?? own ?? (invites ? null : (shown ?? null)));
+          setTrainer((shown) => pool.find((t) => t.id === id) ?? own ?? (invites ? null : (shown ?? null)));
           setChatId(link?.client_id ?? null);
           const other = mine.find((t) => t.trainer_id !== id);
           setOtherTrainer(other ? trainerTitle(other) : null);
@@ -467,6 +472,8 @@ function AskArea({
       );
     case 'unconfirmed':
       return <Footnote>Confirm your email, then you can ask {first} to train you.</Footnote>;
+    case 'unavailable':
+      return <Footnote>{first} isn’t taking requests on Voltrix.</Footnote>;
     case 'limit':
       return <Footnote>You’ve sent 3 requests today. Try again tomorrow.</Footnote>;
     case 'has_trainer': {

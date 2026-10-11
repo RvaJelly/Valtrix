@@ -554,9 +554,10 @@ const styles = themed(() => ({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  // A form's column, as wide as the sticky footer's button under it.
   content: {
     width: '100%',
-    maxWidth: Layout.maxClient,
+    maxWidth: Layout.maxForm,
     alignSelf: 'center',
     paddingHorizontal: Spacing.gutter,
     paddingTop: Spacing.three,

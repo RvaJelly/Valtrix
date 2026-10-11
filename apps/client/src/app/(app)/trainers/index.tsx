@@ -13,8 +13,7 @@ import { findMe } from '@/lib/location';
 import {
   displayName,
   distanceLabel,
-  listTrainers,
-  listTrainersV2,
+  listTrainersForMe,
   loadTrainers,
   sortTrainers,
   townKey,
@@ -43,14 +42,6 @@ const NOT_FOUND = "We couldn't work out how far away trainers are, so they're sh
 
 // After this long the client may have moved, so Nearest finds them again.
 const FRESH_FOR = 10 * 60_000;
-
-// The Trainers list, with whether each takes new clients; an older database answers round 2's list,
-// where everyone does.
-async function loadListed(): Promise<ListedTrainer[]> {
-  const listed = await listTrainersV2();
-  if (listed) return listed;
-  return (await listTrainers()).map((t) => ({ ...t, accepting_clients: true }));
-}
 
 // How far each trainer is from the client, by trainer id, and when that was worked out.
 type Nearby = { distances: Map<string, number>; at: number };
@@ -84,7 +75,7 @@ export default function Trainers() {
 
   const load = useCallback(async () => {
     try {
-      const [all, linked] = await Promise.all([loadListed(), loadTrainers().catch(() => null)]);
+      const [all, linked] = await Promise.all([listTrainersForMe(), loadTrainers().catch(() => null)]);
       setTrainers(all);
       if (linked) {
         setMine(new Set(linked.map((t) => t.trainer_id)));

@@ -54,20 +54,13 @@ type TodayCardProps = {
 
 const MAX_ROWS = 3;
 
-// "6:50 h"; under an hour stays "50 min".
-function shortSleep(minutes: number) {
-  const total = Math.max(0, Math.round(minutes));
-  const hours = Math.floor(total / 60);
-  return hours ? `${hours}:${String(total % 60).padStart(2, '0')} h` : `${total} min`;
-}
-
 // The top of Home: what's on today. Today's workouts with Start, calories left, habits with a
 // quick add for water and the weekly check-in. (The next session is Home's own hero card, so it
 // isn't repeated here.)
 export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardProps) {
   const { settings } = useSettings();
   const unit = settings.units;
-  // At large text sizes the sleep tile shows "6:50 h", which fits a third of a phone.
+  // At large text sizes the habit tiles go two to a row.
   const large = useWindowDimensions().fontScale > 1.15;
   // The newest water quick add, shown until Today loads again with it.
   const [added, setAdded] = useState<HabitDay | null>(null);
@@ -105,9 +98,48 @@ export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardPr
   const steps = habits ? formatNumber(habits.steps) : '–';
   // A dash rather than "Not logged", which doesn't fit a narrow tile on a phone's browser.
   const sleepMinutes = habits?.sleep_minutes ?? null;
-  const sleep = sleepMinutes === null ? '–' : large ? shortSleep(sleepMinutes) : formatSleep(sleepMinutes);
+  const sleep = sleepMinutes === null ? '–' : formatSleep(sleepMinutes);
   const sleepGoal = formatSleep(targets.sleep_minutes);
   const stepLabel = unit === 'lb' ? '8 oz' : '250 ml';
+  const waterTile = (
+    <HabitTile
+      icon="water-outline"
+      title="Water"
+      value={water}
+      goal={waterGoal}
+      share={habits ? habits.water_ml / targets.water_ml : 0}
+      label={`Water, ${water} of ${waterGoal}`}>
+      <Button
+        title={`+${stepLabel}`}
+        variant="secondary"
+        size="small"
+        oneLine
+        onPress={addWater}
+        accessibilityLabel={`Add ${stepLabel} of water`}
+        testID="water-quick-add"
+      />
+    </HabitTile>
+  );
+  const stepsTile = (
+    <HabitTile
+      icon="footsteps-outline"
+      title="Steps"
+      value={steps}
+      goal={formatNumber(targets.steps)}
+      share={habits ? habits.steps / targets.steps : 0}
+      label={`Steps, ${steps} of ${formatNumber(targets.steps)}`}
+    />
+  );
+  const sleepTile = (
+    <HabitTile
+      icon="moon-outline"
+      title="Sleep"
+      value={sleep}
+      goal={sleepGoal}
+      share={sleepMinutes ? sleepMinutes / targets.sleep_minutes : 0}
+      label={`Sleep, ${sleepMinutes !== null ? sleep : 'not logged'} of ${sleepGoal}`}
+    />
+  );
   const checkIn = hasTrainers && today.checkIns?.checkedIn === false && (weekday >= 5 || weekday === 1);
   const reply = today.checkIns?.newReply ?? null;
 
@@ -146,41 +178,25 @@ export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardPr
 
         <Card style={styles.numbers}>
           {today.nutrition?.target ? <Calories target={today.nutrition.target} eaten={today.nutrition.eaten} /> : null}
-          <View style={styles.tiles}>
-            <HabitTile
-              icon="water-outline"
-              title="Water"
-              value={water}
-              goal={waterGoal}
-              share={habits ? habits.water_ml / targets.water_ml : 0}
-              label={`Water, ${water} of ${waterGoal}`}>
-              <Button
-                title={`+${stepLabel}`}
-                variant="secondary"
-                size="small"
-                oneLine
-                onPress={addWater}
-                accessibilityLabel={`Add ${stepLabel} of water`}
-                testID="water-quick-add"
-              />
-            </HabitTile>
-            <HabitTile
-              icon="footsteps-outline"
-              title="Steps"
-              value={steps}
-              goal={formatNumber(targets.steps)}
-              share={habits ? habits.steps / targets.steps : 0}
-              label={`Steps, ${steps} of ${formatNumber(targets.steps)}`}
-            />
-            <HabitTile
-              icon="moon-outline"
-              title="Sleep"
-              value={sleep}
-              goal={sleepGoal}
-              share={sleepMinutes ? sleepMinutes / targets.sleep_minutes : 0}
-              label={`Sleep, ${sleepMinutes !== null ? sleep : 'not logged'} of ${sleepGoal}`}
-            />
-          </View>
+          {large ? (
+            // Two to a row with larger text, so sleep keeps its "7 h 30 min" and nothing is cut.
+            <View style={{ gap: Spacing.gutter }}>
+              <View style={styles.tiles}>
+                {waterTile}
+                {stepsTile}
+              </View>
+              <View style={styles.tiles}>
+                {sleepTile}
+                <View style={styles.tile} />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.tiles}>
+              {waterTile}
+              {stepsTile}
+              {sleepTile}
+            </View>
+          )}
           <ErrorText>{waterError}</ErrorText>
         </Card>
 

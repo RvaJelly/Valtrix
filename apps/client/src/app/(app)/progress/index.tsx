@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Chips } from '@/components/chips';
 import { DaySwitcher } from '@/components/day-switcher';
 import { LineChart } from '@/components/line-chart';
+import { SeenBy, useHasTrainer } from '@/components/seen-by';
 import { Sheet } from '@/components/sheet';
 import {
   Body,
@@ -95,6 +96,7 @@ export default function Progress() {
   const [checkIns, setCheckIns] = useState<CheckIn[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const trainer = useHasTrainer();
 
   // A failed part keeps what is on screen.
   const load = useMemo(
@@ -152,7 +154,7 @@ export default function Progress() {
 
       <Section title="Body weight">
         {weights ? (
-          <WeightSection weights={weights} unit={settings.units} onSaved={reload} />
+          <WeightSection weights={weights} unit={settings.units} trainer={trainer} onSaved={reload} />
         ) : !error ? (
           <Loading height={280} />
         ) : null}
@@ -160,14 +162,23 @@ export default function Progress() {
 
       <Section title="Measurements">
         {measurements ? (
-          <MeasurementsSection measurements={measurements} lengths={settings.lengths} onSaved={reload} />
+          <MeasurementsSection
+            measurements={measurements}
+            lengths={settings.lengths}
+            trainer={trainer}
+            onSaved={reload}
+          />
         ) : !error ? (
           <Loading height={220} />
         ) : null}
       </Section>
 
       <Section title="Photos">
-        {photos ? <PhotosSection photos={photos} links={links} /> : !error ? <Loading height={200} /> : null}
+        {photos ? (
+          <PhotosSection photos={photos} links={links} trainer={trainer} />
+        ) : !error ? (
+          <Loading height={200} />
+        ) : null}
       </Section>
 
       <Section title="Weekly check-in">
@@ -185,7 +196,17 @@ function Loading({ height }: { height: number }) {
 
 // ---------- Body weight ----------
 
-function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: WeightUnit; onSaved: () => void }) {
+function WeightSection({
+  weights,
+  unit,
+  trainer,
+  onSaved,
+}: {
+  weights: BodyWeight[];
+  unit: WeightUnit;
+  trainer: boolean | null | undefined;
+  onSaved: () => void;
+}) {
   const [range, setRange] = useState<Range>('month');
   const [sheet, setSheet] = useState({ open: false, key: 0 });
   const [problem, setProblem] = useState<string | null>(null);
@@ -278,9 +299,7 @@ function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit
         </View>
       ) : null}
       <ErrorText>{problem}</ErrorText>
-      <Text variant="footnote" tone="secondary">
-        Your trainers can see this.
-      </Text>
+      <SeenBy trainer={trainer} />
       <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Log weight">
         <WeightForm
           key={sheet.key}
@@ -299,6 +318,7 @@ function WeightSection({ weights, unit, onSaved }: { weights: BodyWeight[]; unit
 function WeightForm({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: WeightUnit; onSaved: () => void }) {
   const [day, setDay] = useState(() => dayKey(new Date()));
   const existing = weights.find((w) => w.day === day) ?? null;
+  const latest = weights.at(-1) ?? null;
   const [text, setText] = useState(existing ? weightInput(existing.weight_kg, unit) : '');
   // Typed by the person. A prefilled weight saved as it is keeps its exact kg.
   const [typed, setTyped] = useState(false);
@@ -350,7 +370,8 @@ function WeightForm({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: W
           setTyped(true);
         }}
         keyboardType="decimal-pad"
-        placeholder={unit === 'lb' ? '170' : '75.5'}
+        // The last weight logged, as the measurements show theirs; nothing made up.
+        placeholder={latest ? weightInput(latest.weight_kg, unit) : undefined}
         onSubmitEditing={save}
       />
       {existing ? (
@@ -369,14 +390,20 @@ function WeightForm({ weights, unit, onSaved }: { weights: BodyWeight[]; unit: W
 function MeasurementsSection({
   measurements,
   lengths,
+  trainer,
   onSaved,
 }: {
   measurements: Measurements[];
   lengths: LengthUnit;
+  trainer: boolean | null | undefined;
   onSaved: () => void;
 }) {
   const [chart, setChart] = useState<MeasurementKey>('waist_cm');
   const [sheet, setSheet] = useState({ open: false, key: 0 });
+  // Three tiles to a row; two with larger text, so a value like "75.5 cm" is never cut.
+  const perRow = useWindowDimensions().fontScale > 1.15 ? 2 : 3;
+  const rows: (typeof MEASUREMENTS)[number][][] = [];
+  for (let i = 0; i < MEASUREMENTS.length; i += perRow) rows.push(MEASUREMENTS.slice(i, i + perRow));
 
   const points = measurements
     .filter((m) => m[chart] !== null)
@@ -387,7 +414,7 @@ function MeasurementsSection({
   return (
     <Card style={{ gap: Spacing.gutter }}>
       <View style={styles.tiles}>
-        {[MEASUREMENTS.slice(0, 3), MEASUREMENTS.slice(3)].map((row) => (
+        {rows.map((row) => (
           <View key={row[0].key} style={styles.tileRow}>
             {row.map(({ key, label }) => {
               const values = measurements.filter((m) => m[key] !== null);
@@ -403,18 +430,20 @@ function MeasurementsSection({
                     {label}
                   </Text>
                   <Text variant="rowTitle" style={[Tabular, { fontFamily: Fonts.textSemi }]} numberOfLines={1}>
-                    {formatLength(latest, lengths)}
+                    {formatLength(latest, lengths).replace(/ (?=\S+$)/, '\u00a0')}
                   </Text>
                   {change !== null ? (
                     <Text variant="footnote" tone="secondary" style={Tabular} numberOfLines={1}>
-                      {signed(`${formatNumber(Math.abs(change), 1)} ${lengths}`, change)}
+                      {signed(`${formatNumber(Math.abs(change), 1)}\u00a0${lengths}`, change)}
                     </Text>
                   ) : null}
                 </View>
               );
             })}
-            {/* The second row's tiles stay the size of those above. */}
-            {row.length < 3 ? <View style={styles.tileSpacer} /> : null}
+            {/* A short last row's tiles stay the size of those above. */}
+            {Array.from({ length: perRow - row.length }, (_, i) => (
+              <View key={i} style={styles.tileSpacer} />
+            ))}
           </View>
         ))}
       </View>
@@ -446,9 +475,7 @@ function MeasurementsSection({
         onPress={() => setSheet((s) => ({ open: true, key: s.key + 1 }))}
         testID="add-measurements"
       />
-      <Text variant="footnote" tone="secondary">
-        Your trainers can see this.
-      </Text>
+      <SeenBy trainer={trainer} />
       <Sheet visible={sheet.open} onClose={() => setSheet((s) => ({ ...s, open: false }))} title="Add measurements">
         <MeasurementsForm
           key={sheet.key}
@@ -558,7 +585,15 @@ function MeasurementsForm({
 
 // ---------- Photos ----------
 
-function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<string, SignedPhoto> }) {
+function PhotosSection({
+  photos,
+  links,
+  trainer,
+}: {
+  photos: ProgressPhoto[];
+  links: Map<string, SignedPhoto>;
+  trainer: boolean | null | undefined;
+}) {
   // The newest of each pose.
   const latest = POSES.map((pose) => ({ pose, photo: photos.find((p) => p.pose === pose.key) ?? null }));
   return (
@@ -604,9 +639,7 @@ function PhotosSection({ photos, links }: { photos: ProgressPhoto[]; links: Map<
           <Button title="Add progress photos" variant="secondary" onPress={() => router.push('/progress/photos')} />
         </>
       )}
-      <Text variant="footnote" tone="secondary">
-        Only you and your trainers can see these.
-      </Text>
+      <SeenBy trainer={trainer} photos />
     </Card>
   );
 }

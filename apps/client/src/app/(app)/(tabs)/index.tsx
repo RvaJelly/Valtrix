@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnswerNotice } from '@/components/answer-notice';
 import { Avatar } from '@/components/avatar';
+import { CancelledNotice } from '@/components/cancelled-notice';
 import { InviteCard } from '@/components/invite-card';
 import { InviteCodeSheet } from '@/components/invite-code-sheet';
 import { canJoin, JoinCall } from '@/components/join-call';
@@ -64,7 +65,7 @@ import { serial, type Current } from '@/lib/serial';
 import { addDays, dayKey, endOf, formatDay, loadSessions, trainerName, type Session } from '@/lib/sessions';
 import { loadToday, mergeToday, type TodayData } from '@/lib/today';
 import {
-  listTrainers,
+  listTrainersForMe,
   loadInvites,
   loadMyAsks,
   loadTrainers,
@@ -95,6 +96,8 @@ type HomeData = {
   everyone: PublicTrainer[];
   // Booked sessions that hadn't ended when they were loaded; null when they couldn't be loaded.
   sessions: Session[] | null;
+  // Sessions still to come that a trainer cancelled.
+  cancelled: Session[];
   doneThisMonth: number;
   stories: StoryGroup[];
   seen: Set<string>;
@@ -109,6 +112,13 @@ type HomeData = {
   // The person's health form: null when not filled in, undefined when it isn't known.
   health: HealthForm | null | undefined;
 };
+
+// Trainers on Voltrix for someone without a trainer, as the Trainers list has them: none a block hides,
+// and those taking new clients first.
+async function loadEveryone(): Promise<PublicTrainer[]> {
+  const listed = await listTrainersForMe();
+  return [...listed.filter((t) => t.accepting_clients), ...listed.filter((t) => !t.accepting_clients)];
+}
 
 // The trainers the person has, and what each allows them in the app.
 async function loadLinked() {
@@ -204,7 +214,7 @@ export default function Home() {
         loadLinked(),
         loadInvites().catch(() => null),
         loadSessions(monthStart, addDays(start, 90)).catch(() => null),
-        listTrainers().catch(() => null),
+        loadEveryone().catch(() => null),
         loadStories().catch(() => null),
         loadSeen(),
         loadMyTimeRequests().catch(() => undefined),
@@ -233,6 +243,9 @@ export default function Home() {
       sessions: sessions
         ? sessions.filter((s) => s.status === 'scheduled' && endOf(s) > start)
         : (old?.sessions ?? null),
+      cancelled: sessions
+        ? sessions.filter((s) => s.status === 'cancelled' && !s.cancelled_by_me && new Date(s.starts_at) > start)
+        : (old?.cancelled ?? []),
       doneThisMonth: sessions ? sessions.filter((s) => s.status === 'completed').length : (old?.doneThisMonth ?? 0),
       stories: stories ?? old?.stories ?? [],
       seen,
@@ -319,9 +332,10 @@ export default function Home() {
     setRefreshing(false);
   }
 
+  // Also asks for the person's account again when it couldn't be loaded.
   async function retry() {
     setRetrying(true);
-    await Promise.all([load(true, true), loadTodayInOrder(true)]);
+    await Promise.all([load(true, true), loadTodayInOrder(true), profile ? null : refreshProfile()]);
     setRetrying(false);
   }
 
@@ -415,6 +429,7 @@ export default function Home() {
         </View>
 
         {isClient ? <AnswerNotice place="home" testID="home-answer" /> : null}
+        <CancelledNotice sessions={data?.cancelled ?? null} testID="home-cancelled" />
 
         {/* A web page can't be pulled down to refresh, so there's always a button. */}
         {error && !sessionsMissing ? (
@@ -422,7 +437,13 @@ export default function Home() {
             {error}
           </Notice>
         ) : null}
-        {data && !profile ? <Notice>Your account details could not be loaded. Pull down to try again.</Notice> : null}
+        {data && !profile ? (
+          <Notice
+            tone="danger"
+            action={{ label: 'Try again', onPress: retry, loading: retrying, testID: 'home-profile-retry' }}>
+            Your account details could not be loaded. Check your connection.
+          </Notice>
+        ) : null}
         {!data && !error && showSkeleton ? (
           <View style={{ gap: Spacing.tight }}>
             <Skeleton height={200} radius={Radius.large} />
@@ -543,6 +564,7 @@ export default function Home() {
                       key={s.id}
                       session={s}
                       showDay
+                      showMonth
                       showTrainer={data.trainers!.length > 1}
                       variant="grouped"
                       last={i === later.length - 1}

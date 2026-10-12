@@ -1,7 +1,10 @@
 import { TermsGate } from '@/components/legal/terms-gate';
+import { UpdateApp } from '@/components/legal/update-app';
+import { useTerms } from '@/lib/terms';
 
-// The acceptance screen. The root layout shows only this until the Terms are accepted on this device,
-// or by the signed-in account (the same file in Voltrix and Voltrix Coach).
+// The root layout shows only this while the signed-in account hasn't accepted the current Terms, or while
+// this build is older than them (the same file in Voltrix and Voltrix Coach).
 export default function Terms() {
-  return <TermsGate />;
+  const { status } = useTerms();
+  return status === 'update' ? <UpdateApp /> : <TermsGate />;
 }

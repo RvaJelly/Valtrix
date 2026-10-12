@@ -8,15 +8,17 @@ import { supabase } from '@/lib/supabase';
 
 // The Terms everyone accepts before they use the app (the same file in Voltrix and Voltrix Coach).
 //
-// - On this device: the acceptance is kept in AsyncStorage (`voltrix.terms`) as soon as the boxes are
-//   ticked, signed in or not, so the gate never asks twice on the same device for the same version.
-// - Signed out: it goes with the sign-up (options.data.terms) and the database records it as the
-//   account is made. The first account that signs in after it takes it as theirs ("claims" it); a
-//   different account on the same device later accepts for themselves.
-// - Signed in: accept_terms() records it. Offline, or on a database without the Terms yet (no
-//   accept_terms, no terms columns: an older database), the record waits on the device
+// - The current version comes from the server (current_terms_version(), kept on the phone for next
+//   time). A database without that function, or no connection, means this build's own version, so
+//   nobody is locked out. A build older than the server's version asks to be updated.
+// - Signing up: the sign-up screen keeps the ticks in memory, for that sign-up only and for at most
+//   15 minutes, and sends them with it (options.data.terms); the database records them as it makes
+//   the account. Nothing is ever credited to another account, and nothing is kept for a sign-in.
+// - Signed in: an account whose version is older than the current one sees the acceptance screen
+//   with empty boxes. accept_terms() records the answer. Offline, it waits on the phone
 //   (`voltrix.termsPending`) and is sent when the app opens, comes back to the front, or the person
-//   signs in. Nobody is kept out while it waits: they did accept.
+//   signs in; the person carries on meanwhile, for 24 hours. After that the screen asks again until
+//   the record is sent. A database without accept_terms (an older one) keeps the phone's record.
 
 export type AppId = 'coach' | 'client';
 export const APP_NAMES: Record<AppId, string> = { coach: 'Voltrix Coach', client: 'Voltrix' };
@@ -24,12 +26,6 @@ export const APP_NAMES: Record<AppId, string> = { coach: 'Voltrix Coach', client
 export type CheckId = 'age' | 'terms' | 'health';
 export type TermsChecks = Record<CheckId, boolean>;
 type DevicePlatform = 'ios' | 'android' | 'web' | 'other';
-
-type Acceptance = { version: string; acceptedAt: string; app: AppId; platform: DevicePlatform; checks: TermsChecks };
-// What this device remembers. claimedBy: the account that took it as theirs (null until one signs in).
-type DeviceRecord = Acceptance & { claimedBy: string | null };
-// A record waiting to be sent for an account.
-type Pending = Acceptance & { userId: string };
 
 // What the database is sent: the same object at sign-up and in accept_terms(p_terms).
 export type TermsPayload = {
@@ -40,29 +36,88 @@ export type TermsPayload = {
   accepted_at: string;
 };
 
+// A record waiting to be sent for one account. since: when the first unsent acceptance of this version
+// was made (asking again doesn't restart the 24 hours). olderDb: the database has no accept_terms.
+type Pending = {
+  userId: string;
+  version: string;
+  acceptedAt: string;
+  since: string;
+  app: AppId;
+  platform: DevicePlatform;
+  checks: TermsChecks;
+  olderDb?: boolean;
+};
+
 // The acceptance the person can see in Settings. recorded: the database has it.
 export type AcceptedInfo = { version: string; at: Date; recorded: boolean };
 
-const DEVICE_KEY = 'voltrix.terms';
+// 'update': this build is older than the current version. 'accept': show the acceptance screen.
+// 'in': carry on (signed in and accepted). 'out': signed out (Welcome, sign-in and sign-up).
+export type TermsStatus = 'loading' | 'update' | 'accept' | 'in' | 'out';
+
+// What the acceptance screen's button did. 'stuck': the record has waited more than 24 hours and still
+// couldn't be sent, so the person stays on the screen.
+export type AcceptResult = 'sent' | 'waiting' | 'stuck';
+
 const PENDING_KEY = 'voltrix.termsPending';
+const KNOWN_KEY = 'voltrix.termsKnown';
+const CURRENT_KEY = 'voltrix.termsCurrent';
+// The first Terms build kept a ticked box on the phone for whoever signed in next.
+const OLD_DEVICE_KEY = 'voltrix.terms';
 const ALL_TICKED: TermsChecks = { age: true, terms: true, health: true };
+const DAY_MS = 86_400_000;
+// How long a sign-up's ticks count for.
+export const SIGN_UP_TICKS_MS = 15 * 60_000;
+const VERSION = /^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$/;
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 const platformName = (): DevicePlatform =>
   Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web' ? Platform.OS : 'other';
 
-function payloadOf(a: Acceptance): TermsPayload {
-  return { version: a.version, app: a.app, checks: a.checks, platform: a.platform, accepted_at: a.acceptedAt };
+// '2026-10-11' as '11 October 2026' (a second version on the same day: '11 October 2026 (b)').
+export function versionDate(version: string) {
+  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})([a-z]?)$/.exec(version);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  if (!m || !month) return version;
+  return `${Number(m[3])} ${month} ${m[1]}${m[4] ? ` (${m[4]})` : ''}`;
+}
+
+// A sign-up's acceptance, made when its boxes are ticked.
+export function termsPayload(app: AppId, at: Date): TermsPayload {
+  return {
+    version: TERMS_VERSION,
+    app,
+    checks: { ...ALL_TICKED },
+    platform: platformName(),
+    accepted_at: at.toISOString(),
+  };
 }
 
 function allTicked(checks: Partial<TermsChecks> | undefined): checks is TermsChecks {
   return !!checks && checks.age === true && checks.terms === true && checks.health === true;
 }
 
-function isAcceptance(x: unknown): x is Acceptance {
-  const a = x as Partial<Acceptance> | null;
+function isPending(x: unknown): x is Pending {
+  const a = x as Partial<Pending> | null;
   return (
     !!a &&
+    typeof a.userId === 'string' &&
     typeof a.version === 'string' &&
+    VERSION.test(a.version) &&
     typeof a.acceptedAt === 'string' &&
     !Number.isNaN(Date.parse(a.acceptedAt)) &&
     (a.app === 'coach' || a.app === 'client') &&
@@ -84,12 +139,18 @@ function writeJson(key: string, value: unknown) {
   return AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {});
 }
 
-// Sends one waiting record. 'done': recorded (with the account's newest version); 'later': try again
-// another time (offline, an older database, a login that ran out, anything else).
-async function send(record: Pending): Promise<{ kind: 'done'; version: string; at: string } | { kind: 'later' }> {
+function payloadOf(p: Pending): TermsPayload {
+  return { version: p.version, app: p.app, checks: p.checks, platform: p.platform, accepted_at: p.acceptedAt };
+}
+
+// Sends one waiting record. 'done': recorded (with the account's newest version); 'missing': the
+// database has no accept_terms (an older one); 'later': offline, a login that ran out, anything else.
+async function send(
+  record: Pending,
+): Promise<{ kind: 'done'; version: string; at: string } | { kind: 'missing' } | { kind: 'later' }> {
   try {
     const { data, error } = await supabase.rpc('accept_terms', { p_terms: payloadOf(record) });
-    if (error) return { kind: 'later' };
+    if (error) return error.code === 'PGRST202' ? { kind: 'missing' } : { kind: 'later' };
     const answer = (data ?? {}) as { version?: string | null; accepted_at?: string | null };
     return {
       kind: 'done',
@@ -101,216 +162,291 @@ async function send(record: Pending): Promise<{ kind: 'done'; version: string; a
   }
 }
 
+// The server's version: a version, 'none' (an older database without current_terms_version, or no
+// version set), or null (no answer: offline).
+async function fetchCurrent(): Promise<string | 'none' | null> {
+  try {
+    const { data, error } = await supabase.rpc('current_terms_version');
+    if (error) return error.code === 'PGRST202' ? 'none' : null;
+    return typeof data === 'string' && VERSION.test(data) ? data : 'none';
+  } catch {
+    return null;
+  }
+}
+
+type Known = { userId: string; version: string | null };
+type Stored = { known: Known | null; current: string | null };
+
 type TermsState = {
   app: AppId;
   appName: string;
-  // False until this device's record has been read.
+  // False until the phone's records (and, the first time, the server's version) have been read.
   ready: boolean;
-  // Show the acceptance screen now, before anything else.
-  gated: boolean;
+  status: TermsStatus;
+  // The version everyone must have accepted: the server's, or this build's when the server doesn't say.
+  current: string;
   signedIn: boolean;
-  // What the person accepted last, for Settings and the sign-up screen.
+  // What the signed-in person accepted last, for Settings.
   accepted: AcceptedInfo | null;
-  // The sign-up screen asks for the Terms again when this device's acceptance already belongs to an
-  // account (someone else may be signing up).
-  needsFreshForSignUp: boolean;
-  // The acceptance screen's button. Never fails: the record waits on the device when it can't be sent.
-  accept: (checks: TermsChecks) => Promise<void>;
-  // For supabase.auth.signUp's options.data.terms (null when this device hasn't accepted this version).
-  signUpPayload: () => TermsPayload | null;
-  // After a sign-up the database accepted: the acceptance belongs to that account now (and is sent again
-  // at its first sign-in, in case the database didn't record it with the sign-up).
-  claimForSignUp: (userId: string) => void;
+  // The acceptance screen's button, for the signed-in account.
+  accept: (checks: TermsChecks) => Promise<AcceptResult>;
+  // After a sign-up the database accepted: what went with it waits for that account only, and is sent
+  // again at its first sign-in, in case an older database didn't record it with the sign-up.
+  rememberSignUp: (userId: string, payload: TermsPayload) => void;
+  // Asks the server for its version again.
+  checkVersion: () => Promise<void>;
 };
 
 const TermsContext = createContext<TermsState | null>(null);
 
 export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId }>) {
   const { session, profile } = useAuth();
-  const [device, setDevice] = useState<DeviceRecord | null>(null);
+  const [stored, setStored] = useState<Stored | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
-  const [ready, setReady] = useState(false);
+  const [server, setServer] = useState<string | null>(null);
+  // The first answer (or none within 3 seconds) from the server about its version.
+  const [askedOnce, setAskedOnce] = useState(false);
   // What accept_terms answered, per account, so the screen doesn't wait for the profile to reload.
   const [recorded, setRecorded] = useState<{ userId: string; version: string; at: string } | null>(null);
+  // The time the 24 hours are measured against, refreshed when a wait runs out or the app returns.
+  const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef<Pending[]>([]);
   const sending = useRef(false);
+  // Something was added while a send was running: that run sends it too before it stops.
+  const again = useRef(false);
+  // The server has answered, so the version kept on the phone is older news.
+  const heard = useRef(false);
 
   const userId = session?.user.id ?? null;
-  // undefined: the database didn't say (an older database, or the profile couldn't load).
-  const accountVersion =
-    recorded && recorded.userId === userId
-      ? recorded.version
-      : profile && profile.id === userId
-        ? profile.terms_version
-        : undefined;
 
   useEffect(() => {
     let live = true;
-    Promise.all([readJson(DEVICE_KEY), readJson(PENDING_KEY)]).then(([d, p]) => {
+    Promise.all([readJson(PENDING_KEY), readJson(KNOWN_KEY), readJson(CURRENT_KEY)]).then(([p, k, c]) => {
       if (!live) return;
-      if (isAcceptance(d)) {
-        const claimedBy = (d as Partial<DeviceRecord>).claimedBy;
-        setDevice({ ...d, claimedBy: typeof claimedBy === 'string' ? claimedBy : null });
-      }
       const list = Array.isArray(p)
-        ? (p as Pending[]).filter((x) => isAcceptance(x) && typeof x.userId === 'string')
+        ? p.filter(isPending).map((x) => ({ ...x, since: typeof x.since === 'string' ? x.since : x.acceptedAt }))
         : [];
+      const known = k as Partial<Known> | null;
+      const cached = typeof c === 'string' && VERSION.test(c) ? c : null;
       pendingRef.current = list;
       setPending(list);
-      setReady(true);
+      if (!heard.current) setServer(cached);
+      setStored({
+        known:
+          known && typeof known.userId === 'string' ? { userId: known.userId, version: known.version ?? null } : null,
+        current: cached,
+      });
     });
+    AsyncStorage.removeItem(OLD_DEVICE_KEY).catch(() => {});
     return () => {
       live = false;
     };
   }, []);
 
+  // What the server said about its version. Offline (null), the version kept on the phone stands; with
+  // no version on the server (an older database), this build's version is the current one.
+  const applyCurrent = useCallback((answer: string | 'none' | null) => {
+    if (answer === null) return;
+    heard.current = true;
+    setServer(answer === 'none' ? null : answer);
+    if (answer === 'none') AsyncStorage.removeItem(CURRENT_KEY).catch(() => {});
+    else writeJson(CURRENT_KEY, answer);
+  }, []);
+
+  const checkVersion = useCallback(() => fetchCurrent().then(applyCurrent), [applyCurrent]);
+
+  // Ask at start, waiting at most 3 seconds when the phone has never had an answer.
+  useEffect(() => {
+    let live = true;
+    const timer = setTimeout(() => setAskedOnce(true), 3000);
+    fetchCurrent().then((answer) => {
+      if (!live) return;
+      applyCurrent(answer);
+      setAskedOnce(true);
+    });
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [applyCurrent]);
+
   const savePending = useCallback((next: Pending[]) => {
     // A year's worth at most, newest last.
-    const cutoff = Date.now() - 366 * 86_400_000;
+    const cutoff = Date.now() - 366 * DAY_MS;
     const kept = next.filter((x) => Date.parse(x.acceptedAt) > cutoff).slice(-10);
     pendingRef.current = kept;
     setPending(kept);
     writeJson(PENDING_KEY, kept);
   }, []);
 
-  const saveDevice = useCallback((next: DeviceRecord) => {
-    setDevice(next);
-    writeJson(DEVICE_KEY, next);
-  }, []);
-
-  // Sends what waits for the signed-in account, one at a time.
+  // Sends what waits for the signed-in account, one at a time. True once nothing waits for them.
   const flush = useCallback(async () => {
     const me = (await supabase.auth.getSession()).data.session?.user.id;
-    if (!me || sending.current) return;
+    if (!me) return false;
+    if (sending.current) {
+      again.current = true;
+      return false;
+    }
     sending.current = true;
     try {
-      for (const record of pendingRef.current.filter((x) => x.userId === me)) {
-        const answer = await send(record);
-        if (answer.kind === 'later') break;
-        savePending(pendingRef.current.filter((x) => x !== record));
-        setRecorded({ userId: me, version: answer.version, at: answer.at });
+      for (;;) {
+        again.current = false;
+        for (const record of pendingRef.current.filter((x) => x.userId === me)) {
+          const answer = await send(record);
+          if (answer.kind === 'later') return false;
+          if (answer.kind === 'missing') {
+            // An older database: the phone's record stands, and is sent once the database has the Terms.
+            if (!record.olderDb) {
+              savePending(pendingRef.current.map((x) => (x === record ? { ...x, olderDb: true } : x)));
+            }
+            return false;
+          }
+          savePending(pendingRef.current.filter((x) => x !== record));
+          setRecorded({ userId: me, version: answer.version, at: answer.at });
+        }
+        if (!again.current) return true;
       }
     } finally {
       sending.current = false;
     }
   }, [savePending]);
 
-  // Signing in: the account takes this device's acceptance as theirs (as it is saved on the device),
-  // and it is recorded for them when the database doesn't have it yet.
+  // Signing in: send what waits for this account, and ask the server for its version again.
   useEffect(() => {
-    if (!ready || !userId) return;
-    let live = true;
-    (async () => {
-      const saved = await readJson(DEVICE_KEY);
-      if (!live) return;
-      if (isAcceptance(saved) && saved.version === TERMS_VERSION && !(saved as Partial<DeviceRecord>).claimedBy) {
-        const { version, acceptedAt, app: from, platform, checks } = saved;
-        saveDevice({ version, acceptedAt, app: from, platform, checks, claimedBy: userId });
-        const known = pendingRef.current.some((x) => x.userId === userId && x.version === version);
-        if (accountVersion !== TERMS_VERSION && !known) {
-          savePending([...pendingRef.current, { version, acceptedAt, app: from, platform, checks, userId }]);
-        }
-      }
-      await flush();
-    })();
-    return () => {
-      live = false;
-    };
-  }, [ready, userId, accountVersion, saveDevice, savePending, flush]);
+    if (!stored || !userId) return;
+    flush();
+    fetchCurrent().then(applyCurrent);
+  }, [stored, userId, flush, applyCurrent]);
 
-  // Try again each time the app comes back to the front.
+  // Try again, and measure the 24 hours again, each time the app comes back to the front.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') flush();
+      if (state !== 'active') return;
+      setNow(Date.now());
+      flush();
+      fetchCurrent().then(applyCurrent);
     });
     return () => sub.remove();
-  }, [flush]);
+  }, [flush, applyCurrent]);
 
+  // The account's version: what accept_terms just answered, else the profile, else (the profile
+  // couldn't load, for example offline) what the phone last knew. undefined: nobody says.
+  const profileLoaded = !!profile && profile.id === userId;
+  const profileVersion = profileLoaded ? profile.terms_version : undefined;
+  const knownVersion =
+    !profileLoaded && stored?.known && stored.known.userId === userId ? stored.known.version : undefined;
+  const accountVersion =
+    recorded && recorded.userId === userId
+      ? recorded.version
+      : profileVersion !== undefined
+        ? profileVersion
+        : knownVersion;
+
+  // Keep what the account has accepted on the phone, for a start without a connection.
+  useEffect(() => {
+    if (!userId || accountVersion === undefined) return;
+    writeJson(KNOWN_KEY, { userId, version: accountVersion });
+  }, [userId, accountVersion]);
+
+  const current = server ?? TERMS_VERSION;
+  const mine = useMemo(() => pending.filter((x) => x.userId === userId), [pending, userId]);
+
+  // When a 24-hour wait runs out, look again.
+  useEffect(() => {
+    const ends = mine
+      .filter((x) => !x.olderDb)
+      .map((x) => Date.parse(x.since) + DAY_MS)
+      .filter((t) => t > now);
+    if (!ends.length) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(Math.min(...ends) - now + 50, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  }, [mine, now]);
+
+  const ready = !!stored && (stored.current !== null || askedOnce);
   const signedIn = !!session;
-  const gated = useMemo(() => {
-    if (!ready) return false;
-    if (!userId) return device?.version !== TERMS_VERSION;
-    if (accountVersion === TERMS_VERSION) return false;
-    if (pending.some((x) => x.userId === userId && x.version === TERMS_VERSION)) return false;
-    if (device?.version === TERMS_VERSION && (device.claimedBy === null || device.claimedBy === userId)) return false;
-    return true;
-  }, [ready, userId, accountVersion, pending, device]);
+  const status = useMemo((): TermsStatus => {
+    if (!ready) return 'loading';
+    if (TERMS_VERSION < current) return 'update';
+    if (!userId) return 'out';
+    if (accountVersion && accountVersion >= current) return 'in';
+    const waiting = mine.some((x) => x.version >= current && (x.olderDb || now - Date.parse(x.since) < DAY_MS));
+    return waiting ? 'in' : 'accept';
+  }, [ready, current, userId, accountVersion, mine, now]);
 
   const accept = useCallback(
-    async (checks: TermsChecks) => {
-      if (!allTicked(checks)) return;
-      const acceptance: Acceptance = {
+    async (checks: TermsChecks): Promise<AcceptResult> => {
+      if (!allTicked(checks) || !userId) return 'stuck';
+      const at = new Date().toISOString();
+      const earlier = pendingRef.current.find((x) => x.userId === userId && x.version === TERMS_VERSION);
+      const record: Pending = {
+        userId,
         version: TERMS_VERSION,
-        acceptedAt: new Date().toISOString(),
+        acceptedAt: at,
+        since: earlier?.since ?? at,
         app,
         platform: platformName(),
         checks: { ...ALL_TICKED },
+        olderDb: earlier?.olderDb,
       };
-      if (!userId) {
-        saveDevice({ ...acceptance, claimedBy: null });
-        return;
-      }
-      saveDevice({ ...acceptance, claimedBy: userId });
-      savePending([
-        ...pendingRef.current.filter((x) => !(x.userId === userId && x.version === TERMS_VERSION)),
-        { ...acceptance, userId },
-      ]);
-      await flush();
+      savePending([...pendingRef.current.filter((x) => !(x.userId === userId && x.version === TERMS_VERSION)), record]);
+      const sent = await flush();
+      const time = Date.now();
+      setNow(time);
+      if (sent) return 'sent';
+      const still = pendingRef.current.find((x) => x.userId === userId && x.version === TERMS_VERSION);
+      return still && !still.olderDb && time - Date.parse(still.since) >= DAY_MS ? 'stuck' : 'waiting';
     },
-    [app, userId, saveDevice, savePending, flush],
+    [app, userId, savePending, flush],
   );
 
-  const signUpPayload = useCallback(
-    () => (device && device.version === TERMS_VERSION ? payloadOf(device) : null),
-    [device],
-  );
-
-  const claimForSignUp = useCallback(
-    (id: string) => {
-      if (!device || device.version !== TERMS_VERSION) return;
-      saveDevice({ ...device, claimedBy: id });
-      // Sent again when the new account first signs in: a database without the Terms yet didn't record it
-      // with the sign-up (accepting the same version again adds nothing).
-      const { version, acceptedAt, app: from, platform, checks } = device;
+  const rememberSignUp = useCallback(
+    (id: string, payload: TermsPayload) => {
+      if (!allTicked(payload.checks)) return;
       savePending([
-        ...pendingRef.current.filter((x) => !(x.userId === id && x.version === version)),
-        { version, acceptedAt, app: from, platform, checks, userId: id },
+        ...pendingRef.current.filter((x) => !(x.userId === id && x.version === payload.version)),
+        {
+          userId: id,
+          version: payload.version,
+          acceptedAt: payload.accepted_at,
+          since: payload.accepted_at,
+          app: payload.app,
+          platform: payload.platform,
+          checks: { ...ALL_TICKED },
+        },
       ]);
+      // Signed in straight away (no email to confirm): send it now.
+      flush();
     },
-    [device, saveDevice, savePending],
+    [savePending, flush],
   );
 
-  const accountAcceptedAt = profile && profile.id === userId ? (profile.terms_accepted_at ?? null) : null;
+  const accountAcceptedAt = profileLoaded ? (profile.terms_accepted_at ?? null) : null;
   const accepted = useMemo((): AcceptedInfo | null => {
-    if (userId) {
-      if (recorded && recorded.userId === userId)
-        return { version: recorded.version, at: new Date(recorded.at), recorded: true };
-      const waiting = pending.filter((x) => x.userId === userId).at(-1);
-      if (accountVersion && accountAcceptedAt && (!waiting || accountVersion >= waiting.version)) {
-        return { version: accountVersion, at: new Date(accountAcceptedAt), recorded: true };
-      }
-      if (waiting) return { version: waiting.version, at: new Date(waiting.acceptedAt), recorded: false };
-      if (device && device.claimedBy === userId)
-        return { version: device.version, at: new Date(device.acceptedAt), recorded: false };
-      return null;
+    if (!userId) return null;
+    if (recorded && recorded.userId === userId)
+      return { version: recorded.version, at: new Date(recorded.at), recorded: true };
+    const waiting = mine.at(-1);
+    if (accountVersion && accountAcceptedAt && (!waiting || accountVersion >= waiting.version)) {
+      return { version: accountVersion, at: new Date(accountAcceptedAt), recorded: true };
     }
-    return device ? { version: device.version, at: new Date(device.acceptedAt), recorded: false } : null;
-  }, [userId, recorded, pending, accountVersion, accountAcceptedAt, device]);
+    if (waiting) return { version: waiting.version, at: new Date(waiting.acceptedAt), recorded: false };
+    return null;
+  }, [userId, recorded, mine, accountVersion, accountAcceptedAt]);
 
   const value = useMemo(
     (): TermsState => ({
       app,
       appName: APP_NAMES[app],
       ready,
-      gated,
+      status,
+      current,
       signedIn,
       accepted,
-      needsFreshForSignUp: !userId && !!device && device.version === TERMS_VERSION && device.claimedBy !== null,
       accept,
-      signUpPayload,
-      claimForSignUp,
+      rememberSignUp,
+      checkVersion,
     }),
-    [app, ready, gated, userId, signedIn, accepted, device, accept, signUpPayload, claimForSignUp],
+    [app, ready, status, current, signedIn, accepted, accept, rememberSignUp, checkVersion],
   );
 
   return <TermsContext value={value}>{children}</TermsContext>;

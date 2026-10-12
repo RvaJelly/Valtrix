@@ -9,7 +9,7 @@ import { Button, ErrorText, TextField, TextLink } from '@/components/ui';
 import { plainError } from '@/lib/errors';
 import { emailRedirect } from '@/lib/links';
 import { supabase } from '@/lib/supabase';
-import { useTerms } from '@/lib/terms';
+import { SIGN_UP_TICKS_MS, termsPayload, useTerms, type TermsPayload } from '@/lib/terms';
 
 // iPhone's Mail opens on its inbox with message://. "mailto:" would start a blank new email instead,
 // and Android and the web have no link to an inbox, so there "Send it again" is the main button.
@@ -20,6 +20,9 @@ type Problem = { field: Where; text: string } | null;
 
 export default function SignUp() {
   const terms = useTerms();
+  // The Terms ticked on this screen: for this sign-up only, kept in memory, and good for 15 minutes.
+  const [ticks, setTicks] = useState<{ at: number; payload: TermsPayload } | null>(null);
+  const [tickAgain, setTickAgain] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,10 +38,14 @@ export default function SignUp() {
     if (!fullName.trim()) return setProblem({ field: 'name', text: 'Enter your name, as clients will see it.' });
     if (!email.trim()) return setProblem({ field: 'email', text: 'Enter your email.' });
     if (password.length < 8) return setProblem({ field: 'password', text: 'Use at least 8 characters.' });
-    // The Terms this device accepted go with the sign-up, and the database records them as it makes the
-    // account (handle_new_user).
-    const accepted = terms.signUpPayload();
-    if (!accepted) return setProblem({ field: 'form', text: 'Accept the Terms to create an account.' });
+    // The Terms ticked on this screen go with the sign-up, and the database records them as it makes the
+    // account (handle_new_user). Ticks older than 15 minutes are asked for again.
+    if (!ticks || Date.now() - ticks.at > SIGN_UP_TICKS_MS) {
+      setTicks(null);
+      setTickAgain(true);
+      return;
+    }
+    const accepted = ticks.payload;
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -50,7 +57,7 @@ export default function SignUp() {
       setProblem({ field: 'form', text: plainError(error) });
       return;
     }
-    if (data.user?.identities?.length) terms.claimForSignUp(data.user.id);
+    if (data.user?.identities?.length) terms.rememberSignUp(data.user.id, accepted);
     if (!data.session) {
       // Email confirmation is switched on for this project.
       setCheckEmail(true);
@@ -98,9 +105,19 @@ export default function SignUp() {
     );
   }
 
-  // This device's acceptance already went with another account: whoever signs up now accepts for
-  // themselves first.
-  if (terms.needsFreshForSignUp) return <TermsGate underHeader />;
+  // First the Terms, then the form: whoever signs up accepts for themselves, here and now.
+  if (!ticks) {
+    return (
+      <TermsGate
+        underHeader
+        notice={tickAgain ? 'It’s been more than 15 minutes, so please tick the boxes again.' : undefined}
+        onAccept={() => {
+          const at = new Date();
+          setTicks({ at: at.getTime(), payload: termsPayload(terms.app, at) });
+        }}
+      />
+    );
+  }
 
   const errorFor = (field: Where) => (problem?.field === field ? problem.text : undefined);
   const clear = (field: Where) => {
@@ -166,7 +183,7 @@ export default function SignUp() {
         onSubmitEditing={signUp}
         error={errorFor('password')}
       />
-      <TermsAcceptedLine />
+      <TermsAcceptedLine version={ticks.payload.version} />
       <ErrorText>{errorFor('form') ?? null}</ErrorText>
     </AuthPage>
   );

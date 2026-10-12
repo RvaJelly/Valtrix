@@ -6,24 +6,25 @@ import { LegalReader } from '@/components/legal/legal-reader';
 import { Text } from '@/components/ui';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { dayMonth } from '@/lib/format';
-import { useTerms } from '@/lib/terms';
+import { useTerms, versionDate } from '@/lib/terms';
 
 // '11 October 2026'.
 export function fullDate(d: Date) {
   return `${dayMonth(d)} ${d.getFullYear()}`;
 }
 
-// On the sign-up screen: the Terms this device accepted go with the new account, so instead of a
-// second set of ticks, one quiet line and a way to read them again. The same file in both apps.
-export function TermsAcceptedLine() {
-  const { accepted } = useTerms();
+// A date that never breaks across two lines.
+const keep = (date: string) => date.replace(/ /g, '\u00A0');
+
+// On the sign-up form, after its Terms screen: the ticks go with this sign-up, so one quiet line and a
+// way to read them again. The same file in both apps.
+export function TermsAcceptedLine({ version }: { version: string }) {
   const [open, setOpen] = useState(false);
-  if (!accepted) return null;
   return (
     <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-start' }} testID="terms-accepted-line">
       <Ionicons name="checkmark-circle-outline" size={16} color={Colors.textSecondary} style={{ marginTop: 1 }} />
       <Text variant="footnote" tone="secondary" style={{ flex: 1 }}>
-        You accepted the Terms on {fullDate(accepted.at)}.{' '}
+        You accepted the Terms, the version of {keep(versionDate(version))}.{' '}
         <Text
           tone="primary"
           accessibilityRole="link"
@@ -44,8 +45,8 @@ export function TermsAcceptedNote() {
   if (!accepted) return null;
   return (
     <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} testID="terms-accepted-note">
-      You accepted version {accepted.version} on {fullDate(accepted.at)}.
-      {accepted.recorded ? '' : ' It’s saved on this device and added to your account the next time you’re online.'}
+      You accepted the version of {keep(versionDate(accepted.version))} on {keep(fullDate(accepted.at))}.
+      {accepted.recorded ? '' : ' It’s saved on this phone and added to your account the next time you’re online.'}
     </Text>
   );
 }

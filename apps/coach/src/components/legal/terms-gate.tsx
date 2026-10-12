@@ -1,20 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ACCEPT_SCREEN, LEGAL_DOCS, TERMS_UPDATED } from '@/components/legal/legal-content';
+import { ACCEPT_SCREEN, LEGAL_DOCS, TERMS_VERSION } from '@/components/legal/legal-content';
 import { ImportantBox, Points } from '@/components/legal/legal-document';
 import { LegalReader, readerTitle, type ReaderDoc } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
 import { DeleteAccount } from '@/components/settings-parts';
 import { StickyFooter } from '@/components/sticky-footer';
-import { Button, Group, IconTile, ListRow, Section, Text, TextLink, type IconName } from '@/components/ui';
+import {
+  Button,
+  ErrorText,
+  Group,
+  IconTile,
+  ListRow,
+  Notice,
+  Section,
+  Text,
+  TextLink,
+  type IconName,
+} from '@/components/ui';
 import { VMark } from '@/components/v-mark';
 import { Colors, Fonts, Layout, Spacing, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { haptic } from '@/lib/haptics';
-import { fillApp, useTerms, type CheckId, type TermsChecks } from '@/lib/terms';
+import { fillApp, useTerms, versionDate, type CheckId, type TermsChecks } from '@/lib/terms';
 
 const DOC_ICONS: Record<ReaderDoc, IconName> = {
   terms: 'document-text-outline',
@@ -25,40 +37,93 @@ const DOC_ICONS: Record<ReaderDoc, IconName> = {
 
 const NONE: TermsChecks = { age: false, terms: false, health: false };
 
-// The screen everyone sees before anything else, in Voltrix and Voltrix Coach (the same file): what
-// matters most in a few lines, the terms that limit Voltrix's liability in a highlighted box (CPA s49),
-// every document in full one tap away, three ticks and one Agree button.
+// The screen everyone sees before they create an account, and after signing in while their account
+// hasn't accepted the current version, in Voltrix and Voltrix Coach (the same file): what matters most in
+// a few lines, the terms that limit Voltrix's liability in a highlighted box (CPA s49), every document in
+// full one tap away, three empty ticks and one Agree button.
 // - The health box can be ticked only once the Health and Safety Notice has been opened (one tap, no
-//   forced scrolling): until then, tapping it opens the Notice (CPA s49(5), s58).
+//   forced scrolling): until then, tapping it opens the Notice, and closing the Notice ticks it
+//   (CPA s49(5), s58).
 // - Someone signed in can leave from here: sign out, or delete their account (the same steps as Settings).
-// `underHeader`: inside the sign-up screen, under its see-through header and back arrow.
-export function TermsGate({ underHeader }: { underHeader?: boolean }) {
+// - `onAccept`: on the sign-up screen, the ticks go to that sign-up (kept in its memory) instead of an
+//   account. `notice`: a line under the heading, for example when they need ticking again (signed in, the
+//   screen writes its own when an acceptance made on this phone hasn't reached us within a day).
+// `underHeader`: inside the sign-up screen, under its see-through header and back arrow. While this screen
+// shows there, the header gets a solid bar in the page colour, so the long page never scrolls up behind
+// the arrow; the form after it has the see-through header again.
+export function TermsGate({
+  underHeader,
+  onAccept,
+  notice,
+}: {
+  underHeader?: boolean;
+  onAccept?: (checks: TermsChecks) => void;
+  notice?: string;
+}) {
   const terms = useTerms();
   const { signOut, session, profile } = useAuth();
   const [checks, setChecks] = useState<TermsChecks>(NONE);
   const [reading, setReading] = useState<ReaderDoc | null>(null);
-  // The Health and Safety Notice has been opened on this screen.
+  // The Health and Safety Notice has been opened on this screen, and whether the health box opened it.
   const [healthRead, setHealthRead] = useState(false);
+  const [fromHealthBox, setFromHealthBox] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [stuck, setStuck] = useState(false);
   const fill = (text: string) => fillApp(text, terms.appName);
   const ticked = ACCEPT_SCREEN.checks.filter((c) => checks[c.id]).length;
   const all = ticked === ACCEPT_SCREEN.checks.length && checks.age && checks.terms && checks.health;
+  const signedIn = terms.signedIn && !onAccept;
+  // Back because what this person accepted on this phone more than a day ago still hasn't reached us
+  // (an acceptance waiting on the phone counts for 24 hours): say so at the top, before they wonder why.
+  const overdue = signedIn && !!terms.accepted && !terms.accepted.recorded && terms.accepted.version >= terms.current;
+  const why =
+    notice ??
+    (overdue
+      ? `You agreed on this phone more than a day ago, but it hasn’t reached us yet. Connect to the internet, then tick the boxes and tap ${fill(ACCEPT_SCREEN.button)}.`
+      : undefined);
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (!underHeader) return;
+    navigation.setOptions({ headerBackground: SolidHeader });
+    return () => navigation.setOptions({ headerBackground: undefined });
+  }, [navigation, underHeader]);
 
   async function accept() {
-    if (!all) return;
+    if (!all || busy) return;
+    if (onAccept) {
+      haptic.success();
+      onAccept(checks);
+      return;
+    }
     setBusy(true);
-    haptic.success();
-    await terms.accept(checks);
+    setStuck(false);
+    const result = await terms.accept(checks);
     setBusy(false);
+    if (result === 'stuck') {
+      haptic.warning();
+      setStuck(true);
+    } else haptic.success();
   }
 
   const docs: { id: ReaderDoc; title: string }[] = [
     ...LEGAL_DOCS.map((d) => ({ id: d.id as ReaderDoc, title: d.title })),
     { id: 'privacy', title: readerTitle('privacy') },
   ];
-  const read = (doc: ReaderDoc) => {
-    if (doc === 'health') setHealthRead(true);
+  const read = (doc: ReaderDoc, fromBox = false) => {
+    if (doc === 'health') {
+      setHealthRead(true);
+      setFromHealthBox(fromBox);
+    }
     setReading(doc);
+  };
+  // Closing the Notice that the health box opened ticks the box: that tap was the person ticking it.
+  const closeReader = () => {
+    if (reading === 'health' && fromHealthBox) {
+      setChecks((now) => ({ ...now, health: true }));
+      setFromHealthBox(false);
+      haptic.select(true);
+    }
+    setReading(null);
   };
   // Each app deletes its own kind of account: a trainer's in Voltrix Coach, a client's in Voltrix.
   const ownAccount = profile?.role === (terms.app === 'coach' ? 'trainer' : 'client');
@@ -73,13 +138,19 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
         <Logo style={styles.logo} />
 
         <View style={styles.head}>
-          <Text variant="label" tone="secondary">
-            Version {TERMS_UPDATED}
+          <Text variant="label" tone="secondary" testID="terms-version">
+            Version {versionDate(TERMS_VERSION)}
           </Text>
           <Text variant="largeTitle" accessibilityRole="header">
             {fill(ACCEPT_SCREEN.title)}
           </Text>
           <Text tone="secondary">{fill(ACCEPT_SCREEN.lead)}</Text>
+          {/* Why the screen is back (for example, the ticks ran out): at the top, where it is seen first. */}
+          {why ? (
+            <View style={{ marginTop: Spacing.two }} testID="terms-notice">
+              <Notice tone="warning">{why}</Notice>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.list}>
@@ -126,17 +197,21 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
                   key={c.id}
                   id={c.id}
                   label={fill(c.label)}
-                  hint={first ? 'Tap to read the Notice first.' : undefined}
+                  hint={first ? 'Tap to read the Notice. Closing it ticks this box.' : undefined}
                   checked={checks[c.id]}
-                  onToggle={() => (first ? read('health') : setChecks((now) => ({ ...now, [c.id]: !now[c.id] })))}
+                  onToggle={() => (first ? read('health', true) : setChecks((now) => ({ ...now, [c.id]: !now[c.id] })))}
                   last={i === ACCEPT_SCREEN.checks.length - 1}
                 />
               );
             })}
           </Group>
+          {/* The decline note sits with the boxes, so the footer stays one short line. */}
+          <Text variant="footnote" tone="secondary" style={styles.decline} testID="terms-decline-note">
+            {fill(ACCEPT_SCREEN.declineNote)}
+          </Text>
         </Section>
 
-        {terms.signedIn ? (
+        {signedIn ? (
           <Section title="Your account">
             <View style={{ gap: Spacing.three }}>
               <TextLink lead="Not your account?" label="Sign out" onPress={signOut} />
@@ -153,6 +228,11 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
       </ScrollView>
 
       <StickyFooter>
+        {stuck ? (
+          <ErrorText testID="terms-stuck">
+            We still couldn’t send it. Check your connection, then tap {fill(ACCEPT_SCREEN.button)} again.
+          </ErrorText>
+        ) : null}
         <Button
           title={fill(ACCEPT_SCREEN.button)}
           onPress={accept}
@@ -163,16 +243,21 @@ export function TermsGate({ underHeader }: { underHeader?: boolean }) {
           }
           testID="terms-accept"
         />
-        <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} testID="terms-decline-note">
-          {all
-            ? fill(ACCEPT_SCREEN.declineNote)
-            : `${ticked} of ${ACCEPT_SCREEN.checks.length} ticked. ${fill(ACCEPT_SCREEN.declineNote)}`}
-        </Text>
+        {all ? null : (
+          <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} testID="terms-ticked">
+            {ticked} of {ACCEPT_SCREEN.checks.length} ticked
+          </Text>
+        )}
       </StickyFooter>
 
-      <LegalReader doc={reading} onClose={() => setReading(null)} />
+      <LegalReader doc={reading} onClose={closeReader} />
     </SafeAreaView>
   );
+}
+
+// The sign-up screen's header behind the back arrow while the Terms show (see `underHeader`).
+function SolidHeader() {
+  return <View style={styles.headerBar} />;
 }
 
 // A tick box and its words: the whole row is the target. Ticked is drawn in the text colour, like
@@ -237,6 +322,10 @@ const styles = themed(() => ({
     flex: 1,
     backgroundColor: Colors.background,
     overflow: 'hidden',
+  },
+  headerBar: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
   watermark: {
     position: 'absolute',
@@ -309,6 +398,10 @@ const styles = themed(() => ({
     justifyContent: 'center',
     paddingVertical: Spacing.three,
     paddingRight: Spacing.gutter,
+  },
+  decline: {
+    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.gutter,
   },
   hint: {
     flexDirection: 'row',

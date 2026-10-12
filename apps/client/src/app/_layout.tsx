@@ -28,7 +28,7 @@ function RootNavigator() {
     const timer = setTimeout(() => setFontsLate(true), 3000);
     return () => clearTimeout(timer);
   }, []);
-  const loading = authLoading || !ready || !terms.ready || !(fontsLoaded || fontError || fontsLate);
+  const loading = authLoading || !ready || terms.status === 'loading' || !(fontsLoaded || fontError || fontsLate);
 
   useEffect(() => {
     if (fontError) console.warn('Fonts failed to load', fontError);
@@ -42,8 +42,10 @@ function RootNavigator() {
 
   if (loading) return null;
 
-  // The Terms come first, before signing in and before the app (a new version asks again).
-  const gated = terms.gated;
+  // Welcome, sign-in and sign-up come first. A signed-in account that hasn't accepted the current Terms
+  // sees them before anything else, and a build older than the Terms asks to be updated.
+  const update = terms.status === 'update';
+  const gated = update || terms.status === 'accept';
   // Clients and trainers can both use Voltrix; trainers use the same login as in Voltrix Coach.
   const signedIn = !!session && !recovering;
   return (
@@ -55,7 +57,7 @@ function RootNavigator() {
       <Stack.Protected guard={gated}>
         <Stack.Screen name="terms" />
       </Stack.Protected>
-      <Stack.Protected guard={!gated && !session}>
+      <Stack.Protected guard={!update && !session}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
       <Stack.Protected guard={!gated && !!session && recovering}>

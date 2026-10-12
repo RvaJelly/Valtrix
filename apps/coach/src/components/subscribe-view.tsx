@@ -51,7 +51,9 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
       ? `Build your business, ${first}`
       : 'Build your business'
     : inTrial
-      ? `${trialLeft(daysLeft ?? TRIAL_DAYS)} in your trial`
+      ? (daysLeft ?? TRIAL_DAYS) <= 0
+        ? 'Last day of your trial'
+        : `${trialLeft(daysLeft ?? TRIAL_DAYS)} in your trial`
       : `Welcome back, ${first || 'coach'}`;
   const intro = starting
     ? 'Win clients, keep them and get paid.'

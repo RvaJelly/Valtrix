@@ -50,7 +50,8 @@ function planLabel(t: Trainer) {
     case 'trial':
       return `Trial, ${trialLeft(access.daysLeft).toLowerCase()}`;
     default:
-      // The trial only starts once a card is added, so no end date means it never started.
+      // A trial starts when the trainer taps Start my free trial (start_my_trial, no card needed), so no
+      // end date means it never started.
       if (t.subscription_expires_at) return 'Plan ended, not paying';
       return t.trial_ends_at ? 'Trial ended, not paying' : 'No trial yet';
   }

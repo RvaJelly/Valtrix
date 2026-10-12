@@ -318,7 +318,7 @@ export default function TrainerProfile() {
         ) : null}
 
         {isMe ? (
-          <Notice>This is how clients see you. Change it in Voltrix Coach under Settings, Profile.</Notice>
+          <Notice>This is how clients see you. Change it in Voltrix Coach under Settings › Profile.</Notice>
         ) : null}
 
         {trainer.specialties.length ? (

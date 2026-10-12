@@ -61,12 +61,12 @@ export function DeleteAccount() {
   );
 }
 
-// A quiet link under Sign out, for the screens before the app.
+// A quiet link under Sign out, for the screens before the app, in the Settings row's danger colour.
 export function DeleteAccountLink() {
   const { remove, busy, error } = useDeleteAccount();
   return (
     <View style={{ gap: Spacing.two }}>
-      <TextLink label={busy ? 'Deleting…' : 'Delete account'} onPress={remove} testID="delete-account" />
+      <TextLink label={busy ? 'Deleting…' : 'Delete account'} tone="danger" onPress={remove} testID="delete-account" />
       <ErrorText>{error}</ErrorText>
     </View>
   );

@@ -1,8 +1,8 @@
 import type { Href } from 'expo-router';
 import { View } from 'react-native';
 
-import { IconTile, ListRow, StatusPill } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { IconTile, ListRow, StatusDot, StatusPill } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
 import { shortDate, time24 } from '@/lib/format';
 import type { News } from '@/lib/news';
 import { updateIcon, updateLine } from '@/lib/update-words';
@@ -82,8 +82,8 @@ export function UpdateRow({
           </View>
         ) : undefined
       }
-      // Unseen shows as a small dot (the row's label says "New"), so the words keep the row's width.
-      trailing={fresh ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.text }} /> : null}
+      // Unseen shows as the shared status dot with its word.
+      trailing={fresh ? <StatusDot tone="neutral" label="New" /> : null}
       onPress={onPress}
       chevron={!!onPress}
       accessibilityLabel={`${fresh ? 'New: ' : ''}${title}${pill ? `, ${pill.toLowerCase()}` : ''}`}

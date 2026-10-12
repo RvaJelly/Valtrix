@@ -262,19 +262,21 @@ export function Button({
 }
 
 // A quiet text link under a form: an optional lead-in in the secondary colour ("New here?") and the
-// action in the text colour. Never as heavy as a button. With `end` it sits at the right edge, under
-// a field ("Forgot password?").
+// action in the text colour (`tone` danger for one that deletes, as the Settings row). Never as heavy
+// as a button. With `end` it sits at the right edge, under a field ("Forgot password?").
 export function TextLink({
   lead,
   label,
   onPress,
   end,
+  tone = 'primary',
   testID,
 }: {
   lead?: string;
   label: string;
   onPress: () => void;
   end?: boolean;
+  tone?: 'primary' | 'danger';
   testID?: string;
 }) {
   const { hovered, hover } = useHover();
@@ -290,7 +292,7 @@ export function TextLink({
         <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
           {lead ? `${lead} ` : null}
           <Text
-            tone="primary"
+            tone={tone}
             style={{
               fontFamily: lead ? Fonts.textSemi : Fonts.textMedium,
               textDecorationLine: pressed || hovered ? 'underline' : 'none',

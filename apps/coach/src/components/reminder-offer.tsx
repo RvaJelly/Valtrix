@@ -25,7 +25,7 @@ export function ReminderOffer() {
       toast(`Reminders on, ${before} before each session.`);
       refreshReminders();
     } else {
-      toast('Reminders stay off. Turn them on any time in Settings › Notifications.');
+      toast('Reminders stay off. Turn them on any time in Settings\u00a0›\u00a0Notifications.');
     }
   }
 

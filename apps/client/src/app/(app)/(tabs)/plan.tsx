@@ -37,7 +37,7 @@ import {
   type MyTimeRequest,
 } from '@/lib/booking';
 import { useChatEvents } from '@/lib/chat-live';
-import { ago, dayMonth, longDate, shortDate, timeRange } from '@/lib/format';
+import { ago, dayMonth, longDate, monthYear, shortDate, timeRange } from '@/lib/format';
 import {
   dateOf,
   daysLabel,
@@ -54,7 +54,7 @@ import {
   type PlanItem,
   type PlanProgram,
 } from '@/lib/plan';
-import { addDays, dayKey, endOf, formatDay, loadSessions, sameDay, type Session } from '@/lib/sessions';
+import { addDays, dayKey, endOf, loadSessions, sameDay, type Session } from '@/lib/sessions';
 import { loadTrainers, trainerTitle, type Trainer } from '@/lib/trainers';
 import { dayFromKey } from '@/lib/zones';
 
@@ -597,19 +597,20 @@ function Sessions({
   const [openSession, setOpenSession] = useState<string | null>(null);
   const [openRequest, setOpenRequest] = useState<string | null>(null);
   const now = new Date();
-  const upcoming = sessions.filter((s) => s.status === 'scheduled' && endOf(s) > now);
-  const shown =
-    when === 'upcoming' ? upcoming : sessions.filter((s) => endOf(s) <= now || s.status !== 'scheduled').reverse();
+  // Past is what has ended. A session cancelled before its time stays with the ones to come, struck
+  // through and saying who cancelled it, so a trainer's cancel is seen where the person looks.
+  const ahead = sessions.filter((s) => endOf(s) > now);
+  const shown = when === 'upcoming' ? ahead : sessions.filter((s) => endOf(s) <= now).reverse();
   // The trainer's name only matters when there are several.
   const manyTrainers = new Set(sessions.map((s) => s.client_id)).size > 1 || (trainers?.length ?? 0) > 1;
 
-  // Group by day, keeping the order.
-  const days: { key: string; date: Date; items: Session[] }[] = [];
+  // Group by month, keeping the order; each row carries its day.
+  const months: { key: string; date: Date; items: Session[] }[] = [];
   for (const s of shown) {
     const date = new Date(s.starts_at);
-    const key = dayKey(date);
-    if (days.at(-1)?.key !== key) days.push({ key, date, items: [] });
-    days.at(-1)!.items.push(s);
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    if (months.at(-1)?.key !== key) months.push({ key, date, items: [] });
+    months.at(-1)!.items.push(s);
   }
   const single = trainers?.length === 1 ? firstName(trainerTitle(trainers[0])) : null;
   // The only trainer paused this person's sessions: they can't book, so the empty state says so.
@@ -630,8 +631,9 @@ function Sessions({
       (r) => r.status === 'declined' && now.getTime() - Date.parse(r.answered_at ?? r.created_at) < 14 * 86_400_000,
     )
     .sort((a, b) => (a.starts_at < b.starts_at ? 1 : a.starts_at > b.starts_at ? -1 : 0));
-  // Nothing coming up and nothing waiting: the empty state holds the Book button instead of the card.
-  const empty = upcoming.length === 0 && waiting.length === 0;
+  // Nothing coming up and nothing waiting: the empty state holds the Book button instead of the card. A
+  // cancelled session still to come keeps the list (and the card), so it is seen at the top.
+  const empty = ahead.length === 0 && waiting.length === 0;
   const showCard = bookable.length > 0 && !(when === 'upcoming' && empty);
   const packs = booking.packs;
 
@@ -683,44 +685,43 @@ function Sessions({
           </Group>
         </Section>
       ) : null}
-      {days.length === 0 ? (
-        when === 'upcoming' ? (
-          waiting.length ? null : (
-            <EmptyState
-              icon="calendar-outline"
-              title="Nothing booked"
-              message={
-                paused
-                  ? `Your sessions with ${single} are paused. Sessions ${single} books for you show here.`
-                  : bookable.length
-                    ? `Sessions you book, or ${single ?? 'your trainer'} books for you, show here.`
-                    : `Sessions ${single ?? 'your trainer'} books for you show here.`
-              }
-              action={
-                bookable.length ? (
-                  <Button title="Book a session" size="medium" onPress={openBook} testID="plan-book" />
-                ) : (
-                  <TrainerAction trainers={trainers} />
-                )
-              }
-            />
-          )
-        ) : declined.length ? null : (
-          <EmptyState compact icon="time-outline" title="No past sessions" message="Finished sessions show up here." />
-        )
+      {when === 'upcoming' ? (
+        empty ? (
+          <EmptyState
+            icon="calendar-outline"
+            title="Nothing booked"
+            message={
+              paused
+                ? `Your sessions with ${single} are paused. Sessions ${single} books for you show here.`
+                : bookable.length
+                  ? `Sessions you book, or ${single ?? 'your trainer'} books for you, show here.`
+                  : `Sessions ${single ?? 'your trainer'} books for you show here.`
+            }
+            action={
+              bookable.length ? (
+                <Button title="Book a session" size="medium" onPress={openBook} testID="plan-book" />
+              ) : (
+                <TrainerAction trainers={trainers} />
+              )
+            }
+          />
+        ) : null
+      ) : months.length === 0 && !declined.length ? (
+        <EmptyState compact icon="time-outline" title="No past sessions" message="Finished sessions show up here." />
       ) : null}
-      {days.map((d) => (
-        <Section key={d.key} title={formatDay(d.date)}>
+      {months.map((m) => (
+        <Section key={m.key} title={monthYear(m.date)}>
           <Group>
-            {d.items.map((s, i) => (
+            {m.items.map((s, i) => (
               <SessionRow
                 key={s.id}
                 session={s}
                 variant="grouped"
+                showDay
                 showTrainer={manyTrainers}
                 muted={when === 'past'}
                 join={when === 'upcoming'}
-                last={i === d.items.length - 1}
+                last={i === m.items.length - 1}
                 onPress={() => setOpenSession(s.id)}
               />
             ))}
@@ -804,8 +805,9 @@ function Packs({ packs, many }: { packs: MyPack[]; many: boolean }) {
                   {details.charAt(0).toUpperCase() + details.slice(1)}
                 </Text>
                 {p.ended ? null : (
+                  // How much of the pack is used or booked, as the trainer's bar in Voltrix Coach shows it.
                   <ProgressBar
-                    progress={p.sessions_total ? p.sessions_left / p.sessions_total : 0}
+                    progress={p.sessions_total ? (p.sessions_total - p.sessions_left) / p.sessions_total : 0}
                     color={Colors.text}
                   />
                 )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { AuthPage } from '@/components/auth-page';
+import { DeleteAccountLink } from '@/components/delete-account';
 import { Button, Text, TextField, TextLink } from '@/components/ui';
 import { coachAccess, TRIAL_DAYS } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
@@ -48,6 +49,7 @@ export default function BusinessSetup() {
           ) : null}
           <Button title="Continue" onPress={createBusiness} loading={busy} />
           <TextLink label="Sign out" onPress={signOut} />
+          <DeleteAccountLink />
         </>
       }>
       <TextField

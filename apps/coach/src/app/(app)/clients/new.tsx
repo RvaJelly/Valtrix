@@ -26,10 +26,30 @@ export default function NewClient() {
           same &&
           !(await confirm(
             `You already have ${fullName(same)}`,
-            `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them again. Add anyway?`,
+            `${fullName(same)} has the email ${same.email} too. If this is the same person, there’s no need to add them again. Add anyway?`,
             'Add anyway',
           ))
         ) {
+          return null;
+        }
+        // Someone archived with this email: bring them back, with their history, rather than a second row.
+        const archived = same ? null : await clientWithEmail(input.email, undefined, true);
+        if (archived) {
+          const name = fullName(archived);
+          if (
+            !(await confirm(
+              `Restore ${name}?`,
+              `${name} is archived with the email ${archived.email}, with their sessions, money and history. Restore them to your client list? To add someone new, use another email.`,
+              `Restore ${archived.first_name}`,
+              false,
+            ))
+          ) {
+            return null;
+          }
+          const { error } = await supabase.from('clients').update({ status: 'active' }).eq('id', archived.id);
+          if (error) return addError(error);
+          haptic.success();
+          router.replace({ pathname: '/clients/[id]', params: { id: archived.id } });
           return null;
         }
         // trainer_id defaults to the signed-in trainer in the database.

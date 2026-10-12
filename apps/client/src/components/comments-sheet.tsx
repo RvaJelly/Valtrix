@@ -304,7 +304,7 @@ export function CommentsSheet({
     const name = authorName(comment);
     const sure = await confirm(
       `Block ${name}?`,
-      `You won't see each other's stories, reels or comments. ${name} won't be told. You can unblock them in Settings.`,
+      `You won’t see each other’s stories, reels or comments. ${name} won’t be told. You can unblock them in Settings.`,
       'Block',
     );
     if (!sure) return;

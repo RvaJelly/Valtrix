@@ -26,7 +26,6 @@ import {
   StatusPill,
   Text,
   TextLink,
-  Toggle,
   type StatusTone,
 } from '@/components/ui';
 import { Colors, Spacing, Tabular, themed } from '@/constants/theme';
@@ -68,10 +67,15 @@ const PILLS: Partial<Record<SessionStatus, StatusTone>> = {
   no_show: 'warning',
 };
 
-// The status control: three choices that always fit on a phone. A no-show is its own switch under it.
-const CHOICES: readonly { value: SessionStatus; label: string }[] = (
-  ['scheduled', 'completed', 'cancelled'] as const
-).map((value) => ({ value, label: SESSION_STATUS[value] }));
+// The status control, one choice for each status: Booked / Done / No-show / Cancelled. No-show shows
+// once the session has started, and never for the trainer's own time (no client to miss it).
+const CHOICES: readonly { value: SessionStatus; label: string; accessibilityLabel?: string }[] = (
+  ['scheduled', 'completed', 'no_show', 'cancelled'] as const
+).map((value) => ({
+  value,
+  label: SESSION_STATUS[value],
+  accessibilityLabel: value === 'no_show' ? 'No-show: client didn’t show' : undefined,
+}));
 
 function loadSession(id: string) {
   return supabase.from('sessions').select(SESSION_COLUMNS).eq('id', id).maybeSingle();
@@ -421,16 +425,18 @@ export default function SessionDetail() {
   const onApp = !!session.clients?.user_id;
   const joinable = canJoin(session, new Date().getTime());
   const place = session.online ? 'Video call' : session.location || 'No place set';
-  // Done and a no-show only make sense once the session has (nearly) started.
-  const canNoShow = markable || session.status === 'no_show';
-  const choices = CHOICES.map((c) => ({
+  // Done and a no-show only make sense once the session has (nearly) started, and a no-show only with a client.
+  const canNoShow = (markable && !!session.client_id) || session.status === 'no_show';
+  const choices = CHOICES.filter((c) => c.value !== 'no_show' || canNoShow).map((c) => ({
     ...c,
     disabled: c.value === 'completed' && !markable && session.status !== 'completed',
   }));
   const note =
     markable || session.status !== 'scheduled'
       ? markedNote(session, now)
-      : 'You can mark it done or as a no-show once it has started.';
+      : session.client_id
+        ? 'You can mark it done or as a no-show once it has started.'
+        : 'You can mark it done once it has started.';
   const currency = profile?.currency ?? 'ZAR';
   const showPrice = !!session.client_id || session.price_cents != null;
   const price = priceLabel(session.price_cents, session.currency ?? currency);
@@ -491,7 +497,7 @@ export default function SessionDetail() {
           </View>
           <Text
             variant="title"
-            numberOfLines={2}
+            numberOfLines={3}
             accessibilityRole="header"
             style={session.status === 'cancelled' ? styles.struck : undefined}>
             {name}
@@ -570,24 +576,6 @@ export default function SessionDetail() {
 
         <Section title="Status">
           <Segmented options={choices} value={session.status} onChange={setStatus} testID="session-status" />
-          {canNoShow ? (
-            <Group>
-              <ListRow
-                title="Client didn’t show"
-                leading={<IconTile icon="person-remove-outline" />}
-                trailing={
-                  <Toggle
-                    value={session.status === 'no_show'}
-                    // Off again means they did come: the session is done.
-                    onValueChange={(on) => setStatus(on ? 'no_show' : 'completed')}
-                    accessibilityLabel="Client didn’t show"
-                  />
-                }
-                compact
-                last
-              />
-            </Group>
-          ) : null}
           {cancelledBy || note ? (
             <Text variant="footnote" tone="secondary" testID="session-mark-note">
               {cancelledBy ?? note}
@@ -613,7 +601,22 @@ export default function SessionDetail() {
                 compact
               />
             ) : null,
-            showPrice ? (
+            showPrice && session.pack_id && session.status === 'cancelled' ? (
+              // A cancelled session gives its place back to the pack: nothing was used or charged.
+              <ListRow
+                key="price"
+                title="Price"
+                subtitle={`Place back on ${first}’s pack`}
+                leading={<IconTile icon="cash-outline" />}
+                trailing={
+                  <Text variant="callout" tone="secondary">
+                    Not charged
+                  </Text>
+                }
+                testID="session-price"
+                compact
+              />
+            ) : showPrice ? (
               <ListRow
                 key="price"
                 title="Price"
@@ -666,7 +669,7 @@ export default function SessionDetail() {
                 />
               )
             ) : null,
-            session.pack_id ? (
+            session.pack_id && session.status !== 'cancelled' ? (
               <ListRow
                 key="pack-payment"
                 title="Payment"
@@ -690,6 +693,7 @@ export default function SessionDetail() {
                 key="repeat"
                 title="Repeats"
                 subtitle={repeat ? `${repeat.start_time.slice(0, 5)} · ${repeatEnd(repeat)}` : undefined}
+                subtitleLines={2}
                 leading={<IconTile icon="repeat-outline" />}
                 trailing={
                   <Text variant="callout" tone="secondary">

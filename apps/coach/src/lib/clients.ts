@@ -81,11 +81,12 @@ export async function inviteAgain(clientId: string) {
   if (error) throw error;
 }
 
-// Another of the trainer's clients (not archived) with this email in any case, if there is
-// one, so the trainer isn't adding the same person twice. Null when it can't be checked.
-export async function clientWithEmail(email: string | null, exceptId?: string) {
+// Another of the trainer's clients (not archived, or with `archived` only archived ones) with this email in
+// any case, if there is one, so the trainer isn't adding the same person twice. Null when it can't be checked.
+export async function clientWithEmail(email: string | null, exceptId?: string, archived = false) {
   if (!email) return null;
-  const { data } = await supabase.from('clients').select('id, first_name, last_name, email').neq('status', 'archived');
+  const query = supabase.from('clients').select('id, first_name, last_name, email');
+  const { data } = await (archived ? query.eq('status', 'archived') : query.neq('status', 'archived'));
   const rows = (data ?? []) as Pick<Client, 'id' | 'first_name' | 'last_name' | 'email'>[];
   return rows.find((c) => c.id !== exceptId && c.email?.trim().toLowerCase() === email.trim().toLowerCase()) ?? null;
 }

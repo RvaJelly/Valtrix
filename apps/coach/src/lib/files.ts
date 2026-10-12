@@ -1,8 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
-// Removes every photo and video the person uploaded (profile photo, stories and
-// reels, workout videos, and their own progress photos if they also train in the Voltrix app),
-// before their account is deleted.
+// Removes every photo and video the person uploaded (profile photo, stories and reels, workout videos,
+// and progress photos taken in the Voltrix app with their Coach login), before their account is deleted.
 export async function removeAllMyFiles(userId: string) {
   for (const bucket of ['posts', 'avatars', 'workout-videos', 'progress-photos']) {
     // A list returns at most 1000 files, so keep going until the folder is empty.

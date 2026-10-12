@@ -84,13 +84,16 @@ function daysBetween(a: string, b: string) {
 // trainer's reply to each check-in. Read-only apart from the replies. Shown only for a client
 // who accepted the trainer. onUnsavedChange says whether a reply is typed but not sent.
 // `focusCheckIn` (from Needs you) brings that check-in into view and puts the cursor in its reply.
+// `onReplied` tells the page a reply was sent, so its "Check-in waiting" goes.
 export function ClientProgress({
   client,
   onUnsavedChange,
+  onReplied,
   focusCheckIn,
 }: {
   client: Pick<Client, 'id' | 'first_name' | 'user_id'>;
   onUnsavedChange?: (unsaved: boolean) => void;
+  onReplied?: () => void;
   focusCheckIn?: string;
 }) {
   const { settings } = useSettings();
@@ -127,6 +130,7 @@ export function ClientProgress({
           name={client.first_name}
           unit={settings.units}
           onUnsavedChange={onUnsavedChange}
+          onReplied={onReplied}
           focus={focusCheckIn}
         />
       ) : null}
@@ -362,12 +366,14 @@ function CheckIns({
   name,
   unit,
   onUnsavedChange,
+  onReplied,
   focus,
 }: {
   checkIns: ClientCheckIn[];
   name: string;
   unit: WeightUnit;
   onUnsavedChange?: (unsaved: boolean) => void;
+  onReplied?: () => void;
   focus?: string;
 }) {
   // A check-in further down than the first few opens the full list.
@@ -423,6 +429,7 @@ function CheckIns({
       setSaved((s) => ({ ...s, [ci.id]: { body: reply.body, at: reply.updated_at } }));
       setEditing((e) => ({ ...e, [ci.id]: false }));
       setDrafts((d) => ({ ...d, [ci.id]: '' }));
+      onReplied?.();
     } catch (e) {
       setErrors((errs) => ({
         ...errs,
@@ -434,7 +441,9 @@ function CheckIns({
 
   return (
     <View style={styles.part}>
-      <Text style={[styles.subhead, { marginTop: Spacing.one }]}>Check-ins</Text>
+      <Text variant="label" tone="secondary" accessibilityRole="header" style={{ marginTop: Spacing.one }}>
+        Check-ins
+      </Text>
       {(all ? checkIns : checkIns.slice(0, CHECK_INS_SHOWN)).map((ci) => {
         const reply = replyOf(ci);
         const open = !reply || editing[ci.id];

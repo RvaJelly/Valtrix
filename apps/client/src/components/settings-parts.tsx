@@ -23,16 +23,13 @@ import {
 import { ACCENTS, Colors, Layout, Spacing, themed, type AccentName } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { biometricName, confirmIdentity } from '@/lib/biometrics';
-import { removeMyChatPhotos } from '@/lib/chat';
 import { useChatEvents } from '@/lib/chat-live';
-import { confirm } from '@/lib/confirm';
 import { plainError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
 import { askPermission } from '@/lib/notify';
 import { pickProfilePhoto, removeProfilePhoto } from '@/lib/photo';
-import { loadBlocked, removeAllMyFiles, unblockPerson, type Blocked } from '@/lib/posts';
-import { removeProgressPhotoFiles } from '@/lib/progress';
-import { leadLabel, REMINDER_OPTIONS } from '@/lib/reminders';
+import { loadBlocked, unblockPerson, type Blocked } from '@/lib/posts';
+import { closeReminderOffer, leadLabel, refreshReminders, REMINDER_OPTIONS } from '@/lib/reminders';
 import { serial } from '@/lib/serial';
 import { useSettings, type Settings as SettingsValues } from '@/lib/settings';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +59,7 @@ function options<T extends string>(record: Record<T, string>) {
 // A settings page: one column of groups, room to breathe, the keyboard pushing it up.
 export function SettingsPage({ children }: PropsWithChildren) {
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
@@ -279,52 +276,6 @@ export function PasswordForm() {
   );
 }
 
-export function DeleteAccount({ userId, onDeleted }: { userId?: string; onDeleted: () => Promise<void> }) {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function remove() {
-    const sure = await confirm(
-      'Delete your account?',
-      'This permanently deletes your account, your workouts, progress photos and other progress, habits, stories, reels, photos and the messages you sent. It cannot be undone.',
-      'Delete account',
-    );
-    if (!sure) return;
-    setError(null);
-    setBusy(true);
-    // Progress photos are private files that nothing could find once the account is gone, so
-    // they must be removed first.
-    try {
-      if (userId) await removeProgressPhotoFiles(userId);
-    } catch {
-      setBusy(false);
-      return setError("Your progress photos couldn't be removed. Check your connection and try again.");
-    }
-    await removeMyChatPhotos().catch(() => {});
-    if (userId) await removeAllMyFiles(userId).catch(() => {});
-    const { error } = await supabase.rpc('delete_my_client_account');
-    setBusy(false);
-    if (error) return setError(plainError(error));
-    await onDeleted();
-  }
-
-  return (
-    <View style={{ gap: Spacing.two }}>
-      <ErrorText>{error}</ErrorText>
-      <Group>
-        <ListRow
-          title={busy ? 'Deleting…' : 'Delete account'}
-          titleTone="danger"
-          leading={<IconTile icon="trash-outline" color={Colors.danger} />}
-          chevron={false}
-          onPress={busy ? undefined : remove}
-          last
-        />
-      </Group>
-    </View>
-  );
-}
-
 // "Unlock with Face ID": a row with a switch, when the phone has one.
 export function BiometricRow() {
   const { settings } = useSettings();
@@ -371,7 +322,12 @@ export function ReminderPicker() {
   async function choose(key: string | null) {
     const minutes = Number(key ?? 0);
     save({ reminder: minutes });
-    setBlocked(minutes > 0 && !(await askPermission()));
+    if (minutes === 0) return setBlocked(false);
+    // Picking a time here is asking for reminders, so the phone's question comes now, and Home's card is done.
+    const granted = await askPermission();
+    setBlocked(!granted);
+    closeReminderOffer();
+    if (granted) refreshReminders();
   }
 
   return (

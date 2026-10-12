@@ -5,23 +5,12 @@ import { ScrollView, View } from 'react-native';
 import { Avatar } from '@/components/avatar';
 import { MarkPaidSheet } from '@/components/mark-paid-sheet';
 import { RowWithAction } from '@/components/row-action';
-import {
-  Button,
-  Card,
-  EmptyState,
-  Group,
-  Notice,
-  PageHeader,
-  Skeleton,
-  SkeletonRows,
-  Text,
-  useDelayed,
-} from '@/components/ui';
+import { Button, Card, EmptyState, Group, Notice, Skeleton, SkeletonRows, Text, useDelayed } from '@/components/ui';
 import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { fullName } from '@/lib/clients';
 import { formatMoney } from '@/lib/money';
-import { loadOverview, type ClientOverview } from '@/lib/overview';
+import { loadArchivedOwing, loadOverview, type ClientOverview } from '@/lib/overview';
 import { itemCount, owedWords } from '@/lib/paid';
 import { HOME_ZONE, zonedParts } from '@/lib/zones';
 
@@ -39,12 +28,13 @@ export default function WhoOwes() {
 
   const load = useCallback(() => {
     const n = ++loads.current;
-    return loadOverview(today).then(
-      (found) => {
+    // Archived clients who still owe stay here too, as in Earnings' "Owed to you now".
+    return Promise.all([loadOverview(today), loadArchivedOwing(today)]).then(
+      ([found, archived]) => {
         if (n !== loads.current) return;
         setFailed(false);
         setRows(
-          (found ?? [])
+          [...(found ?? []), ...archived]
             .filter((r) => r.owed_cents > 0 || r.owed_other)
             .sort((a, b) => ((a.owed_since ?? '9') < (b.owed_since ?? '9') ? -1 : 1)),
         );
@@ -71,9 +61,8 @@ export default function WhoOwes() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Who owes you', headerTitle: '' }} />
+      <Stack.Screen options={{ title: 'Who owes you' }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <PageHeader title="Who owes you" />
         {failed ? (
           <Notice tone="danger" action={{ label: 'Try again', onPress: retry, loading: retrying }}>
             {rows ? 'Couldn’t refresh who owes you.' : 'Who owes you couldn’t be loaded.'}
@@ -114,7 +103,7 @@ export default function WhoOwes() {
                       key={r.client_id}
                       title={name}
                       // Count first, as on the client's page; a count never breaks from its word.
-                      subtitle={owedWords(itemCount(r.owed_count), r.owed_since, r.owed_other)}
+                      subtitle={`${r.status === 'archived' ? 'Archived · ' : ''}${owedWords(itemCount(r.owed_count), r.owed_since, r.owed_other)}`}
                       subtitleLines={2}
                       leading={<Avatar name={name} size={40} />}
                       stacked

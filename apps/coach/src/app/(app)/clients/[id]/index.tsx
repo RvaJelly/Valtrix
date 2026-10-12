@@ -152,9 +152,10 @@ export default function ClientDetail() {
     const timer = setTimeout(load, 1000);
     return () => clearTimeout(timer);
   }, [news, load]);
+  // The client booked, cancelled, asked or saved their health form in Voltrix: news about this client.
   useChatEvents((event) => {
     if (
-      ((event.type === 'link' || event.type === 'progress') && event.client_id === id) ||
+      ((event.type === 'link' || event.type === 'progress' || event.type === 'news') && event.client_id === id) ||
       event.type === 'reconnected'
     )
       setNews((n) => n + 1);
@@ -186,8 +187,30 @@ export default function ClientDetail() {
     }
   }
 
+  // Says what archiving leaves behind (money owed, sessions still booked), so nothing is a surprise later.
   async function archive() {
-    if (await confirm('Archive client?', 'They will be hidden from your client list.', 'Archive')) {
+    const first = client?.first_name ?? 'This client';
+    const { count } = await supabase
+      .from('sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', id)
+      .eq('status', 'scheduled')
+      .gte('starts_at', new Date().toISOString());
+    const booked = count ?? 0;
+    const lines = [`${first} leaves your client list. Restore them any time from Archived, at the end of Clients.`];
+    if (row && row.owed_cents > 0) {
+      lines.push(
+        `${first} still owes ${formatMoney(row.owed_cents, profile?.currency ?? 'ZAR')}. That stays on Who owes you.`,
+      );
+    }
+    if (booked > 0) {
+      lines.push(
+        booked === 1
+          ? `${first} has 1\u00a0session booked. It stays in your calendar until you cancel it.`
+          : `${first} has ${booked}\u00a0sessions booked. They stay in your calendar until you cancel them.`,
+      );
+    }
+    if (await confirm(`Archive ${first}?`, lines.join('\n\n'), 'Archive')) {
       await setStatus('archived');
     }
   }
@@ -322,7 +345,7 @@ export default function ClientDetail() {
           <View style={styles.profile}>
             <Avatar name={name} size={96} />
             <View style={styles.names}>
-              <Text variant="largeTitle" numberOfLines={2} style={styles.center} accessibilityRole="header">
+              <Text variant="largeTitle" numberOfLines={3} style={styles.center} accessibilityRole="header">
                 {name}
               </Text>
               {client.goal ? (
@@ -395,7 +418,12 @@ export default function ClientDetail() {
               {sharing ? (
                 <>
                   <ClientTrainingLog client={client} />
-                  <ClientProgress client={client} onUnsavedChange={setReplyUnsaved} focusCheckIn={focusCheckIn} />
+                  <ClientProgress
+                    client={client}
+                    onUnsavedChange={setReplyUnsaved}
+                    onReplied={load}
+                    focusCheckIn={focusCheckIn}
+                  />
                   <ClientHabits client={client} />
                 </>
               ) : (
@@ -432,7 +460,7 @@ export default function ClientDetail() {
               same &&
               !(await confirm(
                 `You already have ${fullName(same)}`,
-                `${fullName(same)} has the email ${same.email} too. If this is the same person, there's no need to add them twice. Save anyway?`,
+                `${fullName(same)} has the email ${same.email} too. If this is the same person, there’s no need to add them twice. Save anyway?`,
                 'Save anyway',
               ))
             ) {

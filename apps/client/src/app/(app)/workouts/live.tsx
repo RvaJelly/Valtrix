@@ -654,7 +654,7 @@ export default function LiveWorkout() {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       {header}
       <ScrollView ref={scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {fromPhone ? (
@@ -747,7 +747,7 @@ export default function LiveWorkout() {
           {done} of {total} sets ticked · {soFar}
         </Body>
         <TextField
-          label="Note for your trainers (optional)"
+          label={`Note for ${workout.trainerName?.trim().split(' ')[0] || 'your trainer'} (optional)`}
           value={workout.note}
           onChangeText={(note) => setWorkout((w) => (w && w.finishedAt === null ? { ...w, note, touched: true } : w))}
           editable={!locked}

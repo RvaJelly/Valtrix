@@ -1,8 +1,8 @@
 import type { Href } from 'expo-router';
 import { View } from 'react-native';
 
-import { IconTile, ListRow, StatusDot, StatusPill } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { IconTile, ListRow, StatusPill } from '@/components/ui';
+import { Colors, Spacing } from '@/constants/theme';
 import { shortDate, time24 } from '@/lib/format';
 import type { News } from '@/lib/news';
 import { updateIcon, updateLine } from '@/lib/update-words';
@@ -45,7 +45,7 @@ export function doctorUpdates(list: News[], health: Map<string, string | null>):
   return ids;
 }
 
-// One update, as on Home and the Updates page. `fresh` marks it unseen with a "New" dot; `doctor` adds
+// One update, as on Home and the Updates page. `fresh` marks it unseen with a dot; `doctor` adds
 // the "Check with a doctor" pill to a health update (see doctorUpdates).
 export function UpdateRow({
   news,
@@ -71,7 +71,8 @@ export function UpdateRow({
   return (
     <ListRow
       title={title}
-      titleLines={2}
+      // A long name ("Annelië-Christabel asked for Thu 15 Oct, 17:30") still shows the time.
+      titleLines={3}
       leading={<IconTile icon={updateIcon(news.kind)} />}
       // The pill sits under the words, so the line itself never has to shorten for it.
       subtitle={
@@ -81,7 +82,8 @@ export function UpdateRow({
           </View>
         ) : undefined
       }
-      status={fresh ? <StatusDot tone="neutral" label="New" /> : null}
+      // Unseen shows as a small dot (the row's label says "New"), so the words keep the row's width.
+      trailing={fresh ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.text }} /> : null}
       onPress={onPress}
       chevron={!!onPress}
       accessibilityLabel={`${fresh ? 'New: ' : ''}${title}${pill ? `, ${pill.toLowerCase()}` : ''}`}

@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppStatusLabel } from '@/components/app-status';
 import { Avatar } from '@/components/avatar';
+import { RowWithAction } from '@/components/row-action';
+import { useToast } from '@/components/toast';
 import {
   Button,
   EmptyState,
@@ -14,6 +16,7 @@ import {
   Notice,
   PageHeader,
   SearchField,
+  Section,
   SkeletonRows,
   StatusPill,
   Text,
@@ -23,30 +26,44 @@ import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { APP_STATUS_LABELS, CLIENT_COLUMNS, fullName, shownStatusOf, STATUS_LABELS, type Client } from '@/lib/clients';
 import { plainError } from '@/lib/errors';
+import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 
 const addClient = () => router.push('/clients/new');
 
 export default function Clients() {
-  const [clients, setClients] = useState<Client[] | null>(null);
+  const toast = useToast();
+  const [all, setAll] = useState<Client[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  // The archived clients, at the end of the list, open on demand (a search shows the ones it finds).
+  const [showArchived, setShowArchived] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
   const showSkeleton = useDelayed(300);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('clients')
-      .select(CLIENT_COLUMNS)
-      .neq('status', 'archived')
-      .order('first_name');
+    const { data, error } = await supabase.from('clients').select(CLIENT_COLUMNS).order('first_name');
     if (error) {
       setError(plainError(error));
     } else {
       setError(null);
-      setClients(data as Client[]);
+      setAll(data as Client[]);
     }
   }, []);
+
+  const clients = useMemo(() => all?.filter((c) => c.status !== 'archived') ?? null, [all]);
+  const archived = useMemo(() => all?.filter((c) => c.status === 'archived') ?? [], [all]);
+
+  async function restore(client: Client) {
+    setRestoring(client.id);
+    const { error } = await supabase.from('clients').update({ status: 'active' }).eq('id', client.id);
+    setRestoring(null);
+    if (error) return toast(plainError(error));
+    haptic.success();
+    toast(`${client.first_name} is back`);
+    load();
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -66,15 +83,14 @@ export default function Clients() {
     setRefreshing(false);
   }
 
-  const visible = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!clients || !term) return clients;
-    return clients.filter((c) => `${fullName(c)} ${c.email ?? ''}`.toLowerCase().includes(term));
-  }, [clients, search]);
+  const term = search.trim().toLowerCase();
+  const matches = useCallback((c: Client) => `${fullName(c)} ${c.email ?? ''}`.toLowerCase().includes(term), [term]);
+  const visible = useMemo(() => (!clients || !term ? clients : clients.filter(matches)), [clients, term, matches]);
+  const archivedShown = term ? archived.filter(matches) : showArchived ? archived : [];
 
   const add = <IconButton variant="tonal" icon="add" label="Add client" onPress={addClient} />;
 
-  if (clients && clients.length === 0) {
+  if (clients && clients.length === 0 && archived.length === 0) {
     return (
       <SafeAreaView style={styles.screen} edges={['top']}>
         <ScrollView contentContainerStyle={styles.list}>
@@ -116,10 +132,59 @@ export default function Clients() {
           </View>
         }
         ListEmptyComponent={
-          clients && search.trim() ? (
+          clients && (term ? !archivedShown.length : !clients.length) ? (
             <Text variant="footnote" tone="secondary" style={{ textAlign: 'center', marginTop: Spacing.four }}>
-              No clients match “{search.trim()}”.
+              {term
+                ? `No clients match “${search.trim()}”.`
+                : 'No clients on your list. Add one, or restore someone below.'}
             </Text>
+          ) : null
+        }
+        ListFooterComponent={
+          archived.length ? (
+            <Section
+              title={term ? 'Archived' : `Archived (${archived.length})`}
+              action={
+                term
+                  ? undefined
+                  : {
+                      label: showArchived ? 'Hide' : 'Show',
+                      onPress: () => setShowArchived((v) => !v),
+                      accessibilityLabel: showArchived
+                        ? 'Hide archived clients'
+                        : `Show ${archived.length} archived ${archived.length === 1 ? 'client' : 'clients'}`,
+                      testID: 'clients-archived',
+                    }
+              }
+              style={styles.archived}>
+              {archivedShown.length ? (
+                <View testID="clients-archived-list">
+                  {archivedShown.map((item, index) => (
+                    <View key={item.id} style={groupedItem(index, archivedShown.length)}>
+                      <RowWithAction
+                        title={fullName(item)}
+                        subtitle={item.goal || 'Archived'}
+                        leading={<Avatar name={fullName(item)} size={44} />}
+                        action={
+                          <Button
+                            title="Restore"
+                            variant="secondary"
+                            size="small"
+                            loading={restoring === item.id}
+                            onPress={() => restore(item)}
+                            accessibilityLabel={`Restore ${fullName(item)}`}
+                            testID={`restore-${item.id}`}
+                          />
+                        }
+                        onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.id } })}
+                        accessibilityLabel={`${fullName(item)}, archived`}
+                        last={index === archivedShown.length - 1}
+                      />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </Section>
           ) : null
         }
         renderItem={({ item, index }) => {
@@ -176,5 +241,8 @@ const styles = themed(() => ({
   },
   search: {
     marginTop: Spacing.two,
+  },
+  archived: {
+    marginTop: Spacing.section,
   },
 }));

@@ -25,7 +25,7 @@ import { Colors, Layout, Spacing, Tabular, themed } from '@/constants/theme';
 import { useChatEvents } from '@/lib/chat-live';
 import { plainError } from '@/lib/errors';
 import { haptic } from '@/lib/haptics';
-import { longDate, monthYear, time24, timeRange, weekdayShort } from '@/lib/format';
+import { dayMonth, dayMonthShort, longDate, time24, timeRange, weekdayShort } from '@/lib/format';
 import { refreshReminders } from '@/lib/reminders';
 import { topUpRepeats } from '@/lib/repeats';
 import { loadRequests, type TimeRequest } from '@/lib/requests';
@@ -166,7 +166,13 @@ export default function CalendarScreen() {
   const noShows = (sessions ?? []).filter((s) => s.status === 'no_show').length;
   // This week's sessions that have ended and are still Booked.
   const unmarked = (sessions ?? []).filter((s) => toMark(s, now));
-  const monthLabel = monthYear(selected);
+  // The week shown, so the count under it reads as the week's: "12–18 October", "26 Oct – 1 Nov".
+  const [first, last] = [days[0], days[6]];
+  const weekLabel =
+    (first.getMonth() === last.getMonth()
+      ? `${first.getDate()}–${dayMonth(last)}`
+      : `${dayMonthShort(first)} – ${dayMonthShort(last)}`) +
+    (last.getFullYear() === today.getFullYear() ? '' : ` ${last.getFullYear()}`);
   const isToday = sameDay(selected, today);
 
   return (
@@ -181,8 +187,8 @@ export default function CalendarScreen() {
           <View style={styles.monthRow}>
             <IconButton icon="chevron-back" label="Previous week" onPress={() => setSelected(addDays(selected, -7))} />
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text variant="headline" numberOfLines={1}>
-                {monthLabel}
+              <Text variant="headline" numberOfLines={1} accessibilityLabel={`Week of ${longDate(first)}`}>
+                {weekLabel}
               </Text>
               <Text variant="footnote" tone="secondary" numberOfLines={1}>
                 {sessions

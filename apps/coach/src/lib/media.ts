@@ -25,10 +25,10 @@ const MAX_BYTES = 50 * 1024 * 1024;
 // passes 50 MB after about half a minute.
 export const REEL_LENGTH_HINT =
   Platform.OS === 'android'
-    ? 'Reels are short videos, about 30 seconds.'
+    ? 'Reels are short videos, about 30\u00a0seconds.'
     : Platform.OS === 'ios'
-      ? `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds.`
-      : `Reels are videos up to ${MAX_VIDEO_SECONDS} seconds and 50 MB.`;
+      ? `Reels are videos up to ${MAX_VIDEO_SECONDS}\u00a0seconds.`
+      : `Reels are videos up to ${MAX_VIDEO_SECONDS}\u00a0seconds and 50\u00a0MB.`;
 // Photos are shrunk to this width, which is what Instagram uses too.
 const PHOTO_WIDTH = 1080;
 
@@ -105,7 +105,7 @@ async function prepareVideo(asset: ImagePicker.ImagePickerAsset): Promise<Picked
   const length = asset.duration ? (Platform.OS === 'web' ? asset.duration : asset.duration / 1000) : null;
   const seconds = length ? Math.round(length * 100) / 100 : null;
   if (seconds && seconds > MAX_VIDEO_SECONDS + 0.5) {
-    throw new MediaError(`Videos can be up to ${MAX_VIDEO_SECONDS} seconds. This one is ${Math.round(seconds)}.`);
+    throw new MediaError(`Videos can be up to ${MAX_VIDEO_SECONDS}\u00a0seconds. This one is ${Math.round(seconds)}.`);
   }
   const mimeType = asset.mimeType && asset.mimeType in VIDEO_TYPES ? asset.mimeType : guessVideoType(asset);
   if (!mimeType) throw new MediaError('Please use an MP4 or MOV video, so it plays on every phone.');
@@ -128,8 +128,8 @@ async function prepareVideo(asset: ImagePicker.ImagePickerAsset): Promise<Picked
 function tooBig() {
   return new MediaError(
     Platform.OS === 'android'
-      ? 'This video is too big to share (over 50 MB). Try a shorter clip, about 30 seconds.'
-      : 'This video is too big to share (over 50 MB). Try a shorter clip.',
+      ? 'This video is too big to share (over 50\u00a0MB). Try a shorter clip, about 30\u00a0seconds.'
+      : 'This video is too big to share (over 50\u00a0MB). Try a shorter clip.',
   );
 }
 

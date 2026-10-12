@@ -23,7 +23,6 @@ import {
   Section,
   SkeletonRows,
   StatStrip,
-  StatusDot,
   StatusPill,
   Text,
   Toggle,
@@ -35,6 +34,7 @@ import { dayMonth, longDate, monthYear, time24, timeRange, weekdayLong } from '@
 import { formatMoney, priceFor, spokenMoney } from '@/lib/money';
 import { waitedFor } from '@/lib/needs-you';
 import type { ClientOverview as OverviewRow } from '@/lib/overview';
+import { loadClientCheckIns } from '@/lib/progress';
 import { daysBetween, mondayOf, programWeek } from '@/lib/plan-dates';
 import { addDays, dayKey, endOf, fromDayKey, SESSION_COLUMNS, toMark, type Session } from '@/lib/sessions';
 import { supabase } from '@/lib/supabase';
@@ -97,6 +97,8 @@ export function ClientOverview({
   const now = new Date();
   const today = dayKey(now);
   const archived = client.status === 'archived';
+  // The database refuses a paused client's bookings, so the page never says they can book.
+  const paused = client.status === 'paused';
 
   const loadSessions = useCallback(() => {
     const id = ++loads.current;
@@ -145,6 +147,21 @@ export function ClientOverview({
     loadSessions();
   }, [loadSessions, reloads]);
 
+  // When the newest check-in was sent: "Last check-in" counts days like "Last workout", not weeks.
+  const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
+  const checkInWeek = row?.last_check_in_week ?? null;
+  useEffect(() => {
+    if (!checkInWeek || !linked) return;
+    let live = true;
+    loadClientCheckIns(client.id, 1).then(
+      (found) => live && setCheckedInAt(found[0]?.created_at || null),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [client.id, checkInWeek, linked, reloads]);
+
   useEffect(() => {
     let live = true;
     loadRules().then(
@@ -173,7 +190,7 @@ export function ClientOverview({
   const number = waNumber(client.phone, country);
   const nextSession = sessions?.next[0];
   const toMarkCount = sessions?.open.length ?? row?.open_sessions ?? 0;
-  const listed = sessions ? [...[...sessions.next].reverse(), ...sessions.past] : [];
+  const listed = sessions ? [...sessions.next, ...sessions.past] : [];
 
   const stats = linked
     ? [
@@ -196,7 +213,7 @@ export function ClientOverview({
           onPress: () => onTab('plan'),
         },
         {
-          ...lastCheckIn(row?.last_check_in_week ?? null, today),
+          ...lastCheckIn(checkInWeek, checkedInAt, today),
           label: 'Last check-in',
           onPress: () => onTab('progress'),
         },
@@ -233,7 +250,7 @@ export function ClientOverview({
   // ---------- Money: what's owed and the pack ----------
   const owed = row?.owed_cents ?? 0;
   const owedLine = row ? owedWords(itemCount(row.owed_count), row.owed_since, row.owed_other) : '';
-  const packEnds = row?.pack_expires_on ? `Ends ${dayMonth(dayFromKey(row.pack_expires_on))}` : 'No end';
+  const packEnds = row?.pack_expires_on ? `Ends ${dayMonth(dayFromKey(row.pack_expires_on))}` : 'No end date';
   const sellButton = !archived ? (
     <Button
       title="Sell a pack"
@@ -265,13 +282,7 @@ export function ClientOverview({
               compact
             />
           ) : (
-            <ListRow
-              title="Paid up"
-              leading={<IconTile icon="checkmark-circle-outline" />}
-              status={<StatusDot tone="success" label="Nothing owed" />}
-              onPress={toMoney}
-              compact
-            />
+            <ListRow title="Paid up" leading={<IconTile icon="checkmark-circle-outline" />} onPress={toMoney} compact />
           )}
           {row?.pack_id && row.pack_left > 0 ? (
             <ListRow
@@ -463,11 +474,23 @@ export function ClientOverview({
               <SkeletonRows count={3} />
             </Group>
           ) : listed.length ? (
-            <Group>
-              {listed.map((s, i) => (
-                <SessionRow key={s.id} session={s} variant="grouped" showDay price last={i === listed.length - 1} />
-              ))}
-            </Group>
+            // Coming up (soonest first), then the latest ones (newest first), each its own group.
+            [sessions.next, sessions.past]
+              .filter((part) => part.length)
+              .map((part, p, all) => (
+                <View key={p} style={{ gap: Spacing.two }}>
+                  {all.length > 1 ? (
+                    <Text variant="footnote" tone="secondary" accessibilityRole="header">
+                      {part === sessions.next ? 'Coming up' : 'Recent'}
+                    </Text>
+                  ) : null}
+                  <Group>
+                    {part.map((s, i) => (
+                      <SessionRow key={s.id} session={s} variant="grouped" showDay price last={i === part.length - 1} />
+                    ))}
+                  </Group>
+                </View>
+              ))
           ) : null}
         </Section>
       )}
@@ -523,16 +546,19 @@ export function ClientOverview({
             <ListRow
               title="Books in Voltrix"
               subtitle={
-                booksInApp
-                  ? `${first} can book your open times in Voltrix.`
-                  : `${first} can’t book in Voltrix. You book for them.`
+                paused
+                  ? `Paused clients can’t book. Unpause ${first} to let them book.`
+                  : booksInApp
+                    ? `${first} can book your open times in Voltrix.`
+                    : `${first} can’t book in Voltrix. You book for them.`
               }
               subtitleLines={2}
               leading={<IconTile icon="calendar-number-outline" />}
               trailing={
                 <Toggle
                   accessibilityLabel="Books in Voltrix"
-                  value={booksInApp}
+                  value={booksInApp && !paused}
+                  disabled={paused}
                   onValueChange={switchSelfBooking}
                   testID="overview-self-booking"
                 />
@@ -665,16 +691,23 @@ function lastWorkout(day: string | null, today: string) {
   const days = Math.max(0, daysBetween(day, today));
   if (days === 0) return { value: 'Today', spoken: 'Last workout today' };
   if (days === 1) return { value: 'Yesterday', spoken: 'Last workout yesterday' };
-  return { value: `${days} days`, spoken: `Last workout ${days} days ago` };
+  return { value: `${days}\u00a0days`, spoken: `Last workout ${days} days ago` };
 }
 
-// When they last checked in, in Monday weeks: "This week", "Last week", "3 weeks".
-function lastCheckIn(week: string | null, today: string) {
+// When they last checked in: "Today", "Yesterday", "4 days", as Last workout. Until the check-in's own
+// time has loaded, the week it is for: "This week", "Last week", "3 weeks".
+function lastCheckIn(week: string | null, sentAt: string | null, today: string) {
   if (!week) return { value: 'None yet', spoken: 'No check-in yet' };
+  if (sentAt) {
+    const days = Math.max(0, daysBetween(dayKey(new Date(sentAt)), today));
+    if (days === 0) return { value: 'Today', spoken: 'Last check-in today' };
+    if (days === 1) return { value: 'Yesterday', spoken: 'Last check-in yesterday' };
+    return { value: `${days}\u00a0days`, spoken: `Last check-in ${days} days ago` };
+  }
   const weeks = Math.max(0, Math.round(daysBetween(week, mondayOf(today)) / 7));
   if (weeks === 0) return { value: 'This week', spoken: 'Checked in this week' };
   if (weeks === 1) return { value: 'Last week', spoken: 'Last checked in last week' };
-  return { value: `${weeks} weeks`, spoken: `Last check-in ${weeks} weeks ago` };
+  return { value: `${weeks}\u00a0weeks`, spoken: `Last check-in ${weeks} weeks ago` };
 }
 
 function planTitle(row: OverviewRow, today: string) {

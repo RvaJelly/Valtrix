@@ -48,6 +48,15 @@ export type IconName = ComponentProps<typeof Ionicons>['name'];
 // The selected segment's pill sits this far inside the track.
 const SEGMENT_INSET = 3;
 
+// The font size that keeps a short label (a switch choice, a shortcut) whole on one line in `width`,
+// from `base` down to three quarters of it. The phone's text size scales it again, so it counts too.
+// Inter's letters average a little under 0.6 of the size; 0.62 leaves room for wide ones (W, M).
+export function fitFont(label: string, width: number, base: number, fontScale: number) {
+  if (width <= 0 || !label) return base;
+  const fits = width / (label.length * 0.62 * Math.max(1, fontScale));
+  return Math.max(Math.round(base * 0.75), Math.min(base, Math.floor(fits * 2) / 2));
+}
+
 // Pointer cursor and hover states only mean something in a browser.
 const WEB = Platform.OS === 'web';
 const pointer: ViewStyle = WEB ? { cursor: 'pointer' } : {};
@@ -497,6 +506,8 @@ export function segmentOn(): ViewStyle {
 
 // Two to four choices in one row: Workouts / Sessions, Navy / Light / Auto. The raised pill slides
 // to the new choice (instantly with reduced motion). A value that is none of the options shows no pill.
+// Labels stay on one line, a little smaller when they need to; four choices with large text sit two
+// to a row, so no word ever breaks.
 export function Segmented<T extends string>({
   options,
   value,
@@ -504,16 +515,16 @@ export function Segmented<T extends string>({
   testID,
   style,
 }: {
-  // A disabled option shows in a fainter colour and can't be chosen.
-  options: readonly { value: T; label: string; disabled?: boolean }[];
+  // A disabled option shows in a fainter colour and can't be chosen. `accessibilityLabel` says more than the label.
+  options: readonly { value: T; label: string; disabled?: boolean; accessibilityLabel?: string }[];
   value: T;
   onChange: (value: T) => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const reduceMotion = useReducedMotion();
-  // With large text a label may take two lines rather than being cut.
-  const large = useWindowDimensions().fontScale > 1.15;
+  const { fontScale } = useWindowDimensions();
+  const grid = fontScale > 1.15 && options.length >= 4;
   const found = options.findIndex((o) => o.value === value);
   const index = Math.max(0, found);
   const [width, setWidth] = useState(0);
@@ -522,16 +533,19 @@ export function Segmented<T extends string>({
     if (reduceMotion) position.setValue(index);
     else Animated.spring(position, { toValue: index, ...Spring.move, useNativeDriver: NATIVE_DRIVER }).start();
   }, [index, position, reduceMotion]);
-  // Until the row has been measured the selected segment draws its own pill.
-  const segment = width > 0 ? (width - 2 * SEGMENT_INSET) / options.length : 0;
+  // Until the row has been measured the selected segment draws its own pill (and always in a grid).
+  const segment = width > 0 ? (width - 2 * SEGMENT_INSET) / (grid ? 2 : options.length) : 0;
   const last = Math.max(1, options.length - 1);
+  // One size for every label, the one the longest fits at.
+  const longest = options.reduce((a, o) => (o.label.length > a.length ? o.label : a), '');
+  const size = fitFont(longest, segment - 2 * Spacing.two, Type.callout.fontSize ?? 15, fontScale);
   return (
     <View
-      style={[styles.segmented, style]}
+      style={[styles.segmented, grid && styles.segmentedGrid, style]}
       accessibilityRole="tablist"
       testID={testID}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      {segment > 0 && found >= 0 ? (
+      {segment > 0 && found >= 0 && !grid ? (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -553,6 +567,7 @@ export function Segmented<T extends string>({
             key={o.value}
             testID={testID ? `${testID}-${o.value}` : undefined}
             accessibilityRole="tab"
+            accessibilityLabel={o.accessibilityLabel}
             accessibilityState={{ selected, disabled: !!o.disabled }}
             disabled={o.disabled}
             onPress={() => {
@@ -560,12 +575,24 @@ export function Segmented<T extends string>({
               haptic.select();
               onChange(o.value);
             }}
-            style={[styles.segment, !o.disabled && pointer, selected && segment === 0 && segmentOn()]}>
+            style={[
+              styles.segment,
+              grid && styles.segmentInGrid,
+              !o.disabled && pointer,
+              selected && (grid || segment === 0) && segmentOn(),
+            ]}>
             <Text
               variant="callout"
               tone={selected ? 'primary' : o.disabled ? 'tertiary' : 'secondary'}
-              style={{ fontFamily: Fonts.textSemi, textAlign: 'center' }}
-              numberOfLines={large ? 2 : 1}>
+              style={{
+                fontFamily: Fonts.textSemi,
+                textAlign: 'center',
+                fontSize: size,
+                lineHeight: Math.round(size * 1.4),
+              }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}>
               {o.label}
             </Text>
           </Pressable>
@@ -823,6 +850,7 @@ type ListRowProps = {
   last?: boolean;
   compact?: boolean;
   titleTone?: Tone;
+  // Lines the title may take; 0 lets it wrap in full (a medical question must never be cut).
   titleLines?: number;
   titleStyle?: StyleProp<TextStyle>;
   // Lines a string subtitle may take (one by default, two with large text).
@@ -865,7 +893,7 @@ export function ListRow({
           <Text
             variant="rowTitle"
             tone={titleTone}
-            numberOfLines={large ? Math.max(titleLines, 2) : titleLines}
+            numberOfLines={titleLines === 0 ? undefined : large ? Math.max(titleLines, 2) : titleLines}
             style={titleStyle}>
             {title}
           </Text>
@@ -1045,11 +1073,16 @@ function Shortcut({
   accessibilityLabel?: string;
 }) {
   const { hovered, hover } = useHover();
+  const { fontScale } = useWindowDimensions();
+  // The label stays whole on one line ("WhatsApp"), a little smaller when the text is large.
+  const [width, setWidth] = useState(0);
+  const size = fitFont(label, width, Type.footnote.fontSize ?? 13, fontScale);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       {...hover}
       style={[styles.shortcut, pointer]}>
       {({ pressed }) => (
@@ -1057,7 +1090,12 @@ function Shortcut({
           <View style={[styles.shortcutCircle, (pressed || hovered) && { backgroundColor: Colors.tintPressed }]}>
             <Ionicons name={icon} size={22} color={Colors.text} />
           </View>
-          <Text variant="footnote" numberOfLines={2} style={styles.shortcutLabel}>
+          <Text
+            variant="footnote"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[styles.shortcutLabel, { fontSize: size, lineHeight: Math.round(size * 1.4) }]}>
             {label}
           </Text>
         </>
@@ -1122,21 +1160,36 @@ export function StatStrip({
     value: string | number | null | undefined;
     label: string;
     spoken?: string;
+    // The value in the text face: an amount of zero ("R0"), where the display face's square 0 reads as
+    // the letter O.
+    plain?: boolean;
     onPress?: () => void;
     testID?: string;
   }[];
 }) {
   const grid = useWindowDimensions().fontScale > 1.2 && items.length > 2;
-  // A long value ("R12 400") makes every number in the strip a little smaller, so none breaks over
-  // two lines and they still match.
+  // A long value ("R12 400", "35–55" in a strip of three, "2 200" in four) makes every number in the
+  // strip a little smaller, so none breaks over two lines and they still match. Narrower columns
+  // take fewer characters at full size.
   const longest = Math.max(...items.map((item) => String(item.value ?? '–').length));
-  const size = grid || longest <= 5 ? null : longest === 6 ? 24 : longest === 7 ? 21 : 18;
+  const room = grid || items.length <= 2 ? 5 : items.length === 3 ? 4 : 3;
+  const over = longest - room;
+  const size = over <= 0 ? null : over === 1 ? 24 : over === 2 ? 21 : 18;
   return (
     <View style={[styles.statStrip, grid && styles.statGrid]}>
       {items.map((item, i) => {
         const content = (
           <>
-            <Text variant="stat" style={[Tabular, size ? { fontSize: size, lineHeight: size + 4 } : null]}>
+            <Text
+              variant="stat"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              style={[
+                Tabular,
+                size ? { fontSize: size, lineHeight: size + 4 } : null,
+                item.plain && { fontFamily: Fonts.textSemi },
+              ]}>
               {item.value ?? '–'}
             </Text>
             <Text variant="footnote" tone="secondary" numberOfLines={2} style={{ fontFamily: Fonts.textMedium }}>
@@ -1510,6 +1563,14 @@ const styles = themed(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
+  },
+  segmentedGrid: {
+    flexWrap: 'wrap',
+  },
+  segmentInGrid: {
+    flexBasis: '50%',
+    flexGrow: 0,
+    minHeight: 40,
   },
   // 44 high for the finger around a 50 x 30 track.
   toggleTarget: {

@@ -260,6 +260,15 @@ export async function listTrainersV2(): Promise<ListedTrainer[] | null> {
   return (answer.data ?? []).map((t) => ({ ...t, accepting_clients: t.accepting_clients !== false }));
 }
 
+// The Trainers list as the signed-in person may see it, with whether each takes new clients: no trainer
+// a block hides, and nobody for someone who has a trainer. An older database answers round 2's list,
+// where everyone takes clients.
+export async function listTrainersForMe(): Promise<ListedTrainer[]> {
+  const listed = await listTrainersV2();
+  if (listed) return listed;
+  return (await listTrainers()).map((t) => ({ ...t, accepting_clients: true }));
+}
+
 // Whether a typed number can be a phone number, by the rules of the invite's WhatsApp numbers: South
 // Africa's 10 digits from 0 (082 555 0303), or an international number with its country code.
 export function isPhoneNumber(phone: string): boolean {

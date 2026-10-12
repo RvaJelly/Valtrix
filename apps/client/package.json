@@ -9,6 +9,7 @@
     "@supabase/supabase-js": "^2.117.3",
     "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.27",
+    "expo-asset": "~57.0.19",
     "expo-audio": "~57.0.5",
     "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",

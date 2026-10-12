@@ -28,6 +28,8 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [problem, setProblem] = useState<Problem>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  // The email already has a Voltrix account (Coach or the client app): Supabase sends nothing then.
+  const [existing, setExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resend, setResend] = useState({ busy: false, done: false, error: null as string | null });
   const emailRef = useRef<TextInput>(null);
@@ -57,6 +59,12 @@ export default function SignUp() {
       setProblem({ field: 'form', text: plainError(error) });
       return;
     }
+    if (data.user && data.user.identities?.length === 0) {
+      // Supabase answers like a new sign-up but sends no email when the address is taken. The Terms ticked here
+      // are for a new account only, so nothing is remembered for the existing one.
+      setExisting(true);
+      return;
+    }
     if (data.user?.identities?.length) terms.rememberSignUp(data.user.id, accepted);
     if (!data.session) {
       // Email confirmation is switched on for this project.
@@ -72,6 +80,23 @@ export default function SignUp() {
       options: { emailRedirectTo: emailRedirect() },
     });
     setResend({ busy: false, done: !error, error: error ? plainError(error) : null });
+  }
+
+  if (existing) {
+    return (
+      <AuthPage
+        title="You already have an account"
+        icon="key-outline"
+        intro={`${email.trim()} already has a Voltrix account. Sign in with it, or choose a new password if you’ve forgotten it.`}
+        footer={
+          <>
+            <Button title="Sign in" onPress={() => router.replace('/sign-in')} />
+            <Button title="Forgot password?" variant="secondary" onPress={() => router.push('/forgot-password')} />
+            <TextLink label="Use another email" onPress={() => setExisting(false)} />
+          </>
+        }
+      />
+    );
   }
 
   if (checkEmail) {

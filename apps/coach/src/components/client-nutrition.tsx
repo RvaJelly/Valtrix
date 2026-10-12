@@ -340,9 +340,9 @@ function PlanView({ plan, client, onEdit }: { plan: NutritionPlan; client: Clien
       </View>
       <StatStrip
         items={[
-          { value: plan.protein_g === null ? '–' : `${plan.protein_g} g`, label: 'Protein' },
-          { value: plan.carbs_g === null ? '–' : `${plan.carbs_g} g`, label: 'Carbs' },
-          { value: plan.fat_g === null ? '–' : `${plan.fat_g} g`, label: 'Fat' },
+          { value: plan.protein_g === null ? '–' : `${plan.protein_g}\u00a0g`, label: 'Protein' },
+          { value: plan.carbs_g === null ? '–' : `${plan.carbs_g}\u00a0g`, label: 'Carbs' },
+          { value: plan.fat_g === null ? '–' : `${plan.fat_g}\u00a0g`, label: 'Fat' },
         ]}
       />
       {plan.meals.length || plan.notes ? (

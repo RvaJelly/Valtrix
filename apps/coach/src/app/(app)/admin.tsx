@@ -17,7 +17,7 @@ import {
   useDelayed,
 } from '@/components/ui';
 import { Layout, Spacing, themed } from '@/constants/theme';
-import { coachAccess } from '@/lib/access';
+import { coachAccess, trialLeft } from '@/lib/access';
 import type { Profile } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -48,7 +48,7 @@ function planLabel(t: Trainer) {
     case 'subscribed':
       return 'Paying';
     case 'trial':
-      return `Trial, ${access.daysLeft === 1 ? '1 day' : `${access.daysLeft} days`} left`;
+      return `Trial, ${trialLeft(access.daysLeft).toLowerCase()}`;
     default:
       // The trial only starts once a card is added, so no end date means it never started.
       if (t.subscription_expires_at) return 'Plan ended, not paying';

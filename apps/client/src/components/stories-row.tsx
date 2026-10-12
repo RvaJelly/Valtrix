@@ -35,24 +35,32 @@ export function StoriesRow({
       showsHorizontalScrollIndicator={false}
       style={styles.bleed}
       contentContainerStyle={styles.row}>
-      <View style={styles.item}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={mine ? 'Your story' : 'Add to your story'}
-          onPress={mine ? () => open(mine.author_id) : addStory}>
-          <Ring state={mine ? 'unseen' : 'none'}>
-            <Avatar url={me.avatar} name={me.name} size={SIZE} />
-          </Ring>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add to your story"
-          onPress={addStory}
-          hitSlop={10}
-          style={styles.plus}>
-          <Ionicons name="add" size={14} color={Colors.background} />
-        </Pressable>
-        <Text variant="footnote" style={styles.name} numberOfLines={1}>
+      {/* Wider than the circle when it needs to be, so "Your story" stays whole with large text. */}
+      <View style={[styles.item, styles.mine]}>
+        <View style={styles.circle}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={mine ? 'Your story' : 'Add to your story'}
+            onPress={mine ? () => open(mine.author_id) : addStory}>
+            <Ring state={mine ? 'unseen' : 'none'}>
+              <Avatar url={me.avatar} name={me.name} size={SIZE} />
+            </Ring>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add to your story"
+            onPress={addStory}
+            hitSlop={10}
+            style={styles.plus}>
+            <Ionicons name="add" size={14} color={Colors.background} />
+          </Pressable>
+        </View>
+        <Text
+          variant="footnote"
+          style={[styles.name, styles.mineName]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}>
           Your story
         </Text>
       </View>
@@ -107,6 +115,17 @@ const styles = themed(() => ({
     width: OUTER + 4,
     alignItems: 'center',
     gap: 6,
+  },
+  mine: {
+    width: 'auto',
+    minWidth: OUTER + 4,
+  },
+  circle: {
+    width: OUTER + 4,
+    alignItems: 'center',
+  },
+  mineName: {
+    maxWidth: OUTER + 32,
   },
   ring: {
     width: OUTER,

@@ -153,7 +153,7 @@ export function ClientForm({
               <Text variant="footnote" tone="secondary">
                 {!adding && !linked && newEmail
                   ? 'Saving sends a new invite to this email.'
-                  : 'Optional. With an email they can also accept your invite by signing up with it.'}
+                  : 'With an email they can also accept your invite by signing up with it.'}
               </Text>
             )}
           </View>
@@ -219,7 +219,7 @@ export function ClientForm({
     );
   }
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <ScrollView contentContainerStyle={[styles.content, adding && styles.narrow]} keyboardShouldPersistTaps="handled">
         {header}
         {fields}

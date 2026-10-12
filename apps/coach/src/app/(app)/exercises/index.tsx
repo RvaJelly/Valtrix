@@ -151,11 +151,13 @@ export default function ExerciseLibrary() {
           <View style={groupedItem(index, visible.length)}>
             <ListRow
               title={item.name}
+              titleLines={2}
               subtitle={[MUSCLE_GROUPS[item.muscle_group], EQUIPMENT[item.equipment]].filter(Boolean).join(' · ')}
               leading={<IconTile icon={item.video_path ? 'play-circle-outline' : ICONS[item.muscle_group]} />}
               // Built-in exercises open nothing outside the picker, so they don't look tappable.
               onPress={picking || item.trainer_id ? () => open(item) : undefined}
-              status={item.trainer_id || picking ? null : <StatusPill tone="muted" label="Built-in" />}
+              // Most of the library is built in, so only the trainer's own exercises are marked.
+              status={item.trainer_id && !picking ? <StatusPill tone="muted" label="Yours" /> : null}
               trailing={
                 adding === item.id ? (
                   <ActivityIndicator color={Colors.textSecondary} />

@@ -27,7 +27,7 @@ export function AuthPage({
 }>) {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom', 'left', 'right']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Logo style={styles.logo} />
           <View style={{ gap: Spacing.tight }}>

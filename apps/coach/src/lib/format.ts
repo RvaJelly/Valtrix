@@ -1,5 +1,6 @@
 // Dates and times the South African way, built by hand so every phone and browser agrees:
-// 24-hour times ('18:00'), day before month ('Friday 9 October'), weeks from Monday.
+// 24-hour times ('18:00'), day before month ('Friday 9 October'), weeks from Monday. The day and its
+// month (and year) are joined by a no-break space, so '9 October' never breaks across two lines.
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = [
@@ -18,6 +19,7 @@ const MONTHS = [
 ];
 
 const two = (n: number) => String(n).padStart(2, '0');
+const NB = '\u00a0';
 
 // '07:05', '18:00'
 export function time24(d: Date): string {
@@ -31,19 +33,19 @@ export function timeRange(a: Date, b: Date): string {
 
 // 'Friday 9 October', with the year when it isn't this year.
 export function longDate(d: Date, now = new Date()): string {
-  const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}${year}`;
+  const year = d.getFullYear() === now.getFullYear() ? '' : `${NB}${d.getFullYear()}`;
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}${NB}${MONTHS[d.getMonth()]}${year}`;
 }
 
 // 'Fri 9 Oct', with the year when it isn't this year.
 export function shortDate(d: Date, now = new Date()): string {
-  const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
-  return `${weekdayShort(d)} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}${year}`;
+  const year = d.getFullYear() === now.getFullYear() ? '' : `${NB}${d.getFullYear()}`;
+  return `${weekdayShort(d)} ${d.getDate()}${NB}${MONTHS[d.getMonth()].slice(0, 3)}${year}`;
 }
 
 // '18 October'
 export function dayMonth(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return `${d.getDate()}${NB}${MONTHS[d.getMonth()]}`;
 }
 
 // 'October 2026'
@@ -53,7 +55,7 @@ export function monthYear(d: Date): string {
 
 // '18 Oct'
 export function dayMonthShort(d: Date): string {
-  return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+  return `${d.getDate()}${NB}${MONTHS[d.getMonth()].slice(0, 3)}`;
 }
 
 // 'Mon'

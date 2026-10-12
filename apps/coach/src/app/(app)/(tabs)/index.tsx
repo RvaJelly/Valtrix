@@ -9,6 +9,7 @@ import { canJoin, JoinCall } from '@/components/join-call';
 import { MarkPaidSheet } from '@/components/mark-paid-sheet';
 import { NeedsYouRow } from '@/components/needs-you-row';
 import { PersonSheet } from '@/components/person-sheet';
+import { ReminderOffer } from '@/components/reminder-offer';
 import { PersonRequestRow, TimeRequestRow } from '@/components/request-rows';
 import { RequestSheet, type RequestOpening } from '@/components/request-sheet';
 import { SellPackSheet } from '@/components/sell-pack-sheet';
@@ -37,7 +38,7 @@ import {
   type IconName,
 } from '@/components/ui';
 import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
-import { coachAccess, PRICE_LABEL } from '@/lib/access';
+import { coachAccess, trialLeft } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { earnedFrom, loadMoneyTotals, loadTotals, totalsIn, type MoneyTotals, type Totals } from '@/lib/earnings';
@@ -389,8 +390,8 @@ export default function Home() {
   if (access.kind === 'trial') {
     account.push({
       key: 'trial',
-      title: access.daysLeft === 1 ? 'Last day of your free trial' : `${access.daysLeft} days left in your free trial`,
-      subtitle: `Then ${PRICE_LABEL} a month from ${dayMonth(access.endsAt)}`,
+      title: access.daysLeft === 0 ? 'Last day of your free trial' : `${trialLeft(access.daysLeft)} in your free trial`,
+      subtitle: `Free until ${dayMonth(access.endsAt)}`,
       icon: 'time-outline',
       color: access.daysLeft <= 3 ? Colors.warning : undefined,
       href: '/settings',
@@ -538,6 +539,8 @@ export default function Home() {
           )}
         </Section>
 
+        <ReminderOffer />
+
         {shownUpdates.length ? (
           <EnterUp>
             <View testID="home-updates">
@@ -657,6 +660,7 @@ export default function Home() {
                 showEarned && earned
                   ? {
                       value: formatMoney(earned.cents, currency),
+                      plain: earned.cents === 0,
                       label: 'Earned this week',
                       spoken: `${spokenMoney(earned.cents, currency)} earned this week`,
                       onPress: () => router.push('/earnings'),

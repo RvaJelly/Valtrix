@@ -73,7 +73,7 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
       const blocked = e instanceof Error && /can.t be shared/i.test(e.message);
       setStatus({
         kind: 'error',
-        text: blocked ? "This reel can't be shared." : "Couldn't send it. Check your internet and try again.",
+        text: blocked ? 'This reel can’t be shared.' : 'Couldn’t send it. Check your internet and try again.',
       });
     }
   }
@@ -92,8 +92,8 @@ export function ShareSheet({ reel, onClose }: { reel: Reel | null; onClose: () =
       if (!stillWanted()) return;
       setStatus(
         e instanceof CopyFailedError
-          ? { kind: 'error', text: "Couldn't copy the link. You can copy it from here:", link: e.url }
-          : { kind: 'error', text: "Couldn't share the video. Check your internet and try again." },
+          ? { kind: 'error', text: 'Couldn’t copy the link. You can copy it from here:', link: e.url }
+          : { kind: 'error', text: 'Couldn’t share the video. Check your internet and try again.' },
       );
     }
   }

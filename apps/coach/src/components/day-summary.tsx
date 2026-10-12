@@ -88,7 +88,7 @@ function MacroBar({ label, grams, target }: { label: string; grams: number; targ
       {/* On a narrow phone the target moves under the amount instead of being cut off. */}
       <View style={styles.macroValueRow}>
         <Text variant="rowTitle" style={Tabular}>
-          {formatGrams(grams).replace(' g', '')}
+          {formatGrams(grams).replace(/\s*g$/, '')}
         </Text>
         <Text variant="footnote" tone="secondary" style={Tabular}>
           {target ? `/ ${target} g` : 'g'}

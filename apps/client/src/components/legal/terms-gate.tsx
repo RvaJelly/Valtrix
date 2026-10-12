@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DeleteAccount } from '@/components/delete-account';
 import { ACCEPT_SCREEN, LEGAL_DOCS, TERMS_VERSION } from '@/components/legal/legal-content';
 import { ImportantBox, Points } from '@/components/legal/legal-document';
 import { LegalReader, readerTitle, type ReaderDoc } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
-import { DeleteAccount } from '@/components/settings-parts';
 import { StickyFooter } from '@/components/sticky-footer';
 import {
   Button,
@@ -59,7 +59,7 @@ export function TermsGate({
   notice?: string;
 }) {
   const terms = useTerms();
-  const { signOut, session, profile } = useAuth();
+  const { signOut, profile } = useAuth();
   const [checks, setChecks] = useState<TermsChecks>(NONE);
   const [reading, setReading] = useState<ReaderDoc | null>(null);
   // The Health and Safety Notice has been opened on this screen, and whether the health box opened it.
@@ -212,7 +212,7 @@ export function TermsGate({
             <View style={{ gap: Spacing.three }}>
               <TextLink lead="Not your account?" label={'Sign\u00A0out'} onPress={signOut} />
               {ownAccount ? (
-                <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
+                <DeleteAccount />
               ) : profile ? (
                 <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
                   To delete your account, use {terms.app === 'coach' ? 'Voltrix' : 'Voltrix Coach'}.

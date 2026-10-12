@@ -13,8 +13,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Logo } from '@/components/logo';
-import { Text } from '@/components/ui';
-import { Colors, Fonts, Layout, themed } from '@/constants/theme';
+import { fitFont, Text } from '@/components/ui';
+import { Colors, Fonts, Layout, themed, Type } from '@/constants/theme';
 import { useChat, useChatEvents } from '@/lib/chat-live';
 import { useTabsShown } from '@/lib/nav';
 import { refreshWaitingCount, useWaitingCount } from '@/lib/requests';
@@ -38,7 +38,8 @@ function tabIcon(name: IconName, sidebar: boolean) {
 
 // Our own label, so it keeps the app's font, stops growing at 130 % text size (iPhone shows the
 // large-content viewer instead, as its own tab bars do) and never loses its descenders.
-function tabLabel(sidebar: boolean) {
+// `size` keeps the longest label ("Programs", "Calendar") whole in a narrow bar with large text.
+function tabLabel(sidebar: boolean, size: number) {
   return function TabLabel({
     color,
     position,
@@ -55,7 +56,7 @@ function tabLabel(sidebar: boolean) {
         variant="tab"
         numberOfLines={1}
         allowFontScaling={Platform.OS !== 'ios'}
-        style={[sidebar ? styles.labelSidebar : beside ? styles.labelBeside : null, { color }]}>
+        style={[sidebar ? styles.labelSidebar : beside ? styles.labelBeside : { fontSize: size }, { color }]}>
         {children}
       </Text>
     );
@@ -94,6 +95,8 @@ export default function TabLayout() {
   const icon = (name: IconName) => tabIcon(name, sidebar);
   // Labels grow up to 130 % with the phone's text size (not on iPhone), and the bar grows with them.
   const labelGrow = Platform.OS === 'ios' ? 0 : Math.ceil(15 * (Math.min(fontScale, 1.3) - 1));
+  // Five tabs share the bar's width; each label keeps a little room either side.
+  const labelSize = fitFont('Calendar', width / 5 - 10, Type.tab.fontSize ?? 11, Platform.OS === 'ios' ? 1 : fontScale);
   // The web and phones without a home indicator get a little room under the labels.
   const bottom = insets.bottom > 0 ? insets.bottom : 7;
   const bar: ViewStyle = sidebar
@@ -130,7 +133,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.text,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: bar,
-        tabBarLabel: tabLabel(sidebar),
+        tabBarLabel: tabLabel(sidebar, labelSize),
         tabBarBadgeStyle: {
           backgroundColor: Colors.text,
           color: Colors.background,

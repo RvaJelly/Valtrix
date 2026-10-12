@@ -20,7 +20,7 @@ import {
   Text,
   useDelayed,
 } from '@/components/ui';
-import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { confirm } from '@/lib/confirm';
 import {
@@ -293,7 +293,8 @@ export default function Earnings() {
                   </Text>
                   <Text
                     variant="stat"
-                    style={[Tabular, styles.total]}
+                    // An amount of zero in the text face: the display face's square 0 reads as "RO".
+                    style={[Tabular, styles.total, earned === 0 && { fontFamily: Fonts.textSemi }]}
                     testID="earnings-total"
                     accessibilityLabel={`${spokenMoney(earned, currency)} earned`}>
                     {formatMoney(earned, currency)}

@@ -4,7 +4,8 @@ import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
 import { InviteCodeSheet } from '@/components/invite-code-sheet';
-import { APPEARANCE, DeleteAccount, LENGTHS, SettingsPage, UNITS, useMyTrainers } from '@/components/settings-parts';
+import { DeleteAccount } from '@/components/delete-account';
+import { APPEARANCE, LENGTHS, SettingsPage, UNITS, useMyTrainers } from '@/components/settings-parts';
 import {
   Group,
   IconTile,
@@ -78,7 +79,8 @@ export default function Settings() {
           {
             icon: 'link-outline' as const,
             title: 'Calendar link',
-            subtitle: calendarOn ? 'On' : 'Off',
+            // A trainer's link is the one in Voltrix Coach.
+            subtitle: profile?.role === 'trainer' ? 'In Voltrix Coach' : calendarOn ? 'On' : 'Off',
             href: '/settings/calendar' as const,
             testID: 'settings-calendar',
           },
@@ -106,8 +108,8 @@ export default function Settings() {
     },
     {
       icon: 'hand-left-outline',
-      title: 'Privacy and blocked people',
-      subtitle: 'Who sees what you share',
+      title: 'Privacy',
+      subtitle: 'Blocked people and who sees what you share',
       href: '/settings/privacy',
     },
     {
@@ -187,6 +189,8 @@ export default function Settings() {
             key={row.title}
             title={row.title}
             subtitle={row.subtitle}
+            // Two lines when a phone is narrow or its text is large, so nothing is cut off.
+            subtitleLines={2}
             leading={<IconTile icon={row.icon} />}
             onPress={() => router.push(row.href)}
             testID={row.testID}
@@ -209,7 +213,7 @@ export default function Settings() {
 
       <View style={{ gap: Spacing.three }}>
         {/* Only a known client account can be deleted here; a trainer's would take their clients and calendar with it. */}
-        {profile?.role === 'client' ? <DeleteAccount userId={session?.user.id} onDeleted={signOut} /> : null}
+        {profile?.role === 'client' ? <DeleteAccount /> : null}
         {profile?.role === 'trainer' ? (
           <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
             Signed in with your Voltrix Coach account. To delete it, use Voltrix Coach.

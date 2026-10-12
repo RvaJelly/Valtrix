@@ -4,9 +4,10 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
-import { APPEARANCE, DeleteAccount, LENGTHS, planLabel, SettingsPage, UNITS } from '@/components/settings-parts';
+import { DeleteAccount } from '@/components/delete-account';
+import { APPEARANCE, LENGTHS, planLabel, SettingsPage, UNITS } from '@/components/settings-parts';
 import { Group, IconTile, ListRow, Text, type IconName } from '@/components/ui';
-import { ACCENTS, Fonts, Spacing } from '@/constants/theme';
+import { ACCENTS, Spacing } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { loadRules, modeLabel } from '@/lib/booking-rules';
@@ -96,7 +97,7 @@ export default function Settings() {
     },
     {
       icon: 'hand-left-outline',
-      title: 'Privacy and blocked people',
+      title: 'Privacy',
       subtitle: 'Blocked people and what clients see',
       href: '/settings/privacy',
     },
@@ -141,14 +142,7 @@ export default function Settings() {
             </Text>
           }
           leading={<IconTile icon="card-outline" />}
-          trailing={
-            canSubscribe ? (
-              <Text variant="callout" style={{ fontFamily: Fonts.textSemi }}>
-                Subscribe
-              </Text>
-            ) : null
-          }
-          accessibilityLabel={canSubscribe ? `Subscription: ${planLabel(profile)}. Subscribe` : undefined}
+          accessibilityLabel={canSubscribe ? `Subscription: ${planLabel(profile)}` : undefined}
           onPress={canSubscribe ? () => router.push('/subscribe') : undefined}
           last={!profile?.is_admin}
         />
@@ -176,7 +170,7 @@ export default function Settings() {
       </Group>
 
       <View style={{ gap: Spacing.three }}>
-        <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
+        <DeleteAccount />
         <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
           Voltrix Coach {Constants.expoConfig?.version ?? ''}
         </Text>
@@ -193,6 +187,8 @@ function Rows({ rows }: { rows: Row[] }) {
           key={row.title}
           title={row.title}
           subtitle={row.subtitle}
+          // Two lines when a phone is narrow or its text is large, so nothing is cut off.
+          subtitleLines={2}
           leading={<IconTile icon={row.icon} />}
           onPress={() => router.push(row.href)}
           testID={row.testID}

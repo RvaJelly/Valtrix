@@ -21,7 +21,7 @@ import { removePack, savePack, type Pack } from '@/lib/packs';
 import { lastMethod, methodsInOrder, PAY_METHODS, type PayMethod } from '@/lib/paid';
 import { addDaysKey, dayFromKey, HOME_ZONE, zonedParts } from '@/lib/zones';
 
-const ENDS = { none: 'No end', '1': '1 month', '3': '3 months', '6': '6 months', pick: 'Pick a day' } as const;
+const ENDS = { none: 'No end date', '1': '1 month', '3': '3 months', '6': '6 months', pick: 'Pick a day' } as const;
 type EndKey = keyof typeof ENDS;
 
 function endKeyOf(soldOn: string, expiresOn: string | null): EndKey {

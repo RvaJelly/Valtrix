@@ -185,11 +185,10 @@ export function needsOf(
     const closed = closedCheckInWeek(today);
     const opened = keyOf(utc(closed) + 4 * DAY_MS);
     if (row.last_check_in_week < closed && row.joined_at && localDay(row.joined_at) < opened) {
-      const date = new Date(utc(closed));
       needs.push({
         kind: 'missed_check_in',
         client: row,
-        subtitle: `No check-in for the week of ${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`,
+        subtitle: `No check-in for the week of ${shortDay(closed)}`,
         since: utc(row.last_check_in_week),
         href: clientHref(id, { tab: 'progress' }),
         trailing: 'message',

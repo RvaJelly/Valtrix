@@ -193,13 +193,13 @@ export function formatNumber(n: number) {
 }
 
 export function formatKcal(n: number) {
-  return `${formatNumber(n)} kcal`;
+  return `${formatNumber(n)}\u00a0kcal`;
 }
 
 // Grams of protein, carbs or fat: one decimal for small amounts.
 export function formatGrams(n: number | null) {
   if (n === null) return '–';
-  return n < 10 ? `${Math.round(n * 10) / 10} g` : `${Math.round(n)} g`;
+  return n < 10 ? `${Math.round(n * 10) / 10}\u00a0g` : `${Math.round(n)}\u00a0g`;
 }
 
 function tidy(n: number) {
@@ -264,10 +264,10 @@ export const FOOD_CREDIT = 'Food facts from Open Food Facts';
 // A problem looking food up, with a message to show as it is.
 export class FoodError extends Error {}
 
-const OFFLINE = "You're offline. Check your internet connection and try again.";
+const OFFLINE = 'You’re offline. Check your internet connection and try again.';
 const SLOW = 'Food search is slow right now. Try again in a moment.';
 const BUSY = 'Food search is busy. Try again in a minute.';
-const TROUBLE = "Couldn't look that up right now. Try again.";
+const TROUBLE = 'Couldn’t look that up right now. Try again.';
 
 async function getJson(url: string, timeoutMs: number): Promise<{ status: number; body: unknown }> {
   if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -367,7 +367,7 @@ function parseProduct(p: Record<string, unknown>, code: string | null): Food | n
 
 // Looks a barcode up. Null when Open Food Facts doesn't know it.
 export async function lookupBarcode(code: string): Promise<Food | null> {
-  if (!isBarcode(code)) throw new FoodError('Barcodes have 8 to 14 numbers. Check the number and try again.');
+  if (!isBarcode(code)) throw new FoodError('Barcodes have 6 to 14 numbers. Check the number and try again.');
   const { status, body } = await getJson(`${PRODUCT_URL}${code}?fields=${PRODUCT_FIELDS}`, 12000);
   const data = (body ?? {}) as { status?: number; product?: Record<string, unknown> };
   if (status === 404 || data.status === 0) return null;

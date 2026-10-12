@@ -165,7 +165,7 @@ export async function photoUrls(paths: string[]): Promise<Record<string, string>
   return result;
 }
 
-// Removes the photos this person sent in their chats, before their account is deleted.
+// Removes the photos this person sent in their chats, also ones that have ended, before their account is deleted.
 // A trainer's account takes its chats with it, so the trainer clears whole chats.
 export async function removeMyChatPhotos() {
   const chats = await loadChats().catch(() => [] as ChatSummary[]);
@@ -178,6 +178,15 @@ export async function removeMyChatPhotos() {
       // Only the person's own photos can be removed; stop when nothing more goes.
       if (error || !removed?.length) break;
     }
+  }
+  // Then the photos they sent in chats that have ended (the client left or was archived), which no
+  // chat lists any more. An older database without my_chat_photos answers an error: nothing more to do.
+  for (let round = 0; round < 10; round++) {
+    const { data, error } = await supabase.rpc('my_chat_photos');
+    const paths = ((data ?? []) as string[]).slice(0, 1000);
+    if (error || !paths.length) break;
+    const { data: removed, error: removeError } = await supabase.storage.from(BUCKET).remove(paths);
+    if (removeError || !removed?.length) break;
   }
 }
 

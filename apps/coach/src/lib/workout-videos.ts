@@ -28,10 +28,10 @@ const VIDEO_TYPES: Record<string, string> = {
 // clip passes 50 MB after about half a minute.
 export const VIDEO_HINT =
   Platform.OS === 'android'
-    ? 'short clips work best, about 30 seconds'
+    ? 'short clips work best, about 30\u00a0seconds'
     : Platform.OS === 'ios'
-      ? `up to ${MAX_VIDEO_MINUTES} minutes`
-      : `up to ${MAX_VIDEO_MINUTES} minutes and 50 MB`;
+      ? `up to ${MAX_VIDEO_MINUTES}\u00a0minutes`
+      : `up to ${MAX_VIDEO_MINUTES}\u00a0minutes and 50\u00a0MB`;
 // The same, as a sentence for the "Add a video" question on phones.
 export const VIDEO_TIP = `${VIDEO_HINT[0].toUpperCase()}${VIDEO_HINT.slice(1)}.`;
 
@@ -46,8 +46,8 @@ export type PickedVideo = {
 function tooBig() {
   return new VideoError(
     Platform.OS === 'android'
-      ? 'This video is a bit too big to upload (over 50 MB). Try a shorter clip, about 30 seconds.'
-      : 'This video is a bit too big to upload (over 50 MB). Try a shorter clip, or record it again at a lower quality.',
+      ? 'This video is a bit too big to upload (over 50\u00a0MB). Try a shorter clip, about 30\u00a0seconds.'
+      : 'This video is a bit too big to upload (over 50\u00a0MB). Try a shorter clip, or record it again at a lower quality.',
   );
 }
 
@@ -99,7 +99,7 @@ export async function pickWorkoutVideo(from: 'camera' | 'library'): Promise<Pick
   const seconds = known ? (Platform.OS === 'web' ? known : known / 1000) : null;
   if (seconds && seconds > MAX_SECONDS + 0.5) {
     throw new VideoError(
-      `This video is ${minutesAndSeconds(seconds)} long. Videos can be up to ${MAX_VIDEO_MINUTES} minutes, so try a shorter clip.`,
+      `This video is ${minutesAndSeconds(seconds)} long. Videos can be up to ${MAX_VIDEO_MINUTES}\u00a0minutes, so try a shorter clip.`,
     );
   }
   const mimeType = asset.mimeType && asset.mimeType in VIDEO_TYPES ? asset.mimeType : guessType(asset);

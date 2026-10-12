@@ -15,8 +15,8 @@ const PILL_WIDTH = 52;
 
 // The days to book on, sideways, today first: weekday over day number, the chosen one raised like a
 // segmented control's choice (never orange). A day with no open time is muted and can't be picked. On a
-// wide window the days wrap, two weeks to a row, so 14 show without scrolling. `onNearEnd` asks for more
-// days' times when the strip is scrolled close to its end.
+// wide window every day shows without scrolling, in even rows of at most two weeks, so no day is left on a
+// row of its own. `onNearEnd` asks for more days' times when the strip is scrolled close to its end.
 export function DayStrip({
   days,
   value,
@@ -29,6 +29,7 @@ export function DayStrip({
   onNearEnd?: () => void;
 }) {
   const wide = useWindowDimensions().width >= 768;
+  const perRow = Math.ceil(days.length / Math.max(1, Math.ceil(days.length / 14)));
   const scroll = useRef<ScrollView>(null);
   const placed = useRef(false);
   const [atEnd, setAtEnd] = useState(false);
@@ -60,7 +61,11 @@ export function DayStrip({
           if (x > PILL_WIDTH * 3)
             scroll.current?.scrollTo({ x: Math.max(0, x - PILL_WIDTH - Spacing.gutter), animated: false });
         }}
-        style={[styles.pill, wide && styles.pillWide, Platform.OS === 'web' && !empty && { cursor: 'pointer' }]}>
+        style={[
+          styles.pill,
+          wide && { width: `${100 / perRow}%` },
+          Platform.OS === 'web' && !empty && { cursor: 'pointer' },
+        ]}>
         {({ pressed }) => (
           <View
             style={[
@@ -136,10 +141,6 @@ const styles = themed(() => ({
   },
   pill: {
     width: PILL_WIDTH,
-  },
-  // Two weeks to a row on a wide window.
-  pillWide: {
-    width: `${100 / 14}%`,
   },
   pillInner: {
     minHeight: 52,

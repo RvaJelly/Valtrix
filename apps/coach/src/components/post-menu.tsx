@@ -78,7 +78,7 @@ export function PostMenu({ post, kind, onClose, onRemoved }: Props) {
     if (!post || busy) return;
     const sure = await confirm(
       `Block ${name}?`,
-      `You won't see each other's stories or reels. ${name} won't be told. You can unblock them in Settings.`,
+      `You won’t see each other’s stories or reels. ${name} won’t be told. You can unblock them in Settings.`,
       'Block',
     );
     if (!sure) return;

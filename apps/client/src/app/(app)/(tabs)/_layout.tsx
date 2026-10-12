@@ -86,12 +86,13 @@ export default function TabLayout() {
         elevation: 0,
         shadowOpacity: 0,
       };
-  // The Reels tab shows full-screen video, so the bar goes dark there.
+  // The Reels tab shows full-screen video, so the bar goes dark there. Only the sidebar marks the open
+  // tab with a pill (lighter on black); the bottom bar keeps its indicator alone, as on every tab.
   const darkBar = {
     tabBarStyle: [bar, { backgroundColor: '#000000', borderColor: 'rgba(255,255,255,0.08)' }],
     tabBarActiveTintColor: '#FFFFFF',
     tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
-    tabBarActiveBackgroundColor: 'rgba(255,255,255,0.08)',
+    ...(sidebar ? { tabBarActiveBackgroundColor: 'rgba(255,255,255,0.08)' } : null),
   };
   return (
     <Tabs

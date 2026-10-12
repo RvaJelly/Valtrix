@@ -19,16 +19,16 @@ import { addDaysKey, dayFromKey, zonedParts } from '@/lib/zones';
 
 // No end first. The week keys start with a letter: number-like keys would come first in the chips.
 const UNTIL: Record<string, string> = {
-  none: 'No end',
+  none: 'No end date',
   w4: '4 weeks',
   w8: '8 weeks',
   w12: '12 weeks',
   pick: 'Pick a day',
 };
 
-// "until 8 December", "no end".
+// "until 8 December", "no end date".
 export function repeatEnd(r: Pick<Repeat, 'ends_on'>) {
-  return r.ends_on ? `until ${dayMonth(dayFromKey(r.ends_on))}` : 'no end';
+  return r.ends_on ? `until ${dayMonth(dayFromKey(r.ends_on))}` : 'no end date';
 }
 
 // A repeat booking from one of its sessions: change this and later ones, when it ends, or stop it.
@@ -100,7 +100,7 @@ export function RepeatSheet({
       haptic.warning();
       return setError(plainError(e, 'Couldn’t change it. Try again.'));
     }
-    const ends = last ? `Repeat ends ${dayMonth(dayFromKey(last))}.` : 'The repeat has no end now.';
+    const ends = last ? `Repeat ends ${dayMonth(dayFromKey(last))}.` : 'The repeat has no end date now.';
     try {
       await removeSessions(ids);
       haptic.success();
@@ -149,7 +149,7 @@ export function RepeatSheet({
             leading={<IconTile icon="calendar-outline" />}
             trailing={
               <Text variant="callout" tone="secondary" style={Tabular}>
-                {r.ends_on ? dayMonth(dayFromKey(r.ends_on)) : 'No end'}
+                {r.ends_on ? dayMonth(dayFromKey(r.ends_on)) : 'No end date'}
               </Text>
             }
             onPress={() => setStep('until')}
@@ -178,7 +178,7 @@ export function RepeatSheet({
             testIDPrefix="repeat-until-"
           />
           <Text variant="footnote" tone="secondary">
-            Weeks count from the first session. With no end, Voltrix keeps booking 12 weeks ahead.
+            Weeks count from the first session. With no end date, Voltrix keeps booking 12 weeks ahead.
           </Text>
           <Button title="Back" variant="ghost" onPress={() => setStep('main')} disabled={busy} />
         </View>

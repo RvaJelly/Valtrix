@@ -14,3 +14,9 @@ export function confirm(title: string, message: string, action: string, destruct
     ]),
   );
 }
+
+// Tell the person something that needs no answer.
+export function notice(title: string, message: string) {
+  if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
+  else Alert.alert(title, message);
+}

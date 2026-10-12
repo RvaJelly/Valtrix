@@ -10,7 +10,7 @@ export function emailRedirect(): string | undefined {
   return Linking.createURL('');
 }
 
-// What a link from a sign-up or password email carries when it opens the app on a phone: the new session,
+// What a link from a sign-up or password email carries when it opens the app: the new session,
 // or a token to check (when the email template links straight to the app), or why it didn't work (an
 // expired link). Null for any other link. `type` is 'signup', 'recovery', 'magiclink', 'email_change'...
 export type AuthLink =
@@ -52,4 +52,21 @@ export function authLink(url: string): AuthLink | null {
     };
   }
   return null;
+}
+
+// On the web, a link from a sign-up or password email comes back to the app with what it carries in the
+// address. It is taken out of the address as the app starts, before Expo Router or Supabase read it (entry.ts
+// loads this file first), and held for useAuthLinks, which then handles it as on a phone. So the tokens it
+// carries don't stay in the address or the browser's history, and a reload doesn't open the link again.
+let heldLink: string | null = null;
+
+if (Platform.OS === 'web' && typeof window !== 'undefined' && authLink(window.location.href)) {
+  heldLink = window.location.href;
+  window.history.replaceState(window.history.state, '', window.location.pathname);
+}
+
+export function takeHeldLink(): string | null {
+  const link = heldLink;
+  heldLink = null;
+  return link;
 }

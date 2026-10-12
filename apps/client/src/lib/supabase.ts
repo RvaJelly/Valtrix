@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 // The publishable key is safe to ship in the app: every table is protected by
@@ -12,11 +12,27 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     storage: Platform.OS === 'web' && typeof window === 'undefined' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // On the web, links in sign-up and password emails come back to the app
-    // with the session in the address, so the client is signed in straight away.
-    detectSessionInUrl: Platform.OS === 'web',
+    // Links in sign-up and password emails are read by lib/auth-links.ts on the
+    // web too (see takeHeldLink), so a link never changes who is signed in here
+    // without asking.
+    detectSessionInUrl: false,
   },
 });
+
+// A second client that keeps nothing: it checks which account a sign-in link is for without
+// changing who is signed in (lib/auth-links.ts).
+let checker: SupabaseClient | null = null;
+export function linkChecker(): SupabaseClient {
+  checker ??= createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      storageKey: 'voltrix-link-check',
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  return checker;
+}
 
 // Only refresh the session while the app is in the foreground.
 if (Platform.OS !== 'web') {

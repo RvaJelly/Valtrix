@@ -52,6 +52,7 @@ import { useLeaveGuard } from '@/lib/leave-guard';
 import { formatMoney, priceFor } from '@/lib/money';
 import { useGoBack } from '@/lib/nav';
 import { loadOverview, type ClientOverview as OverviewRow } from '@/lib/overview';
+import { loadOwed } from '@/lib/paid';
 import { useRefreshOnReturn } from '@/lib/refresh-on-return';
 import { saveError } from '@/lib/save-error';
 import { dayKey } from '@/lib/sessions';
@@ -190,18 +191,34 @@ export default function ClientDetail() {
   // Says what archiving leaves behind (money owed, sessions still booked), so nothing is a surprise later.
   async function archive() {
     const first = client?.first_name ?? 'This client';
-    const { count } = await supabase
-      .from('sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('client_id', id)
-      .eq('status', 'scheduled')
-      .gte('starts_at', new Date().toISOString());
+    const [{ count }, owed] = await Promise.all([
+      supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', id)
+        .eq('status', 'scheduled')
+        .gte('starts_at', new Date().toISOString()),
+      // Everything owed, sessions and packs, in every currency (without a connection, the overview's figures).
+      loadOwed(id).catch(() => null),
+    ]);
     const booked = count ?? 0;
     const lines = [`${first} leaves your client list. Restore them any time from Archived, at the end of Clients.`];
-    if (row && row.owed_cents > 0) {
-      lines.push(
-        `${first} still owes ${formatMoney(row.owed_cents, profile?.currency ?? 'ZAR')}. That stays on Who owes you.`,
-      );
+    const currency = profile?.currency ?? 'ZAR';
+    const totals = new Map<string, number>();
+    if (owed) for (const i of owed) totals.set(i.currency, (totals.get(i.currency) ?? 0) + i.cents);
+    else if (row && row.owed_cents > 0) totals.set(currency, row.owed_cents);
+    // The trainer's own currency first.
+    const amounts = [...totals]
+      .filter(([, cents]) => cents > 0)
+      .sort(([a], [b]) => Number(b === currency) - Number(a === currency))
+      .map(([code, cents]) => formatMoney(cents, code));
+    if (!owed && row?.owed_other) {
+      amounts.push(amounts.length ? 'more in another currency' : 'money in another currency');
+    }
+    if (amounts.length) {
+      const all =
+        amounts.length > 2 ? `${amounts.slice(0, -1).join(', ')} and ${amounts.at(-1)}` : amounts.join(' and ');
+      lines.push(`${first} still owes ${all}. That stays on Who owes you.`);
     }
     if (booked > 0) {
       lines.push(

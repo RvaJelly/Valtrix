@@ -9,6 +9,8 @@
 // - "{app}" shows as the name of the app being used: "Voltrix" or "Voltrix Coach".
 // - `important: true` puts a block in a highlighted box (CPA s49: terms that limit what Voltrix is
 //   responsible for, ask a person to accept a risk or cover a cost, or confirm a fact).
+// - `contact: true` ends a block with the contact line (BUSINESS email, phone and website, or the honest
+//   private-testing line while they are empty): every section that sends people to us has one.
 // - A block titled "Part A. ...", "Part B. ..." or "Part C. ..." starts a part of the Terms.
 //
 // Versions: TERMS_VERSION is the day the version took effect, 'YYYY-MM-DD' (a letter after it for a
@@ -19,7 +21,13 @@
 export const TERMS_VERSION: string = '2026-10-11';
 export const TERMS_UPDATED: string = '11 October 2026';
 
-export type LegalBlock = { title: string; paragraphs?: string[]; points?: string[]; important?: boolean };
+export type LegalBlock = {
+  title: string;
+  paragraphs?: string[];
+  points?: string[];
+  important?: boolean;
+  contact?: boolean;
+};
 export type LegalDoc = { id: 'terms' | 'health' | 'community'; title: string; intro: string[]; blocks: LegalBlock[] };
 
 export const LEGAL_DOCS: LegalDoc[] = [
@@ -36,11 +44,11 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: 'In short',
         points: [
           'Voltrix is software. It helps trainers run their business and helps clients train with them. We are not a trainer, gym, doctor or dietitian.',
-          'Trainers are independent businesses. Each trainer is responsible for their own sessions, advice, prices, qualifications and insurance. Unless a trainer’s profile shows a Verified badge, we haven’t checked anything about them.',
+          'Trainers are independent businesses. Each trainer is responsible for their own sessions, advice, prices, qualifications and insurance. We haven’t checked anything about them.',
           'No money passes through Voltrix between clients and trainers. Clients pay their trainer directly and never pay us. Only trainers pay us, for a Voltrix Coach subscription.',
           'Exercise and changes to what you eat can cause injury, illness and, in rare cases, death. Please read the Health and Safety Notice.',
           'Stories and reels can be seen by everyone using Voltrix, and can be shared outside it. We have zero tolerance for objectionable content and abusive users.',
-          'Voltrix Coach will be a monthly subscription with a free trial and no minimum term. Until card payments open, trainers use it free, with access we give them.',
+          'Until card payments open, trainers use Voltrix Coach free, in 14-day free periods they start themselves. No card is taken and nothing is charged. Before we ever charge for it, we’ll show the price and ask for agreement first.',
           'Some sections limit what we are responsible for. They are in highlighted Important boxes. They never take away rights that South African law says can’t be taken away, and you can always complain to a regulator or go to court.',
         ],
       },
@@ -51,10 +59,11 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '1. Who we are',
         paragraphs: [
-          'Voltrix is run by the business named under Business details at the top of these Terms. Business details also give our legal status, our registration number if we have one, our physical address and how to contact us. That physical address is where we accept legal documents.',
+          'Voltrix is run by the business named under Business details at the top of these Terms. Business details give our legal status, our registration number if we have one, and our physical address, which is where we accept legal documents. How to contact us is shown at the end of this section.',
           'If Business details don’t show a company registration number, Voltrix is run by one person as a sole proprietor, trading under the name Voltrix. That person is who you have this agreement with. If Voltrix becomes a company, section 31 explains what happens.',
           'We don’t belong to any industry body, and we haven’t signed up to any code of conduct. If that changes, we will say so here.',
         ],
+        contact: true,
       },
       {
         title: '2. Words we use',
@@ -78,6 +87,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'You can read these Terms at any time in the app, in Settings under Help. If you’d like a copy of this version or an earlier one, ask us and we’ll send it to you free.',
           'We keep a record of each time you accept. Section 29 explains what it contains and how long we keep it.',
         ],
+        contact: true,
       },
       {
         title: '4. Who can use Voltrix',
@@ -98,7 +108,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
         points: [
           'We are not a trainer, gym, doctor, dietitian, physiotherapist or biokineticist. Nothing Voltrix itself provides is medical, dietary or treatment advice. Advice from a trainer is the trainer’s own.',
           'We don’t train anyone, and we don’t supervise trainers.',
-          'We don’t check trainers’ identity, qualifications, registrations, insurance, experience or specialties, unless a trainer’s profile shows a Verified badge. A Verified badge means only that, when we gave it, we saw the trainer’s identity document and a current fitness qualification or registration. It doesn’t mean we checked anything else, such as insurance, experience or whether the qualification covers everything they offer, and it doesn’t mean we recommend them.',
+          'We don’t check trainers’ identity, qualifications, registrations, insurance, experience or specialties.',
           'Everything else on a trainer’s profile comes from the trainer. Being listed or shown in Voltrix doesn’t mean we recommend a trainer.',
           'We are not part of the agreement between a trainer and a client, and no money passes through Voltrix between them.',
           'Voltrix is not an emergency service. In an emergency, call 112 from a cellphone or 10177 for an ambulance.',
@@ -124,6 +134,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'You are responsible for what is done on your account by you, by anyone you let use it, or because you didn’t keep your sign-in details safe. You are not responsible for misuse that wasn’t your fault, or for anything done after you told us your account was being misused.',
         ],
         important: true,
+        contact: true,
       },
       {
         title: '8. Getting the apps, and early versions',
@@ -155,8 +166,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '10. Found a security problem?',
         paragraphs: [
-          'If you find a weakness in Voltrix’s security, please tell us privately using the contact details in section 1, and don’t use it or share it. We’re grateful for reports made in good faith.',
+          'If you find a weakness in Voltrix’s security, please tell us privately, and don’t use it or share it. We’re grateful for reports made in good faith.',
         ],
+        contact: true,
       },
       {
         title: '11. Your content, and the permission you give us',
@@ -186,11 +198,12 @@ export const LEGAL_DOCS: LegalDoc[] = [
         paragraphs: [
           'We have zero tolerance for objectionable content and abusive users. The Community Rules say what isn’t allowed anywhere in Voltrix: stories, reels, comments, profiles, chats, calls and requests.',
           'We don’t check content before it appears. We rely on reports, on automatic checks where we use them, and on our own review.',
-          'Anyone can report a post, a comment or a person. When several people report a post, it’s hidden automatically while we look at it. We aim to review reports within 24 hours, and we deal first with reports about children, intimate images and threats.',
+          'Anyone can report a story, reel or comment in the app. To report anything else, such as a chat, a call or a person, contact us. When several people report a story, reel or comment, it’s hidden automatically while we look at it. We review reports as quickly as we can, and we deal first with reports about children, intimate images and threats.',
           'If we reasonably believe that content or behaviour breaks the law or the Community Rules, we may remove or hide the content, limit what the account can do, warn the person, or suspend or close the account. Section 26 explains when we act at once and when we give notice first.',
-          'We’ll tell you in the app when we remove your content or limit your account, and why, unless the law or someone’s safety means we can’t. If you think we got it wrong, ask us to look again within 30 days, using the contact details in section 1. A person will review it and tell you the outcome, normally within 5 business days. Asking us to look again doesn’t stop you complaining to a regulator or going to court.',
-          'We keep a short record of reports and what we did about them, so we can deal with repeat problems and show what we did if there’s a complaint or claim.',
+          'We’ll tell you when we remove your content or limit your account, and why, unless the law or someone’s safety means we can’t. If you think we got it wrong, contact us within 30 days and ask us to look again. A person will review it and tell you the outcome. Asking us to look again doesn’t stop you complaining to a regulator or going to court.',
+          'A report is kept with the story, reel or comment it’s about, and is deleted with it. We may keep a separate note of a serious report and what we did about it, so we can deal with repeat problems and show what we did if there’s a complaint or claim.',
         ],
+        contact: true,
       },
       {
         title: '14. Crimes, and working with the authorities',
@@ -203,7 +216,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '15. If you think something on Voltrix is unlawful',
         paragraphs: [
-          'The quickest way to tell us is the Report option on the item. You can also send us a written take-down notice, as our take-down contact, using the email address or physical address in Business details. We use this, for example, when something is defamatory, invades someone’s privacy or uses their work without permission.',
+          'For a story, reel or comment, the quickest way to tell us is its Report option. You can also send us a written take-down notice, as our take-down contact, by email (shown at the end of this section) or to the physical address in Business details. We use this, for example, when something is defamatory, invades someone’s privacy or uses their work without permission.',
           'We act quickly on proper notices. We may tell the person who posted the content, so they can respond, and we may put content back if a notice turns out to be wrong. Anyone who knowingly sends a false notice can be held liable for the harm it causes.',
           'A take-down notice should include:',
         ],
@@ -217,6 +230,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'a statement that you are acting in good faith',
           'a statement that the information in your notice is true and correct',
         ],
+        contact: true,
       },
       {
         title: '16. Chats, calls and messages',
@@ -243,9 +257,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'Some parts of Voltrix rely on other companies. Their own terms and privacy policies apply to what they do.',
         ],
         points: [
-          'Our hosting company, Supabase, runs and stores Voltrix in Frankfurt, Germany. An email company sends our emails for us.',
+          'Our hosting company, Supabase, runs and stores Voltrix in Frankfurt, Germany, and sends our account emails, such as sign-up confirmations and password resets.',
           'Food information comes from Open Food Facts (openfoodfacts.org), a free database built by volunteers and made available under the Open Database License. It can be wrong or out of date, so always check the label, especially for allergies and medical diets.',
-          'Google’s servers help connect calls. Google’s Firebase service delivers notifications from our servers, and Apple’s service does so on iPhones.',
+          'Google’s servers help connect calls.',
           'Your phone’s map service (Google on Android, Apple on iPhone) turns a trainer’s rough location into a town name.',
           'Trainers send WhatsApp invites from their own WhatsApp account. Voltrix doesn’t send them.',
           'Calendar apps, app stores and the apps you share reels to are run by their own companies.',
@@ -255,12 +269,12 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '19. Messages and notifications from us',
         paragraphs: [
-          'We send you the messages you need to use Voltrix, such as account emails, session reminders, booking and chat alerts, safety notices, billing messages and changes to these Terms. These aren’t marketing.',
+          'We send you the messages you need to use Voltrix, such as account emails, session reminders, updates about your bookings and chats in the app, and changes to these Terms. These aren’t marketing.',
           'We will only send you news, offers or other marketing if you say yes, and every marketing message will let you stop them easily.',
           'Session reminders are set on your phone. They show the session time and may show the other person’s name and the place.',
-          'Notifications from our servers are delivered through Google’s Firebase service, and through Apple’s service on iPhones, which may handle them outside South Africa. A notification says who it’s from, what happened and when. It never includes health form or check-in answers, notes, prices, payments, places, phone numbers or email addresses. A message notification shows the message text only if Show message text is on in Settings, under Notifications.',
+          'We don’t send notifications from our servers. The notifications you see, such as session reminders and the rest timer, are set on your phone by the app.',
           'Notifications can show on your lock screen, where anyone who sees your phone can read them. You can hide them there, or turn them off, in your phone’s settings.',
-          'When we need to tell you something important, such as a change to these Terms or to your subscription, we’ll tell you in the app and by email. We won’t treat a message as received just because we sent it.',
+          'When we change these Terms, the app shows you the new version and asks you to accept it before you carry on. We won’t treat a message as received just because we sent it.',
         ],
       },
       {
@@ -276,11 +290,12 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: '21. Keeping Voltrix running, and changing features',
         paragraphs: [
           'We work hard to keep Voltrix running and your information safe, and to fix problems quickly. Like all software, though, Voltrix may sometimes be unavailable, slow or wrong, for example during maintenance or when a service we rely on fails.',
-          'Now and then we may pause Voltrix for a short time to update it, or ask you to update the app when an older version can no longer work safely. We’ll show a message in the app when we do.',
+          'Now and then we may pause Voltrix for a short time to update it, or ask you to update the app when an older version can no longer work safely. If your version of the app is too old for our current Terms, it asks you to update it before you carry on.',
           'Keep your own copy of anything that matters to you, such as the client records you need for your business, insurance or tax. You can ask us for a copy of your information at any time, free, and we’ll send it to you.',
-          'We may improve, change or remove features. If we remove a feature you use, we’ll tell you in the app before we do, and you can leave and delete your account at any time. If a change removes something important that trainers pay for, we’ll tell trainers at least 30 days before, unless we must act sooner for security or legal reasons. Trainers can then cancel and get a refund for any time they’ve paid for and won’t use.',
+          'We may improve, change or remove features. If we remove a feature you use, we’ll tell you before we do, and you can leave and delete your account at any time. If a change removes something important that trainers pay for, we’ll tell trainers at least 30 days before, unless we must act sooner for security or legal reasons. Trainers can then cancel and get a refund for any time they’ve paid for and won’t use.',
           'If we decide to close Voltrix completely, we’ll give you at least 60 days’ notice and time to save your information, and refund trainers for any time paid for after the closing date.',
         ],
+        contact: true,
       },
       {
         title: '22. What we are and aren’t responsible for',
@@ -334,9 +349,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'You can stop using Voltrix and delete your account at any time, in Settings, or on the screen that asks you to accept new Terms. Section 28 explains what happens to your information, and section 49 what happens to a trainer’s subscription.',
           'For most breaches of these Terms or the Community Rules, we’ll first warn you and give you a fair chance to put things right, normally 10 business days. If you don’t, we may suspend or close the account.',
           'We may also close an account for another fair reason, such as closing a feature or the service, with at least 30 days’ notice. If we close a trainer’s account and it wasn’t because the trainer broke these Terms, we’ll refund any time they’ve paid for and can’t use.',
-          'While an account is suspended, it can’t be used in either app, its posts and comments are hidden, and people can’t book it or ask it for training. We’ll tell you why in the app. You can ask us to review a suspension or closure within 30 days, and you can still ask us for a copy of your information, or to delete it.',
+          'If we suspend or close your account, we’ll tell you why. You can ask us to review a suspension or closure within 30 days, and you can still ask us for a copy of your information, or to delete it.',
           'If we receive a report that a trainer may have harmed someone, we may hide them from the Trainers list while we look into it.',
-          'To stop someone coming back after we suspend or close their account, we may block the phones it used and the email address and phone numbers linked to it. We keep these only as codes that can’t be turned back into the details, and we remove them 30 days after the block ends.',
+          'If we close an account for a serious breach, we may refuse a new account for the same person.',
           'We may suspend or close an account straight away, without warning, only if:',
         ],
         points: [
@@ -345,12 +360,13 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'it belongs to someone under 18',
           'it was used to break the Community Rules seriously or repeatedly',
         ],
+        contact: true,
       },
       {
         title: '27. People who work for us, and what they can see',
         paragraphs: [
-          'People who work for us, starting with the owner of Voltrix, can see each account’s name, email address and any phone number it gave us, its public profile and posts, reports and suspensions about it, and the kind of phones it’s used on. For trainers, they can also see the plan and the number of clients.',
-          'They use this to run Voltrix: to give free access, give Verified badges, deal with reports, remove content, and suspend or close accounts under these Terms.',
+          'People who work for us, starting with the owner of Voltrix, can see in Voltrix Coach each trainer’s name, business name, email address, plan and number of clients, and can give or end free access. Through our hosting company’s dashboard, the owner can also reach everything stored in Voltrix, including reports, and remove content.',
+          'They use this to run Voltrix: to give free access, deal with reports, remove content, and suspend or close accounts under these Terms.',
           'They look at other information, such as chats, health forms, progress or food diaries, only to help you when you ask, to keep Voltrix safe and working, to deal with a serious report, a complaint or a legal claim, or when the law requires it. Everyone who works for us must keep information confidential. The Privacy Policy explains more.',
         ],
       },
@@ -365,9 +381,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'A trainer’s own record of training you stays with the trainer: your name and the contact details they have for you, your sessions with them, what was paid or owed, their notes, and any date they recorded for your doctor’s OK.',
           'Copies other people already have stay with them, such as chat photos you sent or reels someone saved or shared outside Voltrix.',
           'Our record of the Terms you accepted, with the email address your account had, stays for the time in section 29.',
-          'A suspension and its blocks stay until they end, so nobody can come back by deleting their account.',
-          'Short records of reports and our decisions stay for the times in the Privacy Policy. Anything we need for an open complaint, dispute or legal claim, or to report a crime, stays until it is no longer needed.',
-          'Billing records for trainers’ subscriptions stay for 5 years, because tax law requires it.',
+          'Anything we need for an open complaint, dispute or legal claim, or to report a crime, stays until it is no longer needed.',
+          'Once card payments open, billing records for trainers’ subscriptions will stay for 5 years, because tax law requires it.',
           'Copies in our hosting company’s backups and logs are deleted automatically, within 7 days.',
         ],
       },
@@ -383,7 +398,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: '30. Changes to these Terms',
         paragraphs: [
           'We may need to update these Terms, for example when we add features, when the law changes, or to make them clearer. Each version has a date, and we keep every earlier version, which we’ll send you free if you ask.',
-          'We’ll tell you about a change in the app and by email, with a short summary of what’s changing. For changes that affect your rights or what you pay, we’ll tell you at least 20 business days before they take effect, unless the law or someone’s safety requires a change sooner.',
+          'We’ll tell you about a change before it takes effect. For changes that affect your rights or what you pay, we’ll tell you at least 20 business days before, unless the law or someone’s safety requires a change sooner.',
           'We’ll ask you to read and accept the new version before you carry on using Voltrix. We will never treat silence, or simply carrying on using the app, as you agreeing. If your version of the app is too old to show you new Terms, we’ll ask you to update it first.',
           'You don’t have to accept a new version. You can stop using Voltrix and delete your account at any time, at no charge, including from the screen that asks you to accept. A trainer who leaves because of a change gets a refund for any time they’ve paid for and won’t use.',
         ],
@@ -400,7 +415,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '32. Complaints',
         paragraphs: [
-          'If something goes wrong, please tell us. It’s usually the quickest way to put it right. Contact us using the details in section 1 and tell us who you are, what happened and what you’d like us to do.',
+          'If something goes wrong, please tell us. It’s usually the quickest way to put it right. Contact us and tell us who you are, what happened and what you’d like us to do.',
           'We’ll confirm we’ve received your complaint within 5 business days and give you our answer within 20 business days. If we need longer, we’ll tell you why and when to expect it.',
           'We will never force you into private arbitration, and you keep your right to bring a claim together with other people where the law allows it.',
           'You don’t have to come to us first. You can go straight to any of these, and nothing in these Terms limits that:',
@@ -413,6 +428,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'the National Consumer Tribunal, a provincial consumer protector or consumer court, or another alternative dispute resolution agent',
           'the Small Claims Court or any other court that can hear your claim',
         ],
+        contact: true,
       },
       {
         title: '33. South African law and courts',
@@ -450,9 +466,10 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'You confirm that you are not in a country subject to a United States government embargo, or that the United States has named as supporting terrorism, and that you are not on any United States government list of prohibited or restricted parties.',
           'You must keep to any third-party terms that apply when you use the app, such as your mobile data contract.',
           'Apple and its subsidiaries can rely on this agreement even though they aren’t part of it: once you accept it, Apple has the right to enforce it against you.',
-          'Our name, address and contact details for questions, complaints and claims are in Business details.',
+          'Our name and address are in Business details. How to contact us with questions, complaints and claims is shown below.',
         ],
         important: true,
+        contact: true,
       },
       {
         title: 'Part B. For trainers',
@@ -546,6 +563,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'When a client leaves you, you no longer see what they log, their health form or their photos. If you need records of a client’s screening or training for your insurance or business, ask the client, and keep your own copy securely under POPIA.',
           'If you think your account has been misused, or your clients’ information has been exposed, tell us straight away.',
         ],
+        contact: true,
       },
       {
         title: '44. Programs, workouts and videos you create',
@@ -573,36 +591,37 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '47. The Voltrix Coach subscription',
         paragraphs: [
-          'Card payments for Voltrix Coach aren’t open yet. Until they are, you can use Voltrix Coach only with free access that we give you (section 53), and we charge you nothing. The rest of this section, and sections 48 to 52, apply only once you choose to subscribe.',
+          'Card payments for Voltrix Coach aren’t open yet. Until they are, you use Voltrix Coach free, in 14-day free periods that you start yourself on the Subscribe screen (section 48). No card is taken, and nothing is charged.',
+          'We will never start charging you automatically. Before any charge exists, we’ll show you the price and ask you to agree to it, and you’ll pay only if you do. The rest of this section, and sections 49 to 52, apply only once card payments are open and you have agreed to subscribe.',
           'Voltrix Coach gives you all its features for one monthly subscription: unlimited clients, workouts, programs and the exercise library, bookings and your calendar, chat and video calls, and the community. Your clients use the Voltrix app for free.',
-          'Here is everything you pay and agree to:',
+          'Once card payments open, here is everything you would pay and agree to:',
         ],
         points: [
           'Price: shown on the Subscribe screen before you start, in the currency shown there. Where an app store shows prices in your own currency, you pay the amount it shows.',
           'Full price: the price shown includes any VAT or other tax. We charge no other fees, commission or set-up costs. Your bank may charge its own fees, such as for foreign currency.',
-          'Free trial: 14 days, free, once per trainer. See section 48.',
-          'Billing: monthly in advance, starting when your trial ends (or straight away if you subscribe without a trial), and renewing automatically each month until you cancel.',
+          'Billing: monthly in advance, from the day you agree to subscribe, renewing each month until you cancel.',
           'Payment: by card or another method offered on the Subscribe screen, through Google Play, Apple’s App Store or our payment provider. We never see your full card number.',
           'Minimum term: none. You can cancel at any time, with no cancellation fee.',
-          'Start: straight away. You can use everything as soon as your trial or subscription starts.',
-          'Before you confirm, the Subscribe screen shows your plan, price, trial end date and how to cancel, and you can go back or change your mind.',
+          'Start: straight away. You can use everything as soon as a free period or your subscription starts.',
+          'Before you agree, the Subscribe screen will show your plan, the price, when the first payment is taken and how to cancel, and you’ll be able to go back or change your mind.',
         ],
       },
       {
-        title: '48. Your free trial',
+        title: '48. Your free trial and free periods',
         paragraphs: [
-          'Your 14-day free trial starts when you confirm it on the Subscribe screen. You may be asked for a payment method first, but nothing is charged during the trial.',
-          'Unless you cancel before the trial ends, your paid subscription starts when it ends, and you’ll be charged the monthly price then. The Subscribe screen shows the exact date. You agree to this when you tap to start your trial, and we never start charging you without that.',
-          'If you cancel during the trial, you pay nothing, and you can keep using Voltrix Coach until the trial ends. We end a trial early only under section 26.',
+          'Your first 14 days free start when you start your free trial on the Subscribe screen. While card payments aren’t open, when a free period ends you can start another 14 days free there yourself.',
+          'No card is taken for a free period, and nothing is charged. A free period never turns into a paid subscription. When card payments open, we’ll show you the price and ask whether you want to subscribe. If you don’t, nothing is charged.',
+          'We end a free period early only under section 26.',
         ],
       },
       {
         title: '49. Cancelling',
         paragraphs: [
-          'You can cancel at any time, with no cancellation fee: in your Google Play or App Store subscription settings if you subscribed there, or by asking us using the details in section 1.',
-          'When you cancel, you won’t be charged again. You keep access until the end of the period you’ve paid for, or the end of your trial. After that, your access ends, and you can subscribe again at any time.',
+          'You can cancel at any time, with no cancellation fee: in your Google Play or App Store subscription settings if you subscribed there, or by asking us.',
+          'When you cancel, you won’t be charged again. You keep access until the end of the period you’ve paid for. After that, your access ends, and you can subscribe again at any time.',
           'If you delete your account while a store subscription is still running, we’ll cancel it for you where the store lets us. If you’re charged for any time after you deleted your account, we’ll refund it.',
         ],
+        contact: true,
       },
       {
         title: '50. Refunds',
@@ -623,7 +642,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '51. Price changes',
         paragraphs: [
-          'We may change the price. If we do, we’ll tell you in the app and by email at least 30 days before, and ask you to agree to the new price.',
+          'We may change the price. If we do, we’ll tell you at least 30 days before, and ask you to agree to the new price.',
           'We’ll only charge the new price if you agree to it. If you haven’t agreed by the date it starts, your subscription ends when the period you’ve paid for ends, and you won’t be charged again.',
         ],
       },
@@ -637,15 +656,15 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: '53. Free or discounted access',
         paragraphs: [
           'We may give some trainers free or discounted access, for example while Voltrix is being tested. This is our choice, and it doesn’t mean we recommend or have checked you.',
-          'If we end your free access, you keep it for at least 30 days after we tell you, unless we suspend or close your account under section 26. Free access never turns into a paid subscription on its own: you would need to choose to subscribe.',
+          'We may end free access at any time. While card payments aren’t open, you can then carry on in free periods (section 48). Free access never turns into a paid subscription on its own: you would need to choose to subscribe.',
         ],
       },
       {
         title: '54. If your access ends',
         paragraphs: [
-          'If your trial, subscription or free access ends, you can’t use Voltrix Coach until you subscribe again. Your account and records stay, so you can pick up where you left off, and we’ll send you a copy of your records free if you ask. Your clients keep the plans you gave them and can keep using the Voltrix app.',
-          'If your account has had no access for 12 months, we may close it and delete its information. We’ll warn you in the app and by email at least 30 days before, so you can subscribe again or ask for a copy of what you need.',
+          'If a free period, your subscription or your free access ends, you can’t use Voltrix Coach until you start another free period or subscribe. Your account and records stay, so you can pick up where you left off, and we’ll send you a copy of your records free if you ask. Your clients keep the plans you gave them and can keep using the Voltrix app.',
         ],
+        contact: true,
       },
       {
         title: '55. When trainers must cover our costs',
@@ -677,11 +696,12 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: '57. Your trainer is independent',
         paragraphs: [
           'Trainers are independent businesses, not our staff. You choose your trainer, and your training agreement is directly with them.',
-          'Unless a trainer’s profile shows a Verified badge, we haven’t checked their qualifications, registration, insurance or experience, and even a Verified badge covers only what section 5 says. Before you train with someone, ask to see their qualifications and insurance, and agree on their prices, cancellation rules and what they’ll do for you.',
+          'We haven’t checked their qualifications, registration, insurance or experience. Before you train with someone, ask to see their qualifications and insurance, and agree on their prices, cancellation rules and what they’ll do for you.',
           'Your trainer is responsible for their sessions, programs, plans and advice, so questions or complaints about those go to your trainer first.',
-          'If a trainer has behaved unsafely, dishonestly or inappropriately, please tell us too, using the Report option or the contact details in section 1. We’ll look into it and may act on the trainer’s account under these Terms. Where the law allows, we’ll give you the trainer’s name, business name and contact details if you need them for a complaint or claim.',
+          'If a trainer has behaved unsafely, dishonestly or inappropriately, please contact us too. We’ll look into it and may act on the trainer’s account under these Terms. Where the law allows, we’ll give you the trainer’s name, business name and contact details if you need them for a complaint or claim.',
         ],
         important: true,
+        contact: true,
       },
       {
         title: '58. Joining a trainer, and what they can see',
@@ -718,7 +738,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
         title: '62. Your health form and your health information',
         paragraphs: [
           'The health form is a short set of health questions in our own words. It helps your trainer plan your training safely. Filling it in is your choice, but your trainer may not be able to train you safely, or at all, without it.',
-          'Because health information is specially protected by law, we ask your permission once, before you first add your health form, weight, measurements, progress photos, check-ins or food diary. You can take it back at any time in Settings, and we’ll then delete that information.',
+          'Because health information is specially protected by law, we keep it only with your permission. The health form tells you who sees your answers and why, and you give your permission when you sign and save it. Your weight, measurements, progress photos, check-ins and food diary are kept because you choose to add them, and section 58 explains who sees them. You can remove your health form, or delete any of these entries, at any time, or ask us to delete them all.',
           'If you fill in the health form, answer truthfully and completely. Update it at least once a year, and straight away if your health changes, and tell your trainer about any change before your next session.',
           'If you answer yes to any question, see a doctor before you start training hard or do more than you’re used to, and tell your trainer what the doctor said. Answering no to every question doesn’t mean you are medically cleared to exercise.',
           'Your trainer may record that your doctor said training is fine. That is your trainer’s note of what you told them. We never see or check a doctor’s note.',
@@ -872,7 +892,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: 'Your trainer’s role, and yours',
         paragraphs: [
-          'Your trainer is responsible for screening you, planning your training, supervising your sessions and telling you about the risks of what they ask you to do. Unless their profile shows a Verified badge, we haven’t checked anything about them, and we never check their advice.',
+          'Your trainer is responsible for screening you, planning your training, supervising your sessions and telling you about the risks of what they ask you to do. We haven’t checked anything about them, and we never check their advice.',
           'You’re responsible for telling your trainer the truth about your health, for following your doctor’s advice, and for deciding whether to do an exercise. You can say no at any time.',
         ],
       },
@@ -930,6 +950,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           'Never post, send, ask for or share sexual content involving anyone under 18, whether real, drawn, edited or made by AI. We remove it, report it to the South African Police Service and the Film and Publication Board, and close the account permanently.',
           'Don’t post photos or videos of other people’s children.',
         ],
+        contact: true,
       },
       {
         title: 'No nudity or sexual content',
@@ -1021,27 +1042,30 @@ export const LEGAL_DOCS: LegalDoc[] = [
         paragraphs: [
           'Don’t try to get around a block, a removal or a suspension, for example by making a new account. If you think we got something wrong, ask us to look again instead.',
         ],
+        contact: true,
       },
       {
         title: 'How to report and block',
         points: [
           'Tap Report on any story, reel or comment, or wherever else you see Report, and choose a reason. Reports are private: the person isn’t told who reported them.',
           'Tap Block on a story, reel or comment to stop seeing that person’s stories, reels and comments. They aren’t told. Blocking doesn’t end coaching: to do that, leave your trainer in Settings.',
-          'To report a chat message, a call, a profile or a trainer’s conduct where you don’t see Report, contact us using the details in our Terms of Service. We’ll keep your report confidential.',
+          'To report a chat message, a call, a profile or a trainer’s conduct, contact us. We’ll keep your report confidential.',
           'If someone is in immediate danger, call 10111 or 112 first.',
         ],
+        contact: true,
       },
       {
         title: 'What happens when rules are broken',
         points: [
-          'When several people report a post, it’s hidden automatically while we look at it.',
-          'We aim to review reports within 24 hours, and we deal first with reports about children, intimate images and threats.',
-          'We may remove the content and tell you why, send you a warning, or suspend your account for a time or until we lift it. We may also block the phones, email address and phone numbers the account used, so a new account can’t be made with them.',
+          'When several people report a story, reel or comment, it’s hidden automatically while we look at it.',
+          'We review reports as quickly as we can, and we deal first with reports about children, intimate images and threats.',
+          'We may remove the content and tell you why, send you a warning, or suspend your account for a time or until we lift it. We may also refuse a new account for the same person.',
           'Serious harm, such as sexual content involving anyone under 18, threats, selling banned substances or scams, can mean suspension straight away or permanent closure. People who keep breaking the rules lose their account.',
           'We’ll tell you what we did and why, unless the law or someone’s safety means we can’t.',
-          'You can ask us to look again within 30 days. A person will review it and tell you the outcome, normally within 5 business days.',
+          'You can ask us to look again within 30 days. A person will review it and tell you the outcome.',
           'We don’t check everything before it appears, and we may use automatic tools to find content that breaks these rules.',
         ],
+        contact: true,
       },
       {
         title: 'When we involve the authorities',
@@ -1073,7 +1097,7 @@ export const ACCEPT_SCREEN: {
     },
     {
       title: 'Trainers run their own businesses',
-      body: 'They’re responsible for their own sessions, advice and insurance. Unless you see a Verified badge, we haven’t checked them. Clients pay them directly.',
+      body: 'They’re responsible for their own sessions, advice and insurance. We haven’t checked them. Clients pay them directly.',
     },
     {
       title: 'You choose what you share',
@@ -1101,22 +1125,46 @@ export const ACCEPT_SCREEN: {
   declineNote: 'You need to agree to use {app}. You’re free to leave at any time.',
 };
 
-export const SUBSCRIPTION_SUMMARY: string[] = [
-  'Your 14-day trial is free. Cancel before it ends and you pay nothing.',
-  'After the trial, you pay the monthly price shown, renewing every month until you cancel.',
-  'No minimum term and no cancellation fee. Cancel any time in your Google Play or App Store subscriptions, or by asking us.',
-  'Changed your mind? Ask within 7 days of a subscription’s first payment and we’ll refund it in full.',
-  'The price shown is the full price. We never take money from your clients or charge commission.',
-  'We’ll tell you at least 30 days before any price change, and we’ll only charge the new price if you agree to it.',
-  'By starting your trial, you agree to the subscription terms in Part B of our Terms of Service.',
+// The Voltrix Coach Subscribe screen's short list. 'start' lines are only for a trainer starting their free
+// trial, and only they contain the word "trial"; 'always' lines are for everyone. SUBSCRIPTION_SUMMARY keeps
+// the plain texts for screens that hide lines with "trial" once a trial has ended.
+export type SubscriptionLine = { text: string; when: 'start' | 'always' };
+export const SUBSCRIPTION_LINES: SubscriptionLine[] = [
+  { text: 'Your 14-day free trial starts when you tap to start it. No card is needed.', when: 'start' },
+  {
+    text: 'Until card payments open, Voltrix Coach is free. When 14 days end, you can start 14 more yourself.',
+    when: 'always',
+  },
+  {
+    text: 'Nothing is ever charged automatically. Before any charge, we’ll show you the price and ask you to agree.',
+    when: 'always',
+  },
+  { text: 'No minimum term and no cancellation fee, once you subscribe.', when: 'always' },
+  { text: 'We never take money from your clients or charge commission.', when: 'always' },
+  {
+    text: 'By starting your free trial, you agree to Part B of our Terms of Service, about the subscription.',
+    when: 'start',
+  },
 ];
+export const SUBSCRIPTION_SUMMARY: string[] = SUBSCRIPTION_LINES.map((line) => line.text);
 
-// Who runs Voltrix. Empty until Ryan gives the details: the apps read well with every field null, and show
-// each one once it is filled in. A release build must not ship with name, address or email null.
+// Who runs Voltrix. Empty while Voltrix is in private testing: the apps say so honestly with every field null,
+// and show each one, and every contact line, once it is filled in. The Android workflow warns while name,
+// address or email is null; nothing outside the test group should see a build like that.
 export const BUSINESS: {
   name: string | null;
   registration: string | null;
   address: string | null;
   email: string | null;
+  phone: string | null;
+  website: string | null;
   informationOfficer: string | null;
-} = { name: null, registration: null, address: null, email: null, informationOfficer: null };
+} = {
+  name: null,
+  registration: null,
+  address: null,
+  email: null,
+  phone: null,
+  website: null,
+  informationOfficer: null,
+};

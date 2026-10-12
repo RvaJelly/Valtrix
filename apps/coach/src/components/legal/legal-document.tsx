@@ -1,18 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRef, type PropsWithChildren } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import {
-  BUSINESS,
-  LEGAL_DOCS,
-  TERMS_UPDATED,
-  TERMS_VERSION,
-  type LegalBlock,
-  type LegalDoc,
-} from '@/components/legal/legal-content';
+import { BUSINESS, LEGAL_DOCS, TERMS_VERSION, type LegalBlock, type LegalDoc } from '@/components/legal/legal-content';
 import { Card, Group, ListRow, Text } from '@/components/ui';
-import { BRAND, Colors, Layout, mix, Radius, Spacing, Tabular, themed } from '@/constants/theme';
-import { fillApp, useTerms } from '@/lib/terms';
+import { BRAND, Colors, Fonts, Layout, mix, Radius, Spacing, Tabular, themed, withAlpha } from '@/constants/theme';
+import { fillApp, useTerms, versionDate } from '@/lib/terms';
 
 // One legal document (Terms of Service, Health and Safety Notice, Community Rules) as a calm, readable
 // page: the same component in Voltrix and Voltrix Coach, in Settings and in the reader the acceptance
@@ -33,9 +26,13 @@ const NUMBERED = /^(\d+)\.\s+(.+)$/;
 // The summary at the top of a document, when it isn't an Important box.
 const SUMMARY = /^(In short|The short version)$/;
 
-// The highlighted box for terms that must be drawn to a person's attention (CPA s49): a warm
-// amber tint (solid, so nothing behind it shows through), an icon and a title, never orange (orange
-// is only ever the main button).
+// The amber of the warning tone on dark themes: the Important box is mixed from it on every theme, so it
+// stays warm on navy, Iron, white and Stone alike (a tint of the page colour turned grey on navy).
+const AMBER = '#F5B83D';
+
+// The highlighted box for terms that must be drawn to a person's attention (CPA s49): a warm amber
+// surface (solid, so nothing behind it shows through) with an amber hairline, an icon and a title, never
+// orange (orange is only ever the main button).
 export function ImportantBox({ title, children, testID }: PropsWithChildren<{ title: string; testID?: string }>) {
   const light = Colors.scheme === 'light';
   const ink = light ? mix(Colors.warning, BRAND.iron, 0.15) : Colors.warning;
@@ -46,7 +43,9 @@ export function ImportantBox({ title, children, testID }: PropsWithChildren<{ ti
       style={[
         styles.important,
         narrow && { padding: Spacing.three },
-        { backgroundColor: mix(Colors.background, Colors.warning, light ? 0.1 : 0.13) },
+        light
+          ? { backgroundColor: mix(BRAND.white, AMBER, 0.18), borderColor: withAlpha(Colors.warning, 0.24) }
+          : { backgroundColor: mix(BRAND.iron, AMBER, 0.16), borderColor: withAlpha(AMBER, 0.3) },
       ]}
       testID={testID}>
       <View style={styles.importantHead}>
@@ -116,7 +115,52 @@ function BlockBody({ block, appName }: { block: LegalBlock; appName: string }) {
         </Text>
       ))}
       {block.points?.length ? <Points items={block.points.map((p) => fillApp(p, appName))} /> : null}
+      {block.contact ? <ContactLine /> : null}
     </>
+  );
+}
+
+// How to reach Voltrix, under every section that sends people to us, from BUSINESS: the email address as
+// a link, then the phone number and website once they are set. While Voltrix is in private testing and
+// they are empty, it says so plainly instead of pointing anywhere. Nothing else changes when they are
+// filled in.
+export function ContactLine() {
+  const ways: { icon: 'mail-outline' | 'call-outline' | 'globe-outline'; label: string; url: string }[] = [];
+  if (BUSINESS.email) ways.push({ icon: 'mail-outline', label: BUSINESS.email, url: `mailto:${BUSINESS.email}` });
+  if (BUSINESS.email && BUSINESS.phone) {
+    ways.push({ icon: 'call-outline', label: BUSINESS.phone, url: `tel:${BUSINESS.phone.replace(/[^+0-9]/g, '')}` });
+  }
+  if (BUSINESS.email && BUSINESS.website) {
+    const site = BUSINESS.website;
+    ways.push({ icon: 'globe-outline', label: site, url: /^https?:/.test(site) ? site : `https://${site}` });
+  }
+  if (!ways.length) {
+    return (
+      <View style={styles.contact} testID="contact-line">
+        <Ionicons name="mail-outline" size={16} color={Colors.textSecondary} style={{ marginTop: 2 }} />
+        <Text variant="footnote" tone="secondary" style={{ flex: 1 }}>
+          Voltrix is in private testing. Contact details will be shown here before public launch.
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: Spacing.one }} testID="contact-line">
+      {ways.map((w) => (
+        <View key={w.icon} style={styles.contact}>
+          <Ionicons name={w.icon} size={16} color={Colors.textSecondary} style={{ marginTop: 2 }} />
+          <Text
+            variant="footnote"
+            tone="primary"
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(w.url).catch(() => {})}
+            selectable
+            style={{ flex: 1, fontFamily: Fonts.textMedium, textDecorationLine: 'underline' }}>
+            {w.label}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -129,6 +173,8 @@ export function BusinessDetails() {
     ['Registration number', BUSINESS.registration],
     ['Address', BUSINESS.address],
     ['Email', BUSINESS.email],
+    ['Phone', BUSINESS.phone],
+    ['Website', BUSINESS.website],
     ['Information Officer', BUSINESS.informationOfficer],
   ];
   const filled = rows.filter((r): r is [string, string] => !!r[1]);
@@ -150,19 +196,18 @@ export function BusinessDetails() {
       ))}
       {complete ? null : (
         <Text variant="callout" tone={filled.length ? 'secondary' : 'primary'}>
-          Voltrix is in private testing. Our full business details will be shown here before the apps are offered to
-          anyone outside our test group.
+          Voltrix is in private testing. Our business and contact details will be shown here before public launch.
         </Text>
       )}
     </Card>
   );
 }
 
-// Under a document's intro.
+// Under a document's intro: the same words as the acceptance screen's header.
 export function VersionLine() {
   return (
-    <Text variant="footnote" tone="secondary">
-      Version {TERMS_VERSION} · Updated {TERMS_UPDATED}
+    <Text variant="footnote" tone="secondary" testID="legal-version">
+      Version {versionDate(TERMS_VERSION)}
     </Text>
   );
 }
@@ -326,8 +371,14 @@ const styles = themed(() => ({
   important: {
     borderRadius: Radius.large,
     borderCurve: 'continuous',
+    borderWidth: 1,
     padding: Spacing.gutter,
     gap: Spacing.tight,
+  },
+  contact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
   },
   importantHead: {
     flexDirection: 'row',

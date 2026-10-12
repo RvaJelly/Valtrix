@@ -9,8 +9,8 @@ import { SettingsPage } from '@/components/settings-parts';
 import { Group, IconTile, ListRow, Text } from '@/components/ui';
 
 // The Terms of Service, the Health and Safety Notice, the Community Rules, the Privacy Policy, how to contact
-// Voltrix (once BUSINESS has an email address), which version of the Terms the person accepted, and the
-// app version.
+// Voltrix (the email address from BUSINESS, or, while Voltrix is in private testing, a plain line saying the
+// details will be shown here), which version of the Terms the person accepted, and the app version.
 export default function HelpSettings() {
   return (
     <SettingsPage>
@@ -45,18 +45,19 @@ export default function HelpSettings() {
           last
         />
       </Group>
-      {BUSINESS.email ? (
-        <Group>
-          <ListRow
-            title="Contact Voltrix"
-            subtitle={BUSINESS.email}
-            leading={<IconTile icon="mail-outline" />}
-            onPress={() => Linking.openURL(`mailto:${BUSINESS.email}`).catch(() => {})}
-            testID="help-contact"
-            last
-          />
-        </Group>
-      ) : null}
+      <Group>
+        <ListRow
+          title="Contact Voltrix"
+          subtitle={
+            BUSINESS.email ?? 'Voltrix is in private testing. Contact details will be shown here before public launch.'
+          }
+          subtitleLines={BUSINESS.email ? 1 : 6}
+          leading={<IconTile icon="mail-outline" />}
+          onPress={BUSINESS.email ? () => Linking.openURL(`mailto:${BUSINESS.email}`).catch(() => {}) : undefined}
+          testID="help-contact"
+          last
+        />
+      </Group>
       <TermsAcceptedNote />
       <Text variant="footnote" tone="tertiary" style={{ textAlign: 'center' }}>
         Voltrix {Constants.expoConfig?.version ?? ''}

@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 
-import { BUSINESS, TERMS_UPDATED } from '@/components/legal/legal-content';
-import { BusinessDetails, DocSection, Points } from '@/components/legal/legal-document';
+import { BUSINESS } from '@/components/legal/legal-content';
+import { BusinessDetails, ContactLine, DocSection, Points, VersionLine } from '@/components/legal/legal-document';
 import { Card, Group, IconTile, ListRow, Text, type IconName } from '@/components/ui';
 import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 
@@ -11,15 +11,12 @@ import { Colors, Layout, Spacing, themed } from '@/constants/theme';
 // Terms of Service version in legal-content.ts (it changes with them). Health information is special
 // personal information under POPIA, so it gets its own lines.
 //
-// Some lines are true only with what ships alongside them (the health permission sheet, the email provider,
-// the owner centre, push notifications): see the attorney pack's privacy-changes.md.
+// Every line is true for this build: no server notifications, owner centre, health permission sheet or
+// custom email provider yet. What each changed line becomes when those ship is in the attorney pack
+// (restore-with-owner-and-notifications.md). `after`: lines under the list that don't continue its intro.
+// `contact`: the section ends with the contact line (BUSINESS, or the honest private-testing line).
 
-export const PRIVACY_UPDATED = TERMS_UPDATED;
-
-// The company that sends Voltrix's emails. Name it here once it is chosen.
-const EMAIL_PROVIDER = 'Our email provider';
-
-const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
+const SECTIONS: { title: string; intro?: string; points: string[]; after?: string[]; contact?: boolean }[] = [
   {
     title: 'What Voltrix keeps',
     intro: 'What you, the people you train with, and the apps themselves put in Voltrix:',
@@ -35,14 +32,12 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'Photos: progress photos, and the stories, reels and posts you share.',
       'Nutrition: your food diary and the foods you save.',
       'Health form: your answers to the health questions, anything else you add, an emergency contact and your typed name.',
-      'Your permission for health information: when you gave it, and the wording you agreed to.',
       'Doctor’s OK: if your trainer records that your doctor said training is fine, the date they recorded.',
       'Calendar link: if you turn it on, a private link that lets your calendar app show your sessions.',
-      'Safety: the posts, comments and people you report, why, and any note you add; the people you block; if you are reported, a copy of the post or comment; and our warnings, removals and suspensions.',
-      'Your phones: a coded version of an id the app makes and of your phone’s own id for the app, and the phone’s model, system and app version. We use these to keep Voltrix safe, for example to stop someone we suspended from making a new account. We can’t turn the codes back into the ids, and we never collect your IMEI or advertising id.',
-      'Phone notifications: if you allow them, a code from Google that lets Voltrix reach your phone, which app it is for, the phone’s time zone, and what you chose in Settings, Notifications. A short record of each notification sent (what it was about, and whether it arrived) is kept for 2 days.',
+      'Safety: the stories, reels and comments you report, and why, and the people you block.',
+      'Your settings: appearance, units and how long before a session you’re reminded. The reminders themselves, and the rest timer, are set on your phone.',
       'Our agreement: each time you accept our Terms, the version, the date and time, which app, whether you used Android, an iPhone or the web, and the boxes you ticked.',
-      'For trainers: your trial and subscription dates and status, any free access we gave you, and any Verified badge with what we checked. Your card details are kept by Google, Apple or our payment provider, never by Voltrix.',
+      'For trainers: when your free trial or free period ends, your plan status and any free access we gave you. No card details are taken. Once card payments open, they will be kept by Google, Apple or our payment provider, never by Voltrix.',
       'Messages you send us, such as questions, complaints and requests.',
     ],
   },
@@ -50,11 +45,11 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
     title: 'Why we keep it',
     points: [
       'To run the apps for you and the people you train with, as our Terms describe. You need to give your name, email address and a password to have an account. Everything else is your choice, but a part of the app won’t work without what it needs.',
-      'Your health information, only with your permission: your health form, weight, measurements, progress photos, check-ins and food diary. We ask once, before you first add any of them. You don’t have to agree, but those parts of the app won’t work without it, and your trainer may not be able to train you safely. You can take your permission back at any time in Settings, and we’ll then delete that information.',
+      'Your health information, only with your permission: your health form, weight, measurements, progress photos, check-ins and food diary. You give it by signing and saving your health form, and by choosing to add the others. You don’t have to, but your trainer may not be able to train you safely without them. You can remove your health form and delete those entries at any time, or ask us to delete them all.',
       'To keep Voltrix safe: to stop misuse, deal with reports and protect people.',
       'To show what was agreed, and to deal with complaints and legal claims.',
-      'Because the law requires it, for example tax records for trainers’ subscriptions, or a court order.',
-      'Marketing, such as news and offers from Voltrix, only if you say yes. You can say no at any time, and every message tells you how. Reminders, chat and booking alerts, safety and billing messages aren’t marketing.',
+      'Because the law requires it, for example a court order, and tax records for trainers’ subscriptions once card payments open.',
+      'Marketing, such as news and offers from Voltrix, only if you say yes. You can say no at any time, and every message tells you how. Account emails, reminders and updates in the app aren’t marketing.',
     ],
   },
   {
@@ -66,13 +61,13 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'Money: prices, packs and payments are a trainer’s own record. Clients see how many sessions are left on a pack, never prices or payments.',
       'Asking a trainer: they see your name, photo, and the note and number you send while your request waits. If you withdraw it or they say no, your note and number are removed. They see your email only once they accept.',
       'Your stories, reels, comments and likes: everyone signed in to Voltrix or Voltrix Coach, except people you’ve blocked or who have blocked you. Anyone with the web link to a photo or video in a story, reel or profile picture can open it without signing in, and people can share reels outside Voltrix or save them.',
-      'Trainers’ profiles (name, business, photo, specialties, bio, city, years of experience, whether they’re taking clients, any Verified badge and how far away they are): people looking for a trainer, and everyone who sees their posts.',
+      'Trainers’ profiles (name, business, photo, specialties, bio, city, years of experience, whether they’re taking clients and how far away they are): people looking for a trainer, and everyone who sees their posts.',
       'A trainer who has your email address can see whether you have a Voltrix account.',
       'Finding a trainer near you: if you sort trainers by distance, your phone sends your rough location (to about 1 km) to work out the distances. We use it only for that and don’t keep it.',
       'Your calendar link: anyone who has the link sees your session times and places. A trainer’s link shows each client’s first name and last initial, and the names of blocked-off time. It never has notes, prices, payments, phone numbers, email addresses or health answers. Once you add it to Google Calendar, Apple Calendar or Outlook, that company keeps a copy too.',
       'Calls go straight between the two phones, so each phone sees the other’s internet (IP) address. To connect them, the phones also use Google’s connection servers, which see both addresses but not the call.',
-      'People who work for Voltrix, starting with the owner: they see each account’s name, email address and any phone number it gave us, its public profile and posts, reports and suspensions about it, and the kind of phones it’s used on, and for trainers the plan and number of clients. They look at chats, health forms, progress or food diaries only to help you when you ask, to keep Voltrix safe and working, to deal with a serious report, a complaint or a legal claim, or when the law requires it. Everyone who works for Voltrix must keep information confidential.',
-      'If you report someone, only people who work for Voltrix see that it was you.',
+      'People who work for Voltrix, starting with the owner: in Voltrix Coach they see each trainer’s name, business name, email address, plan and number of clients, and through our hosting company’s dashboard the owner can reach everything stored in Voltrix, including reports. They look at chats, health forms, progress or food diaries only to help you when you ask, to keep Voltrix safe and working, to deal with a serious report, a complaint or a legal claim, or when the law requires it. Everyone who works for Voltrix must keep information confidential.',
+      'If you report a story, reel or comment, or contact us about someone, only people who work for Voltrix see that it was you.',
       'If a client or a regulator has a complaint or claim about a trainer, we may give them the trainer’s name, business name and contact details, where the law allows.',
       'The police, courts and regulators, when the law requires it. We report child sexual abuse material to the police and the Film and Publication Board.',
       'Voltrix doesn’t sell your information, use it for advertising, or use your health or fitness information for marketing.',
@@ -84,8 +79,7 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'Companies that store or send your information for us do so under written agreements that require them to protect it, giving it the same or equal protection as this page describes. Services you choose to use follow their own privacy policies. Each gets only what it needs:',
     points: [
       'Supabase hosts the apps and stores everything, in Frankfurt, Germany, under a written data processing agreement. Supabase’s contracting company is in Singapore.',
-      `${EMAIL_PROVIDER} sends our emails, such as sign-up confirmations, password resets and notices about changes to our Terms. It gets your name and email address.`,
-      'Google’s Firebase Cloud Messaging delivers notifications from our servers, and Apple’s notification service does so on iPhones. They handle them only to deliver them, possibly outside South Africa (for example in the United States). A notification says only who it’s from, what happened and when: never health form or check-in answers, notes, prices, payments, places, phone numbers or email addresses. Message text shows only if Show message text is on in Settings, Notifications, and your phone’s own settings decide whether it shows on the lock screen.',
+      'Supabase also sends our account emails, such as sign-up confirmations and password resets. It gets your email address.',
       'Google’s connection servers help connect calls (see Who sees what).',
       'Open Food Facts, in France: the barcodes and food names you search for, with your phone’s internet address. Never your name or account.',
       'Your phone’s map service (Google on Android, Apple on iPhone): a trainer’s rounded location, to find the name of their town.',
@@ -100,12 +94,10 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'Your information is stored outside South Africa, in Frankfurt, Germany, where the European Union’s data protection law (the GDPR) protects it. Some of the companies above may handle what they need in other countries. We send information abroad only when the company receiving it is bound by law or a written agreement to protect it in a way substantially similar to South Africa’s law, or when it’s needed to provide the service you asked for.',
       'Your information stays while your account is open.',
       'Updates in the apps are cleared after 90 days, the next time you open the app.',
-      'If a trainer’s account has had no plan or free access for 12 months, we may close it and delete its information, after warning them at least 30 days before.',
-      'When you delete your account, we delete your profile and what you added, apart from a trainer’s own record of training you (above) and copies other people already have, such as chat photos you sent or reels they saved. If a technical problem leaves a file behind, we delete it as soon as we find it. Your phones’ codes go with your account.',
-      'After you delete your account, we keep a short record of the Terms you accepted, with the email address the account had, for 3 years in case of a legal claim, or longer while a complaint, dispute or claim is open or the law still allows one. Then we remove anything in it that could identify you.',
-      'Reports lose their details, including any note, a year after they are decided. Suspensions and blocks are kept while they last, even if the account is deleted, so a suspended person can’t come back by deleting their account. Afterwards, blocks lose their codes after 30 days, and a suspension’s details are removed after 3 years. A record of what people who work for Voltrix did is kept for 3 years, then made anonymous.',
-      'A phone’s notification code is removed when you sign out on it, when you delete your account, and after 9 months without opening the app.',
-      'Trainers’ billing records are kept for 5 years, because tax law requires it.',
+      'When you delete your account, we delete your profile and what you added, apart from a trainer’s own record of training you (above) and copies other people already have, such as chat photos you sent or reels they saved. If a technical problem leaves a file behind, we delete it as soon as we find it.',
+      'After you delete your account, we keep a short record of the Terms you accepted, with the email address the account had, for 3 years in case of a legal claim, or longer while a complaint, dispute or claim is open (we mark the record so it is kept) or the law still allows one. Then we remove anything in it that could identify you.',
+      'A report is deleted with the story, reel or comment it’s about, or when the account that made it is deleted. Blocks are deleted when either account is.',
+      'Once card payments open, trainers’ billing records will be kept for 5 years, because tax law requires it.',
       'Copies in our hosting company’s backups and logs are deleted automatically within 7 days.',
       'Voltrix is only for people aged 18 or older. If we learn that someone younger has an account, we close it and delete their information, apart from our record of what they told us when they signed up.',
     ],
@@ -118,25 +110,29 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'correct or delete information that is wrong, out of date, incomplete or misleading, or that we shouldn’t have or no longer need',
       'stop using your information in a particular way, if you object to it',
       'stop sending you marketing, at any time',
-      'stop using your health information, by taking back your permission (this doesn’t undo what was done before)',
-      'We’ll answer within 30 days and confirm what we did. If your account is suspended, you can still ask us for a copy of your information, or for it to be deleted, by email.',
-      'We don’t make decisions about you by computer alone that have legal or similarly serious effects. Automatic checks may hide a post until a person reviews it.',
+      'stop using your health information and delete it, because you take back your permission (this doesn’t undo what was done before)',
+    ],
+    after: [
+      'We’ll answer within 30 days and confirm what we did.',
+      'We don’t make decisions about you by computer alone that have legal or similarly serious effects. When several people report a story, reel or comment, it is hidden automatically until we look at it.',
       'You can also complain to the Information Regulator (details below).',
     ],
+    contact: true,
   },
   {
     title: 'Changing or removing things',
     points: [
       'Most of what you add can be changed or deleted where you added it: your profile, workouts, progress, photos, check-ins, habits, posts and messages.',
       'Change or remove your health form any time. Your trainers stop seeing it at once.',
-      'Take back your permission for health information in Settings. We then delete your health form, weight, measurements, progress photos, check-ins and food diary.',
+      'Take back your permission for health information by removing your health form and deleting those entries, or ask us to delete them all.',
       'Withdraw a request to a trainer while it waits. They no longer have your note or number.',
       'Leave your trainer in Settings. From then on they no longer see what you log.',
       'Make a new calendar link or turn it off in Settings. The old link stops working at once.',
-      'Choose which notifications come, hide message text, or set quiet hours in Settings, Notifications. Turn them off completely in your phone’s settings.',
+      'Choose your session reminders in Settings, Notifications. Turn notifications off completely in your phone’s settings.',
       'Delete your account in Settings. A trainer who deletes their account removes their clients, calendar, workouts and money records too.',
-      'Can’t get into the app? Ask us to delete your account using the contact details below, or on our account deletion page.',
+      'Can’t get into the app? Ask us to delete your account.',
     ],
+    contact: true,
   },
   {
     title: 'Keeping it safe',
@@ -144,13 +140,13 @@ const SECTIONS: { title: string; intro?: string; points: string[] }[] = [
       'Everything travels encrypted between your phone and Voltrix.',
       'The database checks every request, so each person reaches only what they’re allowed to see.',
       'Face ID and fingerprint unlock happen on your phone. Voltrix never receives your face or fingerprint.',
-      'If we believe someone has got into your information without permission, we’ll tell the Information Regulator and you, by email and in the app, as soon as we reasonably can, and explain what you can do to protect yourself.',
+      'If we believe someone has got into your information without permission, we’ll tell the Information Regulator and you as soon as we reasonably can, and explain what you can do to protect yourself.',
     ],
   },
   {
     title: 'Changes to this page',
     points: [
-      'When we change this page in a way that matters, we tell you in the app and by email first. If something new needs your permission, we ask for it again.',
+      'When we change this page in a way that matters, we tell you before the change takes effect, and the app asks you to accept the new version. If something new needs your permission, we ask for it again.',
     ],
   },
 ];
@@ -179,15 +175,19 @@ export function PrivacyPolicy({ onOpenDoc = openInSettings }: { onOpenDoc?: (doc
             This Privacy Policy says what we keep, why, who sees it, how long we keep it, and how to change or remove
             it.
           </Text>
-          <Text variant="footnote" tone="secondary">
-            Updated {PRIVACY_UPDATED}
-          </Text>
+          <VersionLine />
         </Card>
         <BusinessDetails />
         {SECTIONS.map((section) => (
           <DocSection key={section.title} title={section.title}>
             {section.intro ? <Text variant="callout">{section.intro}</Text> : null}
             <Points items={section.points} />
+            {(section.after ?? []).map((line) => (
+              <Text key={line} variant="callout">
+                {line}
+              </Text>
+            ))}
+            {section.contact ? <ContactLine /> : null}
           </DocSection>
         ))}
         <DocSection title="Who is responsible" testID="privacy-responsible">
@@ -200,17 +200,28 @@ export function PrivacyPolicy({ onOpenDoc = openInSettings }: { onOpenDoc?: (doc
           </Text>
           <Text variant="callout">
             To ask what we keep about you, to have something corrected or removed, to take back your permission or to
-            complain, {BUSINESS.email ? `email ${BUSINESS.email}.` : 'contact Voltrix.'} To ask for records under the
-            Promotion of Access to Information Act, contact us the same way.
+            complain, contact us. To ask for records under the Promotion of Access to Information Act, contact us the
+            same way.
           </Text>
+          <ContactLine />
           <Text variant="callout">
             Trainers: for the client records you keep in Voltrix Coach, you are responsible for following the Protection
             of Personal Information Act, and we store them for you, as our Terms explain.
           </Text>
-          <Text variant="callout" selectable>
-            You can also complain to South Africa’s Information Regulator: inforegulator.org.za,
-            POPIAComplaints@inforegulator.org.za, 010 023 5200 or toll-free 0800 017 160.
-          </Text>
+          <View style={{ gap: Spacing.one }} testID="privacy-regulator">
+            <Text variant="callout">You can also complain to South Africa’s Information Regulator:</Text>
+            {/* Each detail on its own line, a size smaller, so the email address (no spaces) fits on one line
+                on a 360-point phone with larger text instead of breaking in the middle. */}
+            <Text variant="footnote" selectable>
+              inforegulator.org.za
+            </Text>
+            <Text variant="footnote" selectable>
+              POPIAComplaints@inforegulator.org.za
+            </Text>
+            <Text variant="footnote" selectable>
+              010 023 5200 or toll-free 0800 017 160
+            </Text>
+          </View>
         </DocSection>
         <DocSection title="Our other documents">
           <Group>

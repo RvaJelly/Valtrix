@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InviteSheet, type InviteClient } from '@/components/invite-sheet';
@@ -23,6 +23,7 @@ import {
   Card,
   EmptyState,
   EnterUp,
+  fitFont,
   Group,
   IconButton,
   IconTile,
@@ -37,7 +38,7 @@ import {
   useDelayed,
   type IconName,
 } from '@/components/ui';
-import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { Colors, Fonts, Layout, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { coachAccess, trialLeft } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { useChat, useChatEvents } from '@/lib/chat-live';
@@ -108,6 +109,8 @@ const SHORTCUTS: { icon: IconName; label: string; name: string; href: Href }[] =
   { icon: 'list-outline', label: 'Library', name: 'Exercise library', href: '/exercises' },
   { icon: 'play-circle-outline', label: 'Reels', name: 'Reels', href: '/reels' },
 ];
+// Every label is drawn at the size that fits the longest one, so the row reads as one.
+const LONGEST_SHORTCUT = SHORTCUTS.reduce((a, s) => (s.label.length > a.length ? s.label : a), '');
 
 export default function Home() {
   const { profile } = useAuth();
@@ -788,19 +791,30 @@ function UpNext({ session, now, avatar }: { session: Session; now: Date; avatar?
   );
 }
 
+// One word under a tonal circle. The word stays whole on one line, a little smaller on a small phone with large
+// text, never broken in two ("Workou / t"); all five at the same size.
 function Shortcut({ icon, label, name, href }: { icon: IconName; label: string; name: string; href: Href }) {
+  const { fontScale } = useWindowDimensions();
+  const [width, setWidth] = useState(0);
+  const size = fitFont(LONGEST_SHORTCUT, width, Type.footnote.fontSize ?? 13, fontScale);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={name}
       onPress={() => router.push(href)}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={[styles.shortcut, Platform.OS === 'web' && { cursor: 'pointer' }]}>
       {({ pressed }) => (
         <>
           <View style={[styles.shortcutCircle, pressed && { backgroundColor: Colors.tintPressed }]}>
             <Ionicons name={icon} size={22} color={Colors.text} />
           </View>
-          <Text variant="footnote" numberOfLines={2} style={styles.shortcutLabel}>
+          <Text
+            variant="footnote"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[styles.shortcutLabel, { fontSize: size, lineHeight: Math.round(size * 1.4) }]}>
             {label}
           </Text>
         </>

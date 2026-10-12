@@ -1055,10 +1055,12 @@ export function Shortcuts({
 }: {
   items: { icon: IconName; label: string; onPress: () => void; accessibilityLabel?: string }[];
 }) {
+  // Every label is drawn at the size that fits the longest one, so the row reads as one.
+  const longest = items.reduce((a, item) => (item.label.length > a.length ? item.label : a), '');
   return (
     <View style={styles.shortcuts}>
       {items.map((item) => (
-        <Shortcut key={item.label} {...item} />
+        <Shortcut key={item.label} {...item} longest={longest} />
       ))}
     </View>
   );
@@ -1067,11 +1069,13 @@ export function Shortcuts({
 function Shortcut({
   icon,
   label,
+  longest,
   onPress,
   accessibilityLabel,
 }: {
   icon: IconName;
   label: string;
+  longest: string;
   onPress: () => void;
   accessibilityLabel?: string;
 }) {
@@ -1079,7 +1083,7 @@ function Shortcut({
   const { fontScale } = useWindowDimensions();
   // The label stays whole on one line ("WhatsApp"), a little smaller when the text is large.
   const [width, setWidth] = useState(0);
-  const size = fitFont(label, width, Type.footnote.fontSize ?? 13, fontScale);
+  const size = fitFont(longest, width, Type.footnote.fontSize ?? 13, fontScale);
   return (
     <Pressable
       accessibilityRole="button"

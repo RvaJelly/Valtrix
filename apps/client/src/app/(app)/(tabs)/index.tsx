@@ -24,6 +24,7 @@ import {
   Card,
   EmptyState,
   EnterUp,
+  fitFont,
   Group,
   IconButton,
   IconTile,
@@ -40,7 +41,7 @@ import {
   useDelayed,
 } from '@/components/ui';
 import { WaitingSheet } from '@/components/waiting-sheet';
-import { BRAND, Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
+import { BRAND, Colors, Layout, Radius, Spacing, Tabular, themed, Type } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { firstOf, packForDay } from '@/lib/book-times';
 import {
@@ -797,34 +798,73 @@ function NextSession({ session, now }: { session: Session; now: Date }) {
   );
 }
 
-// The client's email with a Copy button, so they can send it to their trainer.
+// The client's email with a Copy button, so they can send it to their trainer. The email stays whole on one line,
+// beside Copy when it fits there (a little smaller if need be); when it doesn't, Copy goes under it, and an email
+// too long for a line of its own breaks only before the @. On a small phone with large text neither is cut short.
 function EmailRow({ email }: { email: string }) {
   const [copied, setCopied] = useState(false);
+  const { fontScale } = useWindowDimensions();
+  // The width the email has on a line of its own (the box less its padding, the icon and the gap after it), and the
+  // width Copy takes beside it (the widest it has been, "Copied" included, so the row doesn't jump back).
+  const [room, setRoom] = useState(0);
+  const [copyWidth, setCopyWidth] = useState(0);
+  const size = emailSize(email, room, copyWidth, fontScale);
+  const font = { fontSize: size, lineHeight: Math.round(size * 1.375) };
+  const at = email.lastIndexOf('@');
+  const parts = at > 0 ? [email.slice(0, at), email.slice(at)] : [email];
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
   return (
-    <View style={styles.email}>
-      <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
-      <Text variant="rowTitle" numberOfLines={2} style={{ flex: 1 }} selectable>
-        {email}
-      </Text>
-      <Button
-        title={copied ? 'Copied' : 'Copy'}
-        icon={copied ? 'checkmark' : 'copy-outline'}
-        variant="ghost"
-        size="small"
-        accessibilityLabel={copied ? 'Email copied' : 'Copy your email'}
-        onPress={() => {
-          Clipboard.setStringAsync(email)
-            .then(() => setCopied(true))
-            .catch(() => {});
-        }}
-      />
+    <View
+      style={styles.email}
+      onLayout={(e) => setRoom(e.nativeEvent.layout.width - Spacing.three - Spacing.one - 18 - Spacing.tight)}>
+      <View style={styles.emailText}>
+        <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+        <View style={styles.emailWords} accessible accessibilityLabel={email} testID="home-email">
+          {parts.map((part) => (
+            <Text key={part} variant="rowTitle" style={[{ flexShrink: 1 }, font]} selectable>
+              {part}
+            </Text>
+          ))}
+        </View>
+      </View>
+      <View
+        style={[styles.emailCopy, { minWidth: copyWidth }]}
+        onLayout={(e) => {
+          const width = e.nativeEvent.layout.width;
+          setCopyWidth((now) => Math.max(now, width));
+        }}>
+        <Button
+          title={copied ? 'Copied' : 'Copy'}
+          icon={copied ? 'checkmark' : 'copy-outline'}
+          variant="ghost"
+          size="small"
+          accessibilityLabel={copied ? 'Email copied' : 'Copy your email'}
+          onPress={() => {
+            Clipboard.setStringAsync(email)
+              .then(() => setCopied(true))
+              .catch(() => {});
+          }}
+          testID="home-email-copy"
+        />
+      </View>
     </View>
   );
+}
+
+// The email's size in its row: beside Copy when it fits there at seven eighths of the size or more (fitFont's
+// estimate of the width), else on a line of its own at the size that fits that (down to three quarters), and at the
+// full size when it breaks before the @ anyway. Larger text counts, as in fitFont.
+function emailSize(email: string, room: number, copyWidth: number, fontScale: number) {
+  const base = Type.rowTitle.fontSize ?? 16;
+  if (room <= 0) return base;
+  const fits = (width: number, scale: number) => email.length * 0.62 * Math.max(1, fontScale) * base * scale <= width;
+  const beside = room - Spacing.tight - copyWidth;
+  if (copyWidth > 0 && fits(beside, 0.875)) return fitFont(email, beside, base, fontScale);
+  return fits(room, 0.75) ? fitFont(email, room, base, fontScale) : base;
 }
 
 const styles = themed(() => ({
@@ -846,13 +886,36 @@ const styles = themed(() => ({
   },
   email: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: Spacing.tight,
+    columnGap: Spacing.tight,
+    rowGap: Spacing.one,
     minHeight: 52,
     paddingLeft: Spacing.three,
     paddingRight: Spacing.one,
+    paddingVertical: Spacing.one,
     borderRadius: Radius.medium,
     backgroundColor: Colors.tint,
+  },
+  // The icon and the email: as wide as the email, less when the box is narrower.
+  emailText: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
+  },
+  // The part before the @ and the part from it: the one place a long email may break.
+  emailWords: {
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  // At the right end of its line, the email's or its own.
+  emailCopy: {
+    marginLeft: 'auto',
   },
   bookRow: {
     flexDirection: 'row',

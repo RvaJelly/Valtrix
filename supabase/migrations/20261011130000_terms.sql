@@ -15,9 +15,15 @@
 --     years after that (POPIA s14(4) allows de-identifying in place of destroying).
 --   * profiles.terms_version and terms_accepted_at say which version the account accepted last
 --     and when, for the apps (readable by the account only, like the rest of the row).
+--   * The current version is kept on the server (private.settings 'terms_version', read through
+--     current_terms_version()), so an app that knows only an older version asks the person to update
+--     it, and a new version takes effect when this setting changes.
+--   * A record that may be needed for a complaint, dispute or claim can be held (hold_until, set by
+--     the owner with SQL only), and tidy_terms_proof() leaves it as it is until the hold ends.
 --
 -- Builds on round 3 (20261011120000_round3.sql). handle_new_user() is replaced with the same body
--- plus one line (the sign-up record). Nothing here removes rows or objects.
+-- plus one guarded call (the sign-up record), which can never stop an account from being made.
+-- Nothing here removes rows or objects.
 
 -- ---------- 1. The account's latest acceptance ----------
 
@@ -57,11 +63,16 @@ create table public.terms_acceptances (
   device_time timestamptz,
   -- Set when the account is deleted (section 4).
   account_deleted_at timestamptz,
-  account_email text constraint terms_acceptances_account_email_check check (account_email is null or char_length(account_email) <= 320)
+  account_email text constraint terms_acceptances_account_email_check check (account_email is null or char_length(account_email) <= 320),
+  -- Keep the record exactly as it is until this time (section 5): a complaint, dispute or claim is
+  -- open, or one can still be brought. Set only by the owner, with SQL (hold_terms_proof()).
+  hold_until timestamptz
 );
 
 comment on table public.terms_acceptances is
-  'Proof that a person accepted a version of the Terms. Kept after the account is deleted and de-identified three years later (tidy_terms_proof).';
+  'Proof that a person accepted a version of the Terms. Kept after the account is deleted and de-identified three years later (tidy_terms_proof), unless held (hold_until).';
+comment on column public.terms_acceptances.hold_until is
+  'Keep this record as it is until then (an open complaint, dispute or claim). Owner only, with SQL: hold_terms_proof().';
 
 -- One record per account, version, app and kind of device: accepting the same version again on the
 -- same kind of device adds nothing, so the table can't be flooded.
@@ -100,6 +111,7 @@ declare
   v_app text;
   v_platform text;
   v_device timestamptz;
+  v_day date;
 begin
   if p_user is null or p_terms is null or jsonb_typeof(p_terms) <> 'object' then
     return false;
@@ -107,6 +119,17 @@ begin
   v_version := p_terms ->> 'version';
   v_app := p_terms ->> 'app';
   if v_version is null or v_version !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$' or v_app is null or v_app not in ('coach', 'client') then
+    return false;
+  end if;
+  -- A version is the day it takes effect: a real date, never more than a day after the server's
+  -- (South Africa is ahead of the server's UTC). A made-up '9999-12-31' would otherwise sit above
+  -- every real version on the profile for good.
+  begin
+    v_day := left(v_version, 10)::date;
+  exception when others then
+    return false;
+  end;
+  if v_day > current_date + 1 then
     return false;
   end if;
   -- All three boxes, each exactly true.
@@ -163,6 +186,10 @@ begin
   if not exists (select 1 from public.profiles p where p.id = me) then
     raise exception 'Your account isn''t ready yet. Try again in a moment.' using errcode = 'P0002';
   end if;
+  -- A version dated after tomorrow isn't published yet (record_terms() refuses it too).
+  if p_terms ->> 'version' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' and left(p_terms ->> 'version', 10) > to_char(current_date + 1, 'YYYY-MM-DD') then
+    raise exception 'That version of the Terms isn''t published yet.' using errcode = '22023';
+  end if;
   if not public.record_terms(me, p_terms, 'app') then
     raise exception 'Tick all three boxes to accept the Terms.' using errcode = '22023';
   end if;
@@ -177,9 +204,11 @@ $$;
 revoke execute on function public.accept_terms(jsonb) from public, anon;
 grant execute on function public.accept_terms(jsonb) to authenticated;
 
--- Sign-up: the same body as before (20261007194000_card_first_trial.sql) and one more line, which
+-- Sign-up: the same body as before (20261007194000_card_first_trial.sql) and one guarded call, which
 -- records the acceptance the app sent with the sign-up (options.data.terms). A sign-up without it,
--- or with something wrong in it, makes the account exactly as before; the app then asks again.
+-- or with something wrong in it, makes the account exactly as before; the app then asks again. The
+-- call has its own exception block, so a fault in recording (now, or after a later change) is only a
+-- warning in the logs and never stops an account from being made.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -193,7 +222,11 @@ begin
     nullif(btrim(new.raw_user_meta_data ->> 'full_name'), ''),
     case when new.raw_user_meta_data ->> 'role' = 'client' then 'client' else 'trainer' end
   );
-  perform public.record_terms(new.id, new.raw_user_meta_data -> 'terms', 'sign_up');
+  begin
+    perform public.record_terms(new.id, new.raw_user_meta_data -> 'terms', 'sign_up');
+  exception when others then
+    raise warning 'handle_new_user: the Terms acceptance of % was not recorded (%: %)', new.id, sqlstate, sqlerrm;
+  end;
   return new;
 end;
 $$;
@@ -228,8 +261,9 @@ create trigger on_auth_user_deleted after delete on auth.users
 
 -- Every night: three years after an account was deleted, its records no longer say who accepted
 -- (the account, its email address and the phone's clock are cleared, and the times are kept only to
--- the month). Records of an account that went without the trigger seeing it start their three years
--- now. Answers how many records were de-identified.
+-- the month), unless they are held (section 5): a held record waits until its hold ends. Records of
+-- an account that went without the trigger seeing it start their three years now. Answers how many
+-- records were de-identified.
 create or replace function public.tidy_terms_proof()
 returns integer
 language plpgsql
@@ -252,6 +286,7 @@ begin
          accepted_at = date_trunc('month', a.accepted_at),
          account_deleted_at = date_trunc('month', a.account_deleted_at)
    where a.account_deleted_at < now() - interval '3 years'
+     and (a.hold_until is null or a.hold_until <= now())
      and (a.user_id is not null or a.account_email is not null or a.device_time is not null);
   get diagnostics tidied = row_count;
   return tidied;
@@ -259,6 +294,75 @@ end;
 $$;
 
 revoke execute on function public.tidy_terms_proof() from public, anon, authenticated;
+
+-- ---------- 5. Holding records for a complaint, dispute or claim ----------
+
+-- Owner only, with SQL (the Supabase SQL editor; nobody using the apps can call it): keep an account's
+-- records exactly as they are, with who accepted, until p_until, while a complaint, dispute or claim
+-- is open or one can still be brought (for example by someone who was under 18). Finds the records by
+-- the account while it exists (p_account), or by the email address it had once it is deleted
+-- (p_email, any case). A null p_until lifts the hold, and the records then follow the usual three
+-- years. Answers how many records it changed. Example:
+--   select public.hold_terms_proof(null, '<the email address>', '2030-01-01');
+create or replace function public.hold_terms_proof(p_account uuid, p_email text, p_until timestamptz)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  changed integer;
+begin
+  if p_account is null and nullif(btrim(p_email), '') is null then
+    raise exception 'Name the account or its email address.' using errcode = '22023';
+  end if;
+  update public.terms_acceptances a
+     set hold_until = p_until
+   where (p_account is not null and a.user_id = p_account)
+      or (nullif(btrim(p_email), '') is not null and lower(a.account_email) = lower(btrim(p_email)));
+  get diagnostics changed = row_count;
+  return changed;
+end;
+$$;
+
+revoke execute on function public.hold_terms_proof(uuid, text, timestamptz) from public, anon, authenticated;
+
+-- ---------- 6. The current version, on the server ----------
+
+-- The version everyone must have accepted: 'YYYY-MM-DD' (a letter after it for a second version on
+-- the same day). The apps compare it with the version they carry: an app that only knows an older
+-- one asks the person to update it, and nobody is asked for a newer one until this changes. To
+-- publish a new version, ship the apps with its text first, then change this row (with the 20
+-- business days' notice the Terms promise for changes that affect people's rights).
+-- private.settings is made by 20261008170000_clean_expired_stories.sql (the same definition here, so
+-- this file also builds on a database without the cron jobs; nothing changes where it exists).
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+create table if not exists private.settings (
+  name text primary key,
+  value text not null
+);
+revoke all on private.settings from public, anon, authenticated;
+
+insert into private.settings (name, value)
+values ('terms_version', '2026-10-11')
+on conflict (name) do nothing;
+
+-- Anyone may read it, signed in or not (the acceptance screen comes before signing up). A database
+-- without this function, or without the row, answers nothing, and the apps then use their own
+-- version, so nobody is locked out.
+create or replace function public.current_terms_version()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.value from private.settings s where s.name = 'terms_version';
+$$;
+
+revoke execute on function public.current_terms_version() from public;
+grant execute on function public.current_terms_version() to anon, authenticated;
 
 -- 03:40 in South Africa (01:40 UTC). Only where Supabase Cron is installed (the live project), so
 -- the file also builds on a plain Postgres, where nothing runs it on its own (run

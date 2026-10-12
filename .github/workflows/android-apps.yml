@@ -40,6 +40,27 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      # While Voltrix is in private testing the business details in the legal text are empty, and the apps
+      # say so. This only warns (it never stops the build): nobody outside the test group should get a
+      # build that warns here.
+      - name: Check the business details
+        continue-on-error: true
+        env:
+          FILE: apps/${{ matrix.app }}/src/components/legal/legal-content.ts
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const file = process.env.FILE;
+          const text = fs.readFileSync(require('path').join(process.env.GITHUB_WORKSPACE, file), 'utf8');
+          const block = (text.split('export const BUSINESS')[1] || '').split('};')[0];
+          const empty = ['name', 'address', 'email'].filter((k) => new RegExp('\\b' + k + ': null\\b').test(block));
+          if (!block) console.log(`::warning file=${file},title=Business details not found::BUSINESS is missing from ${file}.`);
+          else if (empty.length)
+            console.log(
+              `::warning file=${file},title=Business details are empty::BUSINESS ${empty.join(', ')} ${empty.length > 1 ? 'are' : 'is'} null. Fill them in before anyone outside the test group gets this build.`,
+            );
+          else console.log('Business name, address and email are filled in.');
+          EOF
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

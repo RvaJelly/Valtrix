@@ -8,9 +8,10 @@ import { TermsAcceptedNote } from '@/components/legal/terms-notes';
 import { SettingsPage } from '@/components/settings-parts';
 import { Group, IconTile, ListRow, Text } from '@/components/ui';
 
-// The Terms of Service, the Health and Safety Notice, the Community Rules, the Privacy Policy, how to contact
-// Voltrix (the email address from BUSINESS, or, while Voltrix is in private testing, a plain line saying the
-// details will be shown here), which version of the Terms the person accepted, and the app version.
+// The Terms of Service, the Health and Safety Notice, the Community Rules, the Privacy Policy (the line under each
+// fits one line at 360 wide; on a narrower phone or with large text it takes two, never cut short), how to contact
+// Voltrix (the email address from BUSINESS, or, while Voltrix is in private testing, a plain line saying the details
+// will be shown here), which version of the Terms the person accepted, and the app version.
 export default function HelpSettings() {
   return (
     <SettingsPage>
@@ -20,13 +21,15 @@ export default function HelpSettings() {
           subtitle="What you and Voltrix agree to"
           leading={<IconTile icon="document-text-outline" />}
           onPress={() => router.push({ pathname: '/settings/legal/[doc]', params: { doc: 'terms' } })}
+          subtitleLines={2}
           testID="help-terms"
         />
         <ListRow
           title={legalDoc('health').title}
-          subtitle="Training safely, and when to see a doctor"
+          subtitle="When to stop and see a doctor"
           leading={<IconTile icon="fitness-outline" />}
           onPress={() => router.push({ pathname: '/settings/legal/[doc]', params: { doc: 'health' } })}
+          subtitleLines={2}
           testID="help-health"
         />
         <ListRow
@@ -34,13 +37,15 @@ export default function HelpSettings() {
           subtitle="How we look after each other"
           leading={<IconTile icon="people-outline" />}
           onPress={() => router.push('/rules')}
+          subtitleLines={2}
           testID="help-community"
         />
         <ListRow
           title="Privacy Policy"
-          subtitle="What Voltrix keeps and who sees it"
+          subtitle="What we keep and who sees it"
           leading={<IconTile icon="shield-checkmark-outline" />}
           onPress={() => router.push('/settings/privacy-policy')}
+          subtitleLines={2}
           testID="help-privacy"
           last
         />

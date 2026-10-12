@@ -85,7 +85,7 @@ export default function AppLayout() {
         <Stack.Screen name="settings/help" options={{ title: 'Help' }} />
         <Stack.Screen name="settings/booking" options={{ title: 'Online booking' }} />
         <Stack.Screen name="settings/calendar" options={{ title: 'Calendar link' }} />
-        <Stack.Screen name="settings/privacy-policy" options={{ title: 'Privacy' }} />
+        <Stack.Screen name="settings/privacy-policy" options={{ title: 'Privacy Policy' }} />
         <Stack.Screen name="admin" options={{ title: 'All trainers' }} />
         <Stack.Screen name="needs-you" options={{ title: 'Needs you' }} />
         <Stack.Screen name="earnings" options={{ title: 'Earnings' }} />
@@ -114,7 +114,7 @@ export default function AppLayout() {
           options={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: '#000000' } }}
         />
         <Stack.Screen name="posts/new" options={{ title: 'New post', presentation: 'modal' }} />
-        <Stack.Screen name="rules" options={{ title: 'Community rules' }} />
+        <Stack.Screen name="rules" options={{ title: 'Community Rules' }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
         <Stack.Screen
           name="call"

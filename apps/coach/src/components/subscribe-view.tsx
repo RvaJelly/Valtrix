@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { SUBSCRIPTION_SUMMARY } from '@/components/legal/legal-content';
+import { Points } from '@/components/legal/legal-document';
+import { LegalReader, type ReaderDoc } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
 import { StickyFooter } from '@/components/sticky-footer';
-import { Button, Card, Divider, StatusPill, Text, type IconName } from '@/components/ui';
+import { Button, Card, Divider, StatusPill, Text, TextLink, type IconName } from '@/components/ui';
 import { Colors, Layout, Radius, Spacing, Tabular, themed } from '@/constants/theme';
 import { PRICE_LABEL, TRIAL_DAYS } from '@/lib/access';
 import { dayMonth } from '@/lib/format';
@@ -34,12 +37,17 @@ type Props = {
 // after that the monthly plan starts on its own.
 export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, onSignOut }: Props) {
   const [notice, setNotice] = useState(false);
+  const [reading, setReading] = useState<ReaderDoc | null>(null);
   const starting = mode === 'start';
   const inTrial = mode === 'trial';
   const [chargeDate] = useState(() =>
     dayMonth(trialEndsAt ?? new Date(new Date().getTime() + TRIAL_DAYS * 86_400_000)),
   );
   const first = name?.trim().split(/\s+/)[0];
+  // The summary is written for starting the free trial. Once a trial has started or ended, the lines about
+  // starting one don't apply, so they are left out; the rest (renewal, cancelling, refunds, the full price,
+  // price changes) always do.
+  const summary = starting ? SUBSCRIPTION_SUMMARY : SUBSCRIPTION_SUMMARY.filter((line) => !/\btrial\b/i.test(line));
   const headline = starting
     ? first
       ? `Build your business, ${first}`
@@ -123,6 +131,18 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
           </View>
         ) : null}
 
+        {/* What the subscription terms say in brief, before the trainer decides, and both documents in full. */}
+        <View style={styles.summary} testID="subscription-summary">
+          <Text variant="label" tone="secondary" accessibilityRole="header">
+            The subscription in brief
+          </Text>
+          <Points items={summary} />
+          <View style={styles.links}>
+            <TextLink label="Subscription terms" onPress={() => setReading('terms')} testID="subscription-terms" />
+            <TextLink label="Privacy Policy" onPress={() => setReading('privacy')} testID="subscription-privacy" />
+          </View>
+        </View>
+
         {standalone && onSignOut ? <Button title="Sign out" variant="ghost" onPress={onSignOut} /> : null}
       </ScrollView>
 
@@ -140,6 +160,7 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
             : `${PRICE_LABEL} a month until you cancel.`}
         </Text>
       </StickyFooter>
+      <LegalReader doc={reading} part={reading === 'terms' ? 'B' : undefined} onClose={() => setReading(null)} />
     </View>
   );
 }
@@ -200,6 +221,20 @@ const styles = themed(() => ({
     alignItems: 'center',
     gap: Spacing.tight,
     minHeight: 28,
+  },
+  summary: {
+    gap: Spacing.tight,
+    padding: Spacing.gutter,
+    borderRadius: Radius.large,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.border,
+  },
+  links: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    columnGap: Spacing.four,
   },
   timeline: {
     paddingHorizontal: Spacing.gutter,

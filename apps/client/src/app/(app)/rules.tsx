@@ -1,26 +1,7 @@
-import { ScrollView } from 'react-native';
+import { LegalDocument } from '@/components/legal/legal-document';
 
-import { CommunityRules } from '@/components/community-rules';
-import { Text } from '@/components/ui';
-import { Colors, Layout, Spacing } from '@/constants/theme';
-
+// The Community Rules in full: from Settings › Help, and from the short list people agree to before
+// their first story or reel. The stack header names the page.
 export default function Rules() {
-  return (
-    <ScrollView
-      style={{ backgroundColor: Colors.background }}
-      contentContainerStyle={{
-        width: '100%',
-        maxWidth: Layout.maxClient,
-        alignSelf: 'center',
-        paddingHorizontal: Spacing.gutter,
-        paddingTop: Spacing.three,
-        paddingBottom: Spacing.hero,
-        gap: Spacing.four,
-      }}>
-      <Text variant="callout" tone="secondary">
-        Everyone on Voltrix agrees to these rules for stories and reels.
-      </Text>
-      <CommunityRules />
-    </ScrollView>
-  );
+  return <LegalDocument doc="community" />;
 }

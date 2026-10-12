@@ -116,7 +116,7 @@ export default function Settings() {
       subtitle: email || 'Email and password',
       href: '/settings/account',
     },
-    { icon: 'help-circle-outline', title: 'Help', subtitle: 'Community rules and app version', href: '/settings/help' },
+    { icon: 'help-circle-outline', title: 'Help', subtitle: 'Terms, privacy and app version', href: '/settings/help' },
   ];
 
   return (

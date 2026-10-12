@@ -12,6 +12,10 @@ export type Profile = {
   avatar_url?: string | null;
   // Theme, units and reminder time saved with the account.
   preferences?: Record<string, unknown> | null;
+  // The newest version of the Terms the account accepted, and when (null: none yet; undefined: a
+  // database without the Terms yet, so the acceptance kept on the phone counts until it can be sent).
+  terms_version?: string | null;
+  terms_accepted_at?: string | null;
 };
 
 type AuthState = {
@@ -31,12 +35,19 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+const PROFILE_COLUMNS = 'id, role, full_name, avatar_url, preferences';
+
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
-    .select('id, role, full_name, avatar_url, preferences')
+    .select(`${PROFILE_COLUMNS}, terms_version, terms_accepted_at`)
     .eq('id', userId)
     .maybeSingle();
+  // A database without the Terms columns yet: the rest loads as before, and the Terms acceptance kept
+  // on the phone is sent once the database has them (lib/terms.tsx).
+  if (error?.code === '42703') {
+    ({ data, error } = await supabase.from('profiles').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle());
+  }
   if (error) throw error;
   return data as Profile | null;
 }

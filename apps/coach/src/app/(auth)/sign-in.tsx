@@ -43,7 +43,7 @@ export default function SignIn() {
         <>
           {problem?.field === 'form' ? <Notice tone="danger">{problem.text}</Notice> : null}
           <Button title="Sign in" onPress={signIn} loading={busy} />
-          <TextLink lead="New here?" label="Create an account" onPress={() => router.replace('/sign-up')} />
+          <TextLink lead="New here?" label={'Create an\u00A0account'} onPress={() => router.replace('/sign-up')} />
         </>
       }>
       <TextField

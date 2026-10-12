@@ -5,10 +5,17 @@
 #   https://github.com/RvaJelly/valtrix/releases/latest/download/voltrix.apk
 # These are test builds signed with the standard Expo test key. Google Play and the
 # App Store get their own signed builds later.
+# The repository is public, so these downloads are public too: anyone with the link can install
+# them. Share the links only with the named test group until the business details are filled in.
 name: Android apps
 
 on:
   workflow_dispatch:
+    inputs:
+      public:
+        description: For people outside the test group (refused while the business details are empty)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +47,29 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      # While Voltrix is in private testing the business details in the legal text are empty, and the apps
+      # say so. A test-group build only warns; a build for people outside the test group ("public") stops
+      # here until BUSINESS has a name, an address and an email (ECTA s43).
+      - name: Check the business details
+        env:
+          FILE: apps/${{ matrix.app }}/src/components/legal/legal-content.ts
+          PUBLIC: ${{ inputs.public }}
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const file = process.env.FILE;
+          const text = fs.readFileSync(require('path').join(process.env.GITHUB_WORKSPACE, file), 'utf8');
+          const block = (text.split('export const BUSINESS')[1] || '').split('};')[0];
+          const empty = ['name', 'address', 'email'].filter((k) => new RegExp('\\b' + k + ': null\\b').test(block));
+          const level = process.env.PUBLIC === 'true' ? 'error' : 'warning';
+          if (!block) console.log(`::${level} file=${file},title=Business details not found::BUSINESS is missing from ${file}.`);
+          else if (empty.length)
+            console.log(
+              `::${level} file=${file},title=Business details are empty::BUSINESS ${empty.join(', ')} ${empty.length > 1 ? 'are' : 'is'} null. Fill them in before anyone outside the test group gets this build.`,
+            );
+          else console.log('Business name, address and email are filled in.');
+          if (level === 'error' && (!block || empty.length)) process.exit(1);
+          EOF
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -78,8 +108,11 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLIC: ${{ inputs.public }}
         run: |
+          notes="Voltrix Coach (voltrix-coach.apk) is the trainer app and Voltrix (voltrix.apk) is the client app. Open the file on an Android phone to install it."
+          if [ "$PUBLIC" != true ]; then notes="Test build for the Voltrix test group only. $notes"; fi
           gh release create "android-${GITHUB_RUN_NUMBER}" apks/*.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
             --title "Android apps, build ${GITHUB_RUN_NUMBER}" \
-            --notes "Voltrix Coach (voltrix-coach.apk) is the trainer app and Voltrix (voltrix.apk) is the client app. Open the file on an Android phone to install it."
+            --notes "$notes"

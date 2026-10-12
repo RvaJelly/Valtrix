@@ -12,6 +12,7 @@ import { Colors } from '@/constants/theme';
 import { coachAccess } from '@/lib/access';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { SettingsProvider, useSettings } from '@/lib/settings';
+import { TermsProvider, useTerms } from '@/lib/terms';
 import { hideWebSplash } from '@/lib/web-splash';
 
 SplashScreen.preventAutoHideAsync();
@@ -19,6 +20,7 @@ SplashScreen.preventAutoHideAsync();
 function RootNavigator() {
   const { loading: authLoading, session, profile, recovering } = useAuth();
   const { ready } = useSettings();
+  const terms = useTerms();
   // A font that fails to load, or takes more than 3 seconds, falls back to the system font, so it
   // never keeps the app from starting. On the web the fonts load from public/index.html instead.
   const [fontsLoaded, fontError] = useFonts(FONT_FILES);
@@ -27,7 +29,7 @@ function RootNavigator() {
     const timer = setTimeout(() => setFontsLate(true), 3000);
     return () => clearTimeout(timer);
   }, []);
-  const loading = authLoading || !ready || !(fontsLoaded || fontError || fontsLate);
+  const loading = authLoading || !ready || terms.status === 'loading' || !(fontsLoaded || fontError || fontsLate);
 
   useEffect(() => {
     if (fontError) console.warn('Fonts failed to load', fontError);
@@ -41,9 +43,13 @@ function RootNavigator() {
 
   if (loading) return null;
 
+  // Welcome, sign-in and sign-up come first. A signed-in account that hasn't accepted the current Terms
+  // sees them before anything else, and a build older than the Terms asks to be updated.
+  const update = terms.status === 'update';
+  const gated = update || terms.status === 'accept';
   // Client accounts belong in the Voltrix client app.
   const isClient = profile?.role === 'client';
-  const signedIn = !!session && !recovering && !isClient;
+  const signedIn = !gated && !!session && !recovering && !isClient;
   const setUp = !!profile?.business_name;
   const hasAccess = coachAccess(profile).kind !== 'none';
   // This version needs a newer database than the one it found: wait on the update screen.
@@ -54,10 +60,13 @@ function RootNavigator() {
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
       }}>
-      <Stack.Protected guard={!session}>
+      <Stack.Protected guard={gated}>
+        <Stack.Screen name="terms" />
+      </Stack.Protected>
+      <Stack.Protected guard={!update && !session}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session && recovering}>
+      <Stack.Protected guard={!gated && !!session && recovering}>
         <Stack.Screen name="new-password" />
       </Stack.Protected>
       <Stack.Protected guard={signedIn && !waiting && !setUp}>
@@ -72,7 +81,7 @@ function RootNavigator() {
       <Stack.Protected guard={waiting}>
         <Stack.Screen name="update-pending" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session && !recovering && isClient}>
+      <Stack.Protected guard={!gated && !!session && !recovering && isClient}>
         <Stack.Screen name="wrong-app" />
       </Stack.Protected>
     </Stack>
@@ -85,7 +94,9 @@ export default function RootLayout() {
       <SettingsProvider>
         <ThemedStatusBar />
         <ToastProvider>
-          <RootNavigator />
+          <TermsProvider app="coach">
+            <RootNavigator />
+          </TermsProvider>
         </ToastProvider>
         <AppLock />
       </SettingsProvider>

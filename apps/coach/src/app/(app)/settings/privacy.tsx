@@ -17,8 +17,9 @@ export default function PrivacySettings() {
       </Section>
       <Group>
         <ListRow
-          title="How Voltrix uses your information"
-          titleLines={2}
+          title="Privacy Policy"
+          subtitle="How Voltrix uses your information"
+          subtitleLines={2}
           leading={<IconTile icon="shield-checkmark-outline" />}
           onPress={() => router.push('/settings/privacy-policy')}
           testID="privacy-policy-row"

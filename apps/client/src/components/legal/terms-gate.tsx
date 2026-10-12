@@ -228,11 +228,7 @@ export function TermsGate({
       </ScrollView>
 
       <StickyFooter>
-        {stuck ? (
-          <ErrorText testID="terms-stuck">
-            We still couldn’t send it. Check your connection, then tap {fill(ACCEPT_SCREEN.button)} again.
-          </ErrorText>
-        ) : null}
+        {stuck ? <ErrorText testID="terms-stuck">Not sent yet. Check your connection and try again.</ErrorText> : null}
         <Button
           title={fill(ACCEPT_SCREEN.button)}
           onPress={accept}

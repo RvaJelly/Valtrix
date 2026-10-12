@@ -693,6 +693,7 @@ export default function SessionDetail() {
                 key="repeat"
                 title="Repeats"
                 subtitle={repeat ? `${repeat.start_time.slice(0, 5)} · ${repeatEnd(repeat)}` : undefined}
+                subtitleLines={2}
                 leading={<IconTile icon="repeat-outline" />}
                 trailing={
                   <Text variant="callout" tone="secondary">

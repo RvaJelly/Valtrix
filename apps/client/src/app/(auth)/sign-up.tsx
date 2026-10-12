@@ -89,7 +89,7 @@ export default function SignUp() {
         intro={`We sent a link to ${email.trim()}. Open it to confirm your account, then sign in.`}
         footer={
           <CheckEmailActions onResend={sendAgain} resending={resend.busy} resent={resend.done} error={resend.error}>
-            <TextLink lead="Confirmed it?" label="Sign in" onPress={() => router.replace('/sign-in')} />
+            <TextLink lead="Confirmed it?" label={'Sign\u00A0in'} onPress={() => router.replace('/sign-in')} />
           </CheckEmailActions>
         }
       />
@@ -118,7 +118,7 @@ export default function SignUp() {
       footer={
         <>
           <Button title="Create account" onPress={signUp} loading={busy} />
-          <TextLink lead="Already have an account?" label="Sign in" onPress={() => router.replace('/sign-in')} />
+          <TextLink lead="Already have an account?" label={'Sign\u00A0in'} onPress={() => router.replace('/sign-in')} />
         </>
       }>
       <TextField

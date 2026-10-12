@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -48,9 +47,8 @@ const NONE: TermsChecks = { age: false, terms: false, health: false };
 // - `onAccept`: on the sign-up screen, the ticks go to that sign-up (kept in its memory) instead of an
 //   account. `notice`: a line under the heading, for example when they need ticking again (signed in, the
 //   screen writes its own when an acceptance made on this phone hasn't reached us within a day).
-// `underHeader`: inside the sign-up screen, under its see-through header and back arrow. While this screen
-// shows there, the header gets a solid bar in the page colour, so the long page never scrolls up behind
-// the arrow; the form after it has the see-through header again.
+// `underHeader`: inside the sign-up screen, under its header and back arrow (a bar in the page colour,
+// from the (auth) layout, so the long page never scrolls up behind the arrow): room at the top for them.
 export function TermsGate({
   underHeader,
   onAccept,
@@ -86,13 +84,6 @@ export function TermsGate({
     (overdue
       ? `You agreed on this phone more than a day ago, but it hasn’t reached us yet. Connect to the internet, then tick the boxes and tap ${fill(ACCEPT_SCREEN.button)}.`
       : undefined);
-  const navigation = useNavigation();
-  useEffect(() => {
-    if (!underHeader) return;
-    navigation.setOptions({ headerBackground: SolidHeader });
-    return () => navigation.setOptions({ headerBackground: undefined });
-  }, [navigation, underHeader]);
-
   async function accept() {
     if (!all || busy) return;
     if (onAccept) {
@@ -219,7 +210,7 @@ export function TermsGate({
         {signedIn ? (
           <Section title="Your account">
             <View style={{ gap: Spacing.three }}>
-              <TextLink lead="Not your account?" label="Sign out" onPress={signOut} />
+              <TextLink lead="Not your account?" label={'Sign\u00A0out'} onPress={signOut} />
               {ownAccount ? (
                 <DeleteAccount userId={session?.user.id} onDeleted={signOut} />
               ) : profile ? (
@@ -254,11 +245,6 @@ export function TermsGate({
       <LegalReader doc={reading} onClose={closeReader} />
     </SafeAreaView>
   );
-}
-
-// The sign-up screen's header behind the back arrow while the Terms show (see `underHeader`).
-function SolidHeader() {
-  return <View style={styles.headerBar} />;
 }
 
 // A tick box and its words: the whole row is the target. Ticked is drawn in the text colour, like
@@ -323,10 +309,6 @@ const styles = themed(() => ({
     flex: 1,
     backgroundColor: Colors.background,
     overflow: 'hidden',
-  },
-  headerBar: {
-    flex: 1,
-    backgroundColor: Colors.background,
   },
   watermark: {
     position: 'absolute',

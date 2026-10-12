@@ -52,7 +52,7 @@ export function UpdateApp() {
             loading={busy}
             testID="update-app"
           />
-          {session ? <TextLink lead="Not your account?" label="Sign out" onPress={signOut} /> : null}
+          {session ? <TextLink lead="Not your account?" label={'Sign\u00A0out'} onPress={signOut} /> : null}
         </>
       }>
       {Platform.OS === 'android' ? (

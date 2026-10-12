@@ -76,7 +76,7 @@ export default function WorkoutHistory() {
         if (allBests) setBests(allBests);
         if (allRecords) setRecords(allRecords);
         setError(
-          first && allBests && allRecords ? null : "Couldn't load your workouts. Check your connection and try again.",
+          first && allBests && allRecords ? null : 'Couldn’t load your workouts. Check your connection and try again.',
         );
       }),
     [],
@@ -110,7 +110,7 @@ export default function WorkoutHistory() {
       });
       setMore(page.length === PAGE);
     } catch {
-      setError("Couldn't load older workouts. Check your connection and try again.");
+      setError('Couldn’t load older workouts. Check your connection and try again.');
     }
     setLoadingMore(false);
   }

@@ -92,7 +92,7 @@ export function plainError(error: unknown, fallback = TRY_AGAIN): string {
 // they come, except its row-level security wording. Anything else is most likely the
 // connection.
 
-export const SAVE_FAILED = "That didn't save. Check your connection and try again.";
+export const SAVE_FAILED = 'That didn’t save. Check your connection and try again.';
 
 export function saveError(error: unknown, fallback = SAVE_FAILED): string {
   const e = error as { code?: string; message?: string } | null;

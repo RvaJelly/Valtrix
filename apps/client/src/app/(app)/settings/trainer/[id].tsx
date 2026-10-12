@@ -72,7 +72,7 @@ export default function TrainerSettings() {
     return (
       <SettingsPage>
         <Stack.Screen options={{ title: '' }} />
-        <EmptyState icon="person-outline" title="Not your trainer" message="You're no longer linked to this trainer." />
+        <EmptyState icon="person-outline" title="Not your trainer" message="You’re no longer linked to this trainer." />
       </SettingsPage>
     );
   }
@@ -84,7 +84,7 @@ export default function TrainerSettings() {
   async function leave(t: Trainer) {
     const sure = await confirm(
       `Leave ${name}?`,
-      `${first} will no longer see your food diary, workouts, progress (weight, measurements and photos), check-ins, habits, health form, chat or calls, and you won't see the plans and sessions they set for you. ${first} keeps their own notes. You can join again if they send you a new invite.`,
+      `${first} will no longer see your food diary, workouts, progress (weight, measurements and photos), check-ins, habits, health form, chat or calls, and you won’t see the plans and sessions they set for you. ${first} keeps their own notes. You can join again if they send you a new invite.`,
       'Leave',
     );
     if (!sure) return;

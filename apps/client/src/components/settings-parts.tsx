@@ -293,7 +293,7 @@ export function BiometricRow() {
   async function toggle(on: boolean) {
     setError(null);
     if (on && !(await confirmIdentity(`Turn on ${name} for Voltrix`))) {
-      return setError(`${name} didn't work, so it is still off.`);
+      return setError(`${name} didn’t work, so it is still off.`);
     }
     setLocked(false);
     save({ biometric: on });

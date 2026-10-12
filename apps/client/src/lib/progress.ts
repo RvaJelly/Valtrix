@@ -317,8 +317,8 @@ export async function pickProgressPhoto(from: 'camera' | 'library'): Promise<Pic
   return { uri: saved.uri, bytes: toBytes(saved.base64), width: saved.width, height: saved.height };
 }
 
-const FOLDER_FULL = `You have ${formatNumber(MAX_PHOTO_FILES)} progress photos, the most there's room for. Delete some old ones to add more.`;
-const UPLOAD_FAILED = "The photo couldn't be uploaded. Check your connection and try again.";
+const FOLDER_FULL = `You have ${formatNumber(MAX_PHOTO_FILES)} progress photos, the most there’s room for. Delete some old ones to add more.`;
+const UPLOAD_FAILED = 'The photo couldn’t be uploaded. Check your connection and try again.';
 
 // Uploads the photo under a new name (files are never overwritten), saves it as that day's
 // photo for the pose, then removes the file it replaced.
@@ -357,7 +357,7 @@ export async function addProgressPhoto(
     .single();
   if (error || !data) {
     await bucket.remove([path]).catch(() => {});
-    throw new Error("That didn't save. Check your connection and try again.");
+    throw new Error('That didn’t save. Check your connection and try again.');
   }
   if (old && old.path !== path) await bucket.remove([old.path]).catch(() => {});
   return cleanPhoto(data as Record<string, unknown>);

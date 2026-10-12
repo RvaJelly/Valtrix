@@ -69,7 +69,7 @@ export default function SearchFood() {
     try {
       setResults({ query: q, foods: await searchFoods(q) });
     } catch (e) {
-      setError(e instanceof FoodError ? e.message : "Couldn't search right now. Try again.");
+      setError(e instanceof FoodError ? e.message : 'Couldn’t search right now. Try again.');
     }
     setSearching(false);
   }
@@ -91,7 +91,7 @@ export default function SearchFood() {
       if (hasNutrition(full)) setFood(full);
       else enterYourself(full);
     } catch (e) {
-      setError(e instanceof FoodError ? e.message : "Couldn't open that one. Try again.");
+      setError(e instanceof FoodError ? e.message : 'Couldn’t open that one. Try again.');
     }
     setOpening(null);
   }

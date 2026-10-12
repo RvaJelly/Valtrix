@@ -3,7 +3,8 @@
 --      who signs up, or whose trial ends, is locked out.
 --   2. Archived clients who still owe money stay on Who owes you.
 --   3. A session moved on or off a pack tells the client's open Voltrix app (their pack count).
---   4. Blocking someone settles a request to train waiting between the two of them.
+--   4. Blocking someone settles a request to train waiting between the two of them (once also for
+--      blocks made before this).
 --   5. Each person can find and remove the chat photos they sent, also once that chat has ended.
 --   6. A profile photo can only be the person's own photo in this project's avatars folder.
 --   7. A trainer and a person who blocked one another don't see each other in list_trainers()
@@ -179,6 +180,32 @@ revoke execute on function public.user_blocks_settle_requests() from public, ano
 
 create trigger user_blocks_settle_requests after insert on public.user_blocks
   for each row execute function public.user_blocks_settle_requests();
+
+-- Once, for blocks made before this: a request still waiting between two people who blocked one
+-- another is settled by the same rule (withdrawn when the person who asked blocked the trainer,
+-- also when they blocked each other; declined when only the trainer blocked them; expired after
+-- 14 days), its note and phone number cleared, and the trainer's update about it marked seen.
+-- Nobody is sent anything for these.
+with settled as (
+  update public.training_requests x
+     set status = case when x.created_at <= now() - interval '14 days' then 'expired'
+                       when exists (select 1 from public.user_blocks b
+                                     where b.blocker_id = x.user_id and b.blocked_id = x.trainer_id) then 'withdrawn'
+                       else 'declined' end,
+         answered_at = now(), note = null, phone = null
+   where x.status = 'pending'
+     and exists (select 1 from public.user_blocks b
+                  where (b.blocker_id = x.user_id and b.blocked_id = x.trainer_id)
+                     or (b.blocker_id = x.trainer_id and b.blocked_id = x.user_id))
+  returning x.id, x.trainer_id
+)
+update public.news n
+   set seen_at = now()
+  from settled s
+ where n.person_id = s.trainer_id
+   and n.kind = 'training_request'
+   and n.seen_at is null
+   and n.payload ->> 'request_id' = s.id::text;
 
 -- ---------- 5. Chat photos a person sent, also in chats that have ended ----------
 

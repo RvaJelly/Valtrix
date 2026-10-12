@@ -8,7 +8,7 @@ import { Button, ErrorText, Text, Title } from '@/components/ui';
 import { Colors, Layout, Radius, Spacing, themed } from '@/constants/theme';
 
 // iPhone's Mail opens on its inbox with message://. "mailto:" would start a blank new email instead,
-// and Android and the web have no link to an inbox, so there Resend is the main button.
+// and Android and the web have no link to an inbox, so there "Send it again" is the main button.
 const MAIL_INBOX = Platform.OS === 'ios' ? 'message://' : null;
 
 // A sign-in page: the logo and a big title at the top, the fields under them, and the main button
@@ -69,7 +69,7 @@ export function CheckEmailActions({
         <Button title="Open mail app" icon="mail-outline" onPress={() => Linking.openURL(MAIL_INBOX).catch(() => {})} />
       ) : null}
       <Button
-        title={resent ? 'Sent again' : 'Resend'}
+        title={resent ? 'Sent again' : 'Send it again'}
         icon={resent ? 'checkmark' : 'refresh-outline'}
         variant={MAIL_INBOX ? 'secondary' : 'primary'}
         onPress={onResend}

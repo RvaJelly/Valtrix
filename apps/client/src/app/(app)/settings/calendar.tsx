@@ -16,7 +16,7 @@ export default function CalendarLinkSettings() {
         <View testID="calendar-in-coach">
           <Notice>
             Your calendar link is in Voltrix Coach, with your clients’ sessions and your own training. Add it, make a
-            new one or turn it off there, under Settings › Calendar link.
+            new one or turn it off there, under {'Settings\u00a0›\u00a0Calendar\u00a0link'}.
           </Notice>
         </View>
       </SettingsPage>

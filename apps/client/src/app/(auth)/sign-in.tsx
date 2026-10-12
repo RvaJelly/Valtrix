@@ -71,7 +71,7 @@ export default function SignIn() {
               <Notice
                 tone="danger"
                 action={{
-                  label: 'Resend link',
+                  label: 'Send it again',
                   onPress: () => sendLink(problem.unconfirmed!),
                   loading: resend.busy,
                   testID: 'sign-in-resend',

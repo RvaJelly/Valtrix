@@ -68,7 +68,7 @@ export default function CheckInScreen() {
         if (c) setCheckIns(c);
         if (t !== null) setTrainers(t);
         if (w) setWeights(w);
-        setError(c ? null : "Couldn't load your check-ins. Check your connection and try again.");
+        setError(c ? null : 'Couldn’t load your check-ins. Check your connection and try again.');
         const newest = (c ?? [])
           .flatMap((x) => x.replies)
           .map((r) => r.updated_at)
@@ -138,7 +138,7 @@ export default function CheckInScreen() {
           />
           <Text variant="footnote" tone="secondary">
             {trainers?.length === 0
-              ? "When you have a trainer, they'll see your check-ins."
+              ? 'When you have a trainer, they’ll see your check-ins.'
               : trainers?.length === 1
                 ? `${trainers[0]} sees your check-in and can reply.`
                 : 'Your trainers see your check-in and can reply.'}

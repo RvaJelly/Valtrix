@@ -43,7 +43,7 @@ export default function ScanFood() {
         params: { meal, day, barcode: code, name: found?.name ?? '', brand: found?.brand ?? '' },
       });
     } catch (e) {
-      setMessage(e instanceof FoodError ? e.message : "Couldn't look that up right now. Try again.");
+      setMessage(e instanceof FoodError ? e.message : 'Couldn’t look that up right now. Try again.');
       setBusy(false);
     }
   }

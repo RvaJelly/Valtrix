@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { ErrorText, Group, IconTile, ListRow } from '@/components/ui';
+import { ErrorText, Group, IconTile, ListRow, TextLink } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { removeMyChatPhotos } from '@/lib/chat';
@@ -14,13 +14,14 @@ import { supabase } from '@/lib/supabase';
 // Deletes the client's account once they confirm: their progress photos first, then the photos they sent in
 // chats, their profile photo, stories and reels, then everything in the database, then signs out. Offered in
 // Settings and on the Terms screen (the same file name as in Voltrix Coach, so the shared Terms screen finds it).
-export function DeleteAccount() {
+function useDeleteAccount() {
   const { session, signOut } = useAuth();
   const userId = session?.user.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function remove() {
+    if (busy) return;
     const sure = await confirm(
       'Delete your account?',
       'This permanently deletes your account, your workouts, progress photos and other progress, habits, stories, reels, photos and the messages you sent. It cannot be undone.',
@@ -45,6 +46,12 @@ export function DeleteAccount() {
     await signOut();
   }
 
+  return { remove, busy, error };
+}
+
+// The Settings row.
+export function DeleteAccount() {
+  const { remove, busy, error } = useDeleteAccount();
   return (
     <View style={{ gap: Spacing.two }}>
       <ErrorText>{error}</ErrorText>
@@ -58,6 +65,18 @@ export function DeleteAccount() {
           last
         />
       </Group>
+    </View>
+  );
+}
+
+// The Terms screen, before the app: a quiet red link under Sign out, under the page's own content and never in
+// its footer. The same in Voltrix Coach.
+export function DeleteAccountLink() {
+  const { remove, busy, error } = useDeleteAccount();
+  return (
+    <View style={{ gap: Spacing.two }}>
+      <TextLink label={busy ? 'Deleting…' : 'Delete account'} tone="danger" onPress={remove} testID="delete-account" />
+      <ErrorText>{error}</ErrorText>
     </View>
   );
 }

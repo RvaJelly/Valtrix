@@ -170,9 +170,10 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
           </View>
         </View>
 
+        {/* Two quiet links, as on every screen before the app. */}
         {standalone && onSignOut ? (
-          <View style={{ gap: Spacing.two }}>
-            <Button title="Sign out" variant="ghost" onPress={onSignOut} />
+          <View style={{ gap: Spacing.one }}>
+            <TextLink label="Sign out" onPress={onSignOut} />
             <DeleteAccountLink />
           </View>
         ) : null}

@@ -12,8 +12,8 @@ import { supabase } from '@/lib/supabase';
 
 // Deletes the trainer's account once they confirm: their files first (chat photos, profile photo, stories
 // and reels, workout videos, progress photos), then everything in the database, then signs out. Offered in
-// Settings and, for trainers who can't reach Settings (on the set-up step or once their trial has ended),
-// under Sign out there.
+// Settings and, for trainers who can't reach Settings (the Terms screen, the set-up step, the paywall), under
+// Sign out there.
 function useDeleteAccount() {
   const { session, signOut } = useAuth();
   const userId = session?.user.id;
@@ -61,12 +61,13 @@ export function DeleteAccount() {
   );
 }
 
-// A quiet link under Sign out, for the screens before the app.
+// The screens before the app (the Terms screen, the set-up step, the paywall): a quiet red link under Sign
+// out, both under the page's own content and never in its footer. The same in Voltrix.
 export function DeleteAccountLink() {
   const { remove, busy, error } = useDeleteAccount();
   return (
     <View style={{ gap: Spacing.two }}>
-      <TextLink label={busy ? 'Deleting…' : 'Delete account'} onPress={remove} testID="delete-account" />
+      <TextLink label={busy ? 'Deleting…' : 'Delete account'} tone="danger" onPress={remove} testID="delete-account" />
       <ErrorText>{error}</ErrorText>
     </View>
   );

@@ -269,12 +269,15 @@ export function TextLink({
   label,
   onPress,
   end,
+  tone = 'primary',
   testID,
 }: {
   lead?: string;
   label: string;
   onPress: () => void;
   end?: boolean;
+  // Danger for Delete account, the one quiet link that can't be undone.
+  tone?: 'primary' | 'danger';
   testID?: string;
 }) {
   const { hovered, hover } = useHover();
@@ -290,7 +293,7 @@ export function TextLink({
         <Text variant="callout" tone="secondary" style={{ textAlign: 'center' }}>
           {lead ? `${lead} ` : null}
           <Text
-            tone="primary"
+            tone={tone}
             style={{
               fontFamily: lead ? Fonts.textSemi : Fonts.textMedium,
               textDecorationLine: pressed || hovered ? 'underline' : 'none',

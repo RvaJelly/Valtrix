@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { AuthPage } from '@/components/auth-page';
 import { DeleteAccountLink } from '@/components/delete-account';
 import { Button, Text, TextField, TextLink } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
 import { coachAccess, TRIAL_DAYS } from '@/lib/access';
 import { useAuth } from '@/lib/auth';
 import { plainError } from '@/lib/errors';
@@ -48,8 +50,6 @@ export default function BusinessSetup() {
             </Text>
           ) : null}
           <Button title="Continue" onPress={createBusiness} loading={busy} />
-          <TextLink label="Sign out" onPress={signOut} />
-          <DeleteAccountLink />
         </>
       }>
       <TextField
@@ -66,6 +66,12 @@ export default function BusinessSetup() {
         onSubmitEditing={createBusiness}
         error={error ?? undefined}
       />
+      {/* Under the field, not in the footer: the footer stays short, so a message under the field is never
+          hidden behind it (a small phone with large text). Two quiet links, as on every screen before the app. */}
+      <View style={{ gap: Spacing.one, marginTop: Spacing.three }}>
+        <TextLink label="Sign out" onPress={signOut} />
+        <DeleteAccountLink />
+      </View>
     </AuthPage>
   );
 }

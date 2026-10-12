@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DeleteAccount } from '@/components/delete-account';
+import { DeleteAccountLink } from '@/components/delete-account';
 import { ACCEPT_SCREEN, LEGAL_DOCS, TERMS_VERSION } from '@/components/legal/legal-content';
 import { ImportantBox, Points } from '@/components/legal/legal-document';
 import { LegalReader, readerTitle, type ReaderDoc } from '@/components/legal/legal-reader';
@@ -207,12 +207,13 @@ export function TermsGate({
           </Text>
         </Section>
 
+        {/* Sign out and Delete account: two quiet links, as on every screen before the app. */}
         {signedIn ? (
           <Section title="Your account">
-            <View style={{ gap: Spacing.three }}>
+            <View style={{ gap: Spacing.one }}>
               <TextLink lead="Not your account?" label={'Sign\u00A0out'} onPress={signOut} />
               {ownAccount ? (
-                <DeleteAccount />
+                <DeleteAccountLink />
               ) : profile ? (
                 <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }}>
                   To delete your account, use {terms.app === 'coach' ? 'Voltrix' : 'Voltrix Coach'}.

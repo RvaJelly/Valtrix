@@ -700,14 +700,35 @@ export function Notice({
   style?: StyleProp<ViewStyle>;
 }>) {
   const color = tone === 'neutral' ? Colors.textSecondary : Colors[tone];
+  const { fontScale } = useWindowDimensions();
+  // With large text the action goes under the words, so the words keep the width to read well.
+  const stacked = !!action && fontScale > 1.15;
+  const icon = <Ionicons name={NOTICE_ICONS[tone]} size={20} color={color} />;
+  const words = (
+    <Text variant="callout" style={{ flex: 1 }}>
+      {children}
+    </Text>
+  );
   return (
     <View
-      style={[styles.notice, { backgroundColor: onCard ? Colors.tint : Colors.surface }, style]}
+      style={[
+        styles.notice,
+        stacked && styles.noticeStacked,
+        { backgroundColor: onCard ? Colors.tint : Colors.surface },
+        style,
+      ]}
       accessibilityRole={tone === 'danger' ? 'alert' : undefined}>
-      <Ionicons name={NOTICE_ICONS[tone]} size={20} color={color} />
-      <Text variant="callout" style={{ flex: 1 }}>
-        {children}
-      </Text>
+      {stacked ? (
+        <View style={styles.noticeRow}>
+          {icon}
+          {words}
+        </View>
+      ) : (
+        <>
+          {icon}
+          {words}
+        </>
+      )}
       {action ? (
         <Button
           title={action.label}
@@ -716,6 +737,7 @@ export function Notice({
           variant="secondary"
           size="small"
           testID={action.testID}
+          style={stacked ? { alignSelf: 'flex-start', marginLeft: 20 + Spacing.tight } : undefined}
         />
       ) : null}
     </View>
@@ -1604,6 +1626,15 @@ const styles = themed(() => ({
     paddingVertical: Spacing.tight,
     paddingHorizontal: CARD_X,
     borderRadius: Radius.medium,
+  },
+  noticeStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.tight,
   },
   card: {
     backgroundColor: Colors.surface,

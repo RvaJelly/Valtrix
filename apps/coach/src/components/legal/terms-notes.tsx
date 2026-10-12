@@ -46,7 +46,11 @@ export function TermsAcceptedNote() {
   return (
     <Text variant="footnote" tone="secondary" style={{ textAlign: 'center' }} testID="terms-accepted-note">
       You accepted the version of {keep(versionDate(accepted.version))} on {keep(fullDate(accepted.at))}.
-      {accepted.recorded ? '' : ' It’s saved on this phone and added to your account the next time you’re online.'}
+      {accepted.recorded
+        ? ''
+        : accepted.early
+          ? ' It’s saved on this phone and added to your account once that version takes effect.'
+          : ' It’s saved on this phone and added to your account the next time you’re online.'}
     </Text>
   );
 }

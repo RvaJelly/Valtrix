@@ -75,7 +75,12 @@ export function TermsGate({
   const signedIn = terms.signedIn && !onAccept;
   // Back because what this person accepted on this phone more than a day ago still hasn't reached us
   // (an acceptance waiting on the phone counts for 24 hours): say so at the top, before they wonder why.
-  const overdue = signedIn && !!terms.accepted && !terms.accepted.recorded && terms.accepted.version >= terms.current;
+  const overdue =
+    signedIn &&
+    !!terms.accepted &&
+    !terms.accepted.recorded &&
+    !terms.accepted.early &&
+    terms.accepted.version >= terms.current;
   const why =
     notice ??
     (overdue

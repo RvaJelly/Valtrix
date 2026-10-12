@@ -15,9 +15,10 @@
 --     years after that (POPIA s14(4) allows de-identifying in place of destroying).
 --   * profiles.terms_version and terms_accepted_at say which version the account accepted last
 --     and when, for the apps (readable by the account only, like the rest of the row).
---   * The current version is kept on the server (private.settings 'terms_version', read through
---     current_terms_version()), so an app that knows only an older version asks the person to update
---     it, and a new version takes effect when this setting changes.
+--   * The versions are kept on the server: the ones published (private.terms_versions) and the current
+--     one (private.settings 'terms_version', read through current_terms_version()). Only a published
+--     version is recorded. An app that knows only an older version than the current one asks the person
+--     to update it, and a new version takes effect when the setting changes.
 --   * A record that may be needed for a complaint, dispute or claim can be held (hold_until, set by
 --     the owner with SQL only), and tidy_terms_proof() leaves it as it is until the hold ends.
 --
@@ -45,7 +46,7 @@ comment on column public.profiles.terms_accepted_at is 'When the account accepte
 
 create table public.terms_acceptances (
   id bigint generated always as identity primary key,
-  -- No foreign key on purpose: the record outlives the account (section 4).
+  -- No foreign key on purpose: the record outlives the account (section 5).
   user_id uuid,
   version text not null
     constraint terms_acceptances_version_check check (version ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$'),
@@ -61,10 +62,10 @@ create table public.terms_acceptances (
   -- When the person ticked the boxes, by their phone's clock (earlier when they accepted offline, or
   -- before signing up). Kept only when it is within a year before the record and not in the future.
   device_time timestamptz,
-  -- Set when the account is deleted (section 4).
+  -- Set when the account is deleted (section 5).
   account_deleted_at timestamptz,
   account_email text constraint terms_acceptances_account_email_check check (account_email is null or char_length(account_email) <= 320),
-  -- Keep the record exactly as it is until this time (section 5): a complaint, dispute or claim is
+  -- Keep the record exactly as it is until this time (section 6): a complaint, dispute or claim is
   -- open, or one can still be brought. Set only by the owner, with SQL (hold_terms_proof()).
   hold_until timestamptz
 );
@@ -75,7 +76,8 @@ comment on column public.terms_acceptances.hold_until is
   'Keep this record as it is until then (an open complaint, dispute or claim). Owner only, with SQL: hold_terms_proof().';
 
 -- One record per account, version, app and kind of device: accepting the same version again on the
--- same kind of device adds nothing, so the table can't be flooded.
+-- same kind of device adds nothing. Only published versions are recorded (section 3), so an account
+-- adds at most 8 records per published version (2 apps, 4 kinds of device), and made-up versions none.
 create unique index terms_acceptances_once on public.terms_acceptances (user_id, version, app, platform);
 create index terms_acceptances_deleted_idx on public.terms_acceptances (account_deleted_at)
   where account_deleted_at is not null;
@@ -94,12 +96,95 @@ create policy terms_acceptances_select_own on public.terms_acceptances
 -- No insert, update or delete grants or policies: records are added only by the functions below,
 -- and nobody using the apps can change or remove one.
 
--- ---------- 3. Recording an acceptance ----------
+-- ---------- 3. Which versions exist, and the current one ----------
+
+-- A version is 'YYYY-MM-DD', the day it takes effect (a letter after it for a second version on the
+-- same day). Two things on the server say which versions exist:
+--   * private.terms_versions: every version published, from the day the builds that carry its text can
+--     reach people. Only these, and the current one, are recorded, so the proof holds real versions only
+--     and nobody can fill the table with made-up ones.
+--   * private.settings 'terms_version': the current version, the one everyone must have accepted. The
+--     apps compare it with the version they carry: an app that only knows an older one asks the person to
+--     update it, and nobody is asked for a newer one until this changes. It is always accepted too.
+-- Publishing a new version (the owner, with SQL in the Supabase SQL editor):
+--   1. Put its text in the apps, with TERMS_VERSION the day it takes effect (for example '2026-12-01').
+--   2. insert into private.terms_versions (version) values ('2026-12-01');
+--      From then on a sign-up or an acceptance of it is recorded, so a new build can go out early.
+--   3. Ship the builds, and give the 20 business days' notice the Terms promise for changes that affect
+--      people's rights.
+--   4. On the day it takes effect:
+--      update private.settings set value = '2026-12-01' where name = 'terms_version';
+--      Everyone is then asked to accept it, and an older build asks to be updated.
+-- A build whose version isn't published yet still works: accept_terms() answers VT001, and the apps keep
+-- the record on the phone and send it once the version is published.
+-- private.settings is made by 20261008170000_clean_expired_stories.sql (the same definition here, so
+-- this file also builds on a database without the cron jobs; nothing changes where it exists).
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+create table if not exists private.settings (
+  name text primary key,
+  value text not null
+);
+revoke all on private.settings from public, anon, authenticated;
+
+insert into private.settings (name, value)
+values ('terms_version', '2026-10-11')
+on conflict (name) do nothing;
+
+create table private.terms_versions (
+  version text primary key
+    constraint terms_versions_version_check check (version ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$'),
+  -- When it was added to this list.
+  published_at timestamptz not null default now()
+);
+revoke all on private.terms_versions from public, anon, authenticated;
+
+comment on table private.terms_versions is
+  'Every published version of the Terms. Only these, and private.settings terms_version, are recorded in public.terms_acceptances. Add a row when the builds that carry a new version ship.';
+
+insert into private.terms_versions (version)
+values ('2026-10-11')
+on conflict (version) do nothing;
+
+-- Whether a version may be recorded: published, or the current one.
+create or replace function public.terms_published(p_version text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    p_version is not null
+      and (exists (select 1 from private.terms_versions t where t.version = p_version)
+           or p_version = (select s.value from private.settings s where s.name = 'terms_version')),
+    false);
+$$;
+
+revoke execute on function public.terms_published(text) from public, anon, authenticated;
+
+-- Anyone may read the current version, signed in or not (the acceptance screen comes before signing
+-- up). A database without this function, or without the row, answers nothing, and the apps then use
+-- their own version, so nobody is locked out.
+create or replace function public.current_terms_version()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.value from private.settings s where s.name = 'terms_version';
+$$;
+
+revoke execute on function public.current_terms_version() from public;
+grant execute on function public.current_terms_version() to anon, authenticated;
+
+-- ---------- 4. Recording an acceptance ----------
 
 -- The one place that checks what an app sent and writes the record and the profile. p_terms is the
 -- object an app sends: {"version", "app", "checks": {"age", "terms", "health"}, "platform",
--- "accepted_at"}. Answers false, without raising, when anything is missing or wrong, so a bad
--- sign-up payload never stops an account from being made.
+-- "accepted_at"}. Answers false, without raising, when anything is missing or wrong (a version that
+-- isn't published among them), so a bad sign-up payload never stops an account from being made.
 create or replace function public.record_terms(p_user uuid, p_terms jsonb, p_via text)
 returns boolean
 language plpgsql
@@ -111,7 +196,6 @@ declare
   v_app text;
   v_platform text;
   v_device timestamptz;
-  v_day date;
 begin
   if p_user is null or p_terms is null or jsonb_typeof(p_terms) <> 'object' then
     return false;
@@ -121,15 +205,9 @@ begin
   if v_version is null or v_version !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$' or v_app is null or v_app not in ('coach', 'client') then
     return false;
   end if;
-  -- A version is the day it takes effect: a real date, never more than a day after the server's
-  -- (South Africa is ahead of the server's UTC). A made-up '9999-12-31' would otherwise sit above
-  -- every real version on the profile for good.
-  begin
-    v_day := left(v_version, 10)::date;
-  exception when others then
-    return false;
-  end;
-  if v_day > current_date + 1 then
+  -- Only a published version (section 3). A made-up '9999-12-31' would otherwise sit above every
+  -- real version on the profile for good, and made-up older ones would fill the table.
+  if not public.terms_published(v_version) then
     return false;
   end if;
   -- All three boxes, each exactly true.
@@ -186,9 +264,11 @@ begin
   if not exists (select 1 from public.profiles p where p.id = me) then
     raise exception 'Your account isn''t ready yet. Try again in a moment.' using errcode = 'P0002';
   end if;
-  -- A version dated after tomorrow isn't published yet (record_terms() refuses it too).
-  if p_terms ->> 'version' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' and left(p_terms ->> 'version', 10) > to_char(current_date + 1, 'YYYY-MM-DD') then
-    raise exception 'That version of the Terms isn''t published yet.' using errcode = '22023';
+  -- A version that isn't published (section 3; record_terms() refuses it too). VT001 tells the apps
+  -- this is the server's answer, not a lost connection: they keep the record on the phone, let the
+  -- person carry on while the server's current version is older, and send it again later.
+  if p_terms ->> 'version' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$' and not public.terms_published(p_terms ->> 'version') then
+    raise exception 'That version of the Terms isn''t published yet.' using errcode = 'VT001';
   end if;
   if not public.record_terms(me, p_terms, 'app') then
     raise exception 'Tick all three boxes to accept the Terms.' using errcode = '22023';
@@ -233,7 +313,7 @@ $$;
 
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
--- ---------- 4. After the account is deleted ----------
+-- ---------- 5. After the account is deleted ----------
 
 -- When an account is deleted (delete_my_account(), delete_my_client_account(), or the Supabase
 -- dashboard), its records stay, marked with when it went and the email address it had, so the
@@ -261,7 +341,7 @@ create trigger on_auth_user_deleted after delete on auth.users
 
 -- Every night: three years after an account was deleted, its records no longer say who accepted
 -- (the account, its email address and the phone's clock are cleared, and the times are kept only to
--- the month), unless they are held (section 5): a held record waits until its hold ends. Records of
+-- the month), unless they are held (section 6): a held record waits until its hold ends. Records of
 -- an account that went without the trigger seeing it start their three years now. Answers how many
 -- records were de-identified.
 create or replace function public.tidy_terms_proof()
@@ -295,7 +375,7 @@ $$;
 
 revoke execute on function public.tidy_terms_proof() from public, anon, authenticated;
 
--- ---------- 5. Holding records for a complaint, dispute or claim ----------
+-- ---------- 6. Holding records for a complaint, dispute or claim ----------
 
 -- Owner only, with SQL (the Supabase SQL editor; nobody using the apps can call it): keep an account's
 -- records exactly as they are, with who accepted, until p_until, while a complaint, dispute or claim
@@ -326,43 +406,6 @@ end;
 $$;
 
 revoke execute on function public.hold_terms_proof(uuid, text, timestamptz) from public, anon, authenticated;
-
--- ---------- 6. The current version, on the server ----------
-
--- The version everyone must have accepted: 'YYYY-MM-DD' (a letter after it for a second version on
--- the same day). The apps compare it with the version they carry: an app that only knows an older
--- one asks the person to update it, and nobody is asked for a newer one until this changes. To
--- publish a new version, ship the apps with its text first, then change this row (with the 20
--- business days' notice the Terms promise for changes that affect people's rights).
--- private.settings is made by 20261008170000_clean_expired_stories.sql (the same definition here, so
--- this file also builds on a database without the cron jobs; nothing changes where it exists).
-create schema if not exists private;
-revoke all on schema private from public, anon, authenticated;
-create table if not exists private.settings (
-  name text primary key,
-  value text not null
-);
-revoke all on private.settings from public, anon, authenticated;
-
-insert into private.settings (name, value)
-values ('terms_version', '2026-10-11')
-on conflict (name) do nothing;
-
--- Anyone may read it, signed in or not (the acceptance screen comes before signing up). A database
--- without this function, or without the row, answers nothing, and the apps then use their own
--- version, so nobody is locked out.
-create or replace function public.current_terms_version()
-returns text
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select s.value from private.settings s where s.name = 'terms_version';
-$$;
-
-revoke execute on function public.current_terms_version() from public;
-grant execute on function public.current_terms_version() to anon, authenticated;
 
 -- 03:40 in South Africa (01:40 UTC). Only where Supabase Cron is installed (the live project), so
 -- the file also builds on a plain Postgres, where nothing runs it on its own (run

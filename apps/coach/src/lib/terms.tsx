@@ -19,6 +19,9 @@ import { supabase } from '@/lib/supabase';
 //   (`voltrix.termsPending`) and is sent when the app opens, comes back to the front, or the person
 //   signs in; the person carries on meanwhile, for 24 hours. After that the screen asks again until
 //   the record is sent. A database without accept_terms (an older one) keeps the phone's record.
+// - A build that carries a version the server hasn't published yet (accept_terms answers VT001: the
+//   builds went out before the owner listed it) keeps the record on the phone too, and the person
+//   carries on while the server's current version is older; it is sent once the version is published.
 
 export type AppId = 'coach' | 'client';
 export const APP_NAMES: Record<AppId, string> = { coach: 'Voltrix Coach', client: 'Voltrix' };
@@ -37,7 +40,8 @@ export type TermsPayload = {
 };
 
 // A record waiting to be sent for one account. since: when the first unsent acceptance of this version
-// was made (asking again doesn't restart the 24 hours). olderDb: the database has no accept_terms.
+// was made (asking again doesn't restart the 24 hours), or when the server last said it hasn't published
+// this version yet. olderDb: the database has no accept_terms. early: the server hasn't published it.
 type Pending = {
   userId: string;
   version: string;
@@ -47,10 +51,12 @@ type Pending = {
   platform: DevicePlatform;
   checks: TermsChecks;
   olderDb?: boolean;
+  early?: boolean;
 };
 
-// The acceptance the person can see in Settings. recorded: the database has it.
-export type AcceptedInfo = { version: string; at: Date; recorded: boolean };
+// The acceptance the person can see in Settings. recorded: the database has it. early: it waits for the
+// server to publish its version (not for a connection).
+export type AcceptedInfo = { version: string; at: Date; recorded: boolean; early: boolean };
 
 // 'update': this build is older than the current version. 'accept': show the acceptance screen.
 // 'in': carry on (signed in and accepted). 'out': signed out (Welcome, sign-in and sign-up).
@@ -70,6 +76,8 @@ const DAY_MS = 86_400_000;
 // How long a sign-up's ticks count for.
 export const SIGN_UP_TICKS_MS = 15 * 60_000;
 const VERSION = /^[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]?$/;
+// accept_terms()'s answer for a version the server hasn't published yet.
+const NOT_PUBLISHED = 'VT001';
 const MONTHS = [
   'January',
   'February',
@@ -144,13 +152,19 @@ function payloadOf(p: Pending): TermsPayload {
 }
 
 // Sends one waiting record. 'done': recorded (with the account's newest version); 'missing': the
-// database has no accept_terms (an older one); 'later': offline, a login that ran out, anything else.
+// database has no accept_terms (an older one); 'early': the server hasn't published this version yet;
+// 'later': offline, a login that ran out, anything else.
 async function send(
   record: Pending,
-): Promise<{ kind: 'done'; version: string; at: string } | { kind: 'missing' } | { kind: 'later' }> {
+): Promise<
+  { kind: 'done'; version: string; at: string } | { kind: 'missing' } | { kind: 'early' } | { kind: 'later' }
+> {
   try {
     const { data, error } = await supabase.rpc('accept_terms', { p_terms: payloadOf(record) });
-    if (error) return error.code === 'PGRST202' ? { kind: 'missing' } : { kind: 'later' };
+    if (error) {
+      if (error.code === 'PGRST202') return { kind: 'missing' };
+      return error.code === NOT_PUBLISHED ? { kind: 'early' } : { kind: 'later' };
+    }
     const answer = (data ?? {}) as { version?: string | null; accepted_at?: string | null };
     return {
       kind: 'done',
@@ -291,6 +305,7 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
     try {
       for (;;) {
         again.current = false;
+        let all = true;
         for (const record of pendingRef.current.filter((x) => x.userId === me)) {
           const answer = await send(record);
           if (answer.kind === 'later') return false;
@@ -301,10 +316,18 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
             }
             return false;
           }
+          if (answer.kind === 'early') {
+            // The server answered, so this isn't a lost connection: the record waits for the version to be
+            // published, and the 24 hours count from this answer.
+            const since = new Date().toISOString();
+            savePending(pendingRef.current.map((x) => (x === record ? { ...x, early: true, since } : x)));
+            all = false;
+            continue;
+          }
           savePending(pendingRef.current.filter((x) => x !== record));
           setRecorded({ userId: me, version: answer.version, at: answer.at });
         }
-        if (!again.current) return true;
+        if (!again.current) return all;
       }
     } finally {
       sending.current = false;
@@ -369,7 +392,10 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
     if (TERMS_VERSION < current) return 'update';
     if (!userId) return 'out';
     if (accountVersion && accountVersion >= current) return 'in';
-    const waiting = mine.some((x) => x.version >= current && (x.olderDb || now - Date.parse(x.since) < DAY_MS));
+    const waiting = mine.some(
+      (x) =>
+        x.version >= current && (x.olderDb || (x.early && x.version > current) || now - Date.parse(x.since) < DAY_MS),
+    );
     return waiting ? 'in' : 'accept';
   }, [ready, current, userId, accountVersion, mine, now]);
 
@@ -387,6 +413,7 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
         platform: platformName(),
         checks: { ...ALL_TICKED },
         olderDb: earlier?.olderDb,
+        early: earlier?.early,
       };
       savePending([...pendingRef.current.filter((x) => !(x.userId === userId && x.version === TERMS_VERSION)), record]);
       const sent = await flush();
@@ -394,7 +421,7 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
       setNow(time);
       if (sent) return 'sent';
       const still = pendingRef.current.find((x) => x.userId === userId && x.version === TERMS_VERSION);
-      return still && !still.olderDb && time - Date.parse(still.since) >= DAY_MS ? 'stuck' : 'waiting';
+      return still && !still.olderDb && !still.early && time - Date.parse(still.since) >= DAY_MS ? 'stuck' : 'waiting';
     },
     [app, userId, savePending, flush],
   );
@@ -424,14 +451,17 @@ export function TermsProvider({ app, children }: PropsWithChildren<{ app: AppId 
   const accepted = useMemo((): AcceptedInfo | null => {
     if (!userId) return null;
     if (recorded && recorded.userId === userId)
-      return { version: recorded.version, at: new Date(recorded.at), recorded: true };
+      return { version: recorded.version, at: new Date(recorded.at), recorded: true, early: false };
     const waiting = mine.at(-1);
     if (accountVersion && accountAcceptedAt && (!waiting || accountVersion >= waiting.version)) {
-      return { version: accountVersion, at: new Date(accountAcceptedAt), recorded: true };
+      return { version: accountVersion, at: new Date(accountAcceptedAt), recorded: true, early: false };
     }
-    if (waiting) return { version: waiting.version, at: new Date(waiting.acceptedAt), recorded: false };
+    if (waiting) {
+      const early = !!waiting.early && waiting.version > current;
+      return { version: waiting.version, at: new Date(waiting.acceptedAt), recorded: false, early };
+    }
     return null;
-  }, [userId, recorded, mine, accountVersion, accountAcceptedAt]);
+  }, [userId, recorded, mine, accountVersion, accountAcceptedAt, current]);
 
   const value = useMemo(
     (): TermsState => ({

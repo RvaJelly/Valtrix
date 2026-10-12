@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import { confirm, notice } from '@/lib/confirm';
 import { authLink, takeHeldLink, type AuthLink } from '@/lib/links';
+import { replaceReminders } from '@/lib/notify';
 import { linkChecker, supabase } from '@/lib/supabase';
 
 // A link from a sign-up or password email opens the app (see emailRedirect), on a phone and on the web
@@ -68,6 +69,8 @@ async function openLink(url: string, onRecovery: (recovering: boolean) => void) 
         'Switch account',
       );
       if (!switching) return;
+      // The reminders on this phone are for the other account's sessions.
+      await replaceReminders([]).catch(() => {});
     }
     signIn = () =>
       supabase.auth.setSession({ access_token: checked.access_token, refresh_token: checked.refresh_token });
@@ -82,11 +85,13 @@ async function openLink(url: string, onRecovery: (recovering: boolean) => void) 
 }
 
 // The session a link signs in to, checked with Supabase while the person signed in here stays signed in.
+// A session link is checked by its refresh token, which Supabase swaps for a new pair of the same account:
+// a link can't show one account here and carry another one's refresh token into the app.
 async function checkLink(link: Exclude<AuthLink, { kind: 'error' }>): Promise<Session | null> {
   const auth = linkChecker().auth;
   const { data, error } =
     link.kind === 'session'
-      ? await auth.setSession({ access_token: link.accessToken, refresh_token: link.refreshToken })
+      ? await auth.refreshSession({ refresh_token: link.refreshToken })
       : await auth.verifyOtp({ token_hash: link.tokenHash, type: link.type as EmailOtpType });
   return error ? null : data.session;
 }

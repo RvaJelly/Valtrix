@@ -42,8 +42,8 @@ type Props = {
 
 // The plan, and how to start. Card payments aren't connected yet, so for now the free trial starts without a
 // card (TRIAL_DAYS, 14 days), and a trainer whose trial has ended keeps going free for another 14 days: nobody
-// is locked out while there is no way to pay. Nothing on this page charges anything. The subscription in
-// brief is the Terms' own list.
+// is locked out while there is no way to pay. Nothing on this page charges anything or takes a card, and it
+// says what the Terms say (sections 47 and 48); the subscription in brief is the Terms' own list.
 export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, onSignOut }: Props) {
   const { refreshProfile } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -65,7 +65,7 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
       ? `${trialLeft(daysLeft ?? TRIAL_DAYS)} in your trial`
       : `Welcome back, ${first || 'coach'}`;
   const intro = starting
-    ? 'Win clients, keep them and get paid.'
+    ? 'Win clients, keep them and grow your business.'
     : inTrial
       ? `Your free trial runs until ${endDate}.`
       : 'Your trial has ended. Everything is saved.';
@@ -141,10 +141,11 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
         {starting ? (
           <View style={styles.timeline} accessibilityRole="list">
             <Step icon="lock-open-outline" title="Today" text="Full access to everything. No card needed." />
+            {/* What happens on the day the trial ends, as the Terms say (section 48): no card, no charge. */}
             <Step
-              icon="card-outline"
+              icon="calendar-outline"
               title={endDate}
-              text={`Your free trial ends. Stay on for ${PRICE_LABEL} a month once card payments open.`}
+              text={`Your free trial ends. Until card payments open, you can start ${TRIAL_DAYS} more days free.`}
               last
             />
           </View>

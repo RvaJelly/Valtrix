@@ -75,17 +75,19 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  // The Terms sit above the settings: a theme change redraws everything under the settings, and the
+  // Terms loading again there would put the app back on its first screen.
   return (
     <AuthProvider>
-      <SettingsProvider>
-        <ThemedStatusBar />
-        <ToastProvider>
-          <TermsProvider app="client">
+      <TermsProvider app="client">
+        <SettingsProvider>
+          <ThemedStatusBar />
+          <ToastProvider>
             <RootNavigator />
-          </TermsProvider>
-        </ToastProvider>
-        <AppLock />
-      </SettingsProvider>
+          </ToastProvider>
+          <AppLock />
+        </SettingsProvider>
+      </TermsProvider>
     </AuthProvider>
   );
 }

@@ -13,10 +13,12 @@
 //   private-testing line while they are empty): every section that sends people to us has one.
 // - A block titled "Part A. ...", "Part B. ..." or "Part C. ..." starts a part of the Terms.
 //
-// Versions: TERMS_VERSION is the day the version took effect, 'YYYY-MM-DD' (a letter after it for a
-// second version on the same day: '2026-10-11b'). The database only accepts that format and keeps the
-// newest one per account. Changing it asks everyone to accept again. Keep the text of every version
-// (git keeps this file's history).
+// Versions: TERMS_VERSION is the day the version takes effect, 'YYYY-MM-DD' (a letter after it for a
+// second version on the same day: '2026-10-11b'). The database records only versions it has published and
+// keeps the newest one per account. Publishing a new one (supabase/migrations/20261011130000_terms.sql,
+// section 3): add it to private.terms_versions when the builds that carry it ship, then set private.settings
+// terms_version on the day it takes effect, which asks everyone to accept again. Keep the text of every
+// version (git keeps this file's history).
 
 export const TERMS_VERSION: string = '2026-10-11';
 export const TERMS_UPDATED: string = '11 October 2026';
@@ -139,8 +141,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         title: '8. Getting the apps, and early versions',
         paragraphs: [
-          'Only install Voltrix from Google Play, Apple’s App Store or our own download page. If someone sends you the app as a file, or a link to anywhere else, don’t install it, even if it seems to come from your trainer.',
-          'Voltrix is new and in early testing. Until the apps are in the app stores, your phone may warn you that the app didn’t come from a store. Only continue if you’re on our own download page. If you’re unsure, don’t install it and ask us first.',
+          'Only install Voltrix from Google Play, Apple’s App Store or, while Voltrix is being tested, our releases on GitHub (github.com/RvaJelly/valtrix/releases). Your trainer’s Voltrix invite and the app’s update screen link there. Don’t install Voltrix from a file someone sends you, or from any other link.',
+          'Voltrix is new and in early testing. Until the apps are in the app stores, your phone may warn you that the app didn’t come from a store, and ask you to allow the install. Only continue if the download came from github.com/RvaJelly/valtrix. If you’re not sure where a download came from, don’t install it.',
           'Early versions may have more mistakes, and features may change or be removed while we build Voltrix. Section 21 explains how we handle changes.',
         ],
       },
@@ -1101,7 +1103,7 @@ export const ACCEPT_SCREEN: {
     },
     {
       title: 'You choose what you share',
-      body: 'Stories and reels are seen by everyone on Voltrix. What a client logs is seen only by their trainers, while they train together.',
+      body: 'Stories and reels are seen by everyone on Voltrix. In the apps, what a client logs is seen only by them, and by their trainers while they train together.',
     },
   ],
   important: [
@@ -1149,8 +1151,8 @@ export const SUBSCRIPTION_LINES: SubscriptionLine[] = [
 export const SUBSCRIPTION_SUMMARY: string[] = SUBSCRIPTION_LINES.map((line) => line.text);
 
 // Who runs Voltrix. Empty while Voltrix is in private testing: the apps say so honestly with every field null,
-// and show each one, and every contact line, once it is filled in. The Android workflow warns while name,
-// address or email is null; nothing outside the test group should see a build like that.
+// and show each one, and every contact line, once it is filled in. While name, address or email is null, the
+// Android workflow warns on a test-group build and refuses a build for people outside the test group.
 export const BUSINESS: {
   name: string | null;
   registration: string | null;

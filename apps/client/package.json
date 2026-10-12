@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "main": "expo-router/entry",
+  "main": "entry.ts",
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.22",

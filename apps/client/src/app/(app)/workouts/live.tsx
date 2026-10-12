@@ -461,7 +461,7 @@ export default function LiveWorkout() {
 
   async function discard() {
     if (!workout || !userId) return;
-    const sure = await confirm('Discard workout?', "The sets you ticked won't be saved.", 'Discard');
+    const sure = await confirm('Discard workout?', 'The sets you ticked won’t be saved.', 'Discard');
     if (!sure) return;
     const id = workout.id;
     setWorkout(null);
@@ -473,7 +473,7 @@ export default function LiveWorkout() {
 
   async function discardAndStart(stored: ActiveWorkout) {
     if (!userId) return;
-    const sure = await confirm('Discard workout?', `The sets you ticked in ${stored.name} won't be saved.`, 'Discard');
+    const sure = await confirm('Discard workout?', `The sets you ticked in ${stored.name} won’t be saved.`, 'Discard');
     if (!sure) return;
     await clearActiveWorkout(userId, stored.id);
     setPhase({ kind: 'loading' });
@@ -579,7 +579,7 @@ export default function LiveWorkout() {
         {phase.kind === 'error' ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="Couldn't load this workout"
+            title="Couldn’t load this workout"
             message="Check your connection and try again."
             action={
               <Button
@@ -605,7 +605,7 @@ export default function LiveWorkout() {
           <EmptyState
             icon="barbell-outline"
             title="No exercises yet"
-            message="Your trainer hasn't added exercises to this workout yet."
+            message="Your trainer hasn’t added exercises to this workout yet."
           />
         ) : null}
         {phase.kind === 'conflict' ? (
@@ -758,8 +758,8 @@ export default function LiveWorkout() {
         {unticked > 0 ? (
           <Text variant="footnote" tone="secondary">
             {unticked === 1
-              ? "1 set isn't ticked off. It won't be saved."
-              : `${unticked} sets aren't ticked off. They won't be saved.`}
+              ? '1 set isn’t ticked off. It won’t be saved.'
+              : `${unticked} sets aren’t ticked off. They won’t be saved.`}
           </Text>
         ) : null}
         <ErrorText>{problem}</ErrorText>

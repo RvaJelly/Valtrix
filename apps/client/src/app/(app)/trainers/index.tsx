@@ -36,9 +36,9 @@ const SORT_BUTTON: Record<TrainerSort, string> = { default: 'A to Z', nearest: '
 
 const DENIED =
   Platform.OS === 'web'
-    ? "Your browser didn't share your location, so trainers are shown A to Z."
-    : "Voltrix can't see your location, so trainers are shown A to Z. You can allow it in your phone's settings.";
-const NOT_FOUND = "We couldn't work out how far away trainers are, so they're shown A to Z. Try again in a moment.";
+    ? 'Your browser didn’t share your location, so trainers are shown A to Z.'
+    : 'Voltrix can’t see your location, so trainers are shown A to Z. You can allow it in your phone’s settings.';
+const NOT_FOUND = 'We couldn’t work out how far away trainers are, so they’re shown A to Z. Try again in a moment.';
 
 // After this long the client may have moved, so Nearest finds them again.
 const FRESH_FOR = 10 * 60_000;
@@ -249,7 +249,7 @@ export default function Trainers() {
       ) : null}
 
       {locating ? <Notice>Finding trainers near you…</Notice> : null}
-      {notice || noneNearby ? <Notice>{notice ?? "These trainers haven't added their location yet."}</Notice> : null}
+      {notice || noneNearby ? <Notice>{notice ?? 'These trainers haven’t added their location yet.'}</Notice> : null}
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {!trainers && !error ? (

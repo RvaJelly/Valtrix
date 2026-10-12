@@ -79,7 +79,7 @@ export default function WorkoutLogScreen() {
   async function remove() {
     const sure = await confirm(
       'Delete this workout?',
-      "It's removed from your history and personal bests. The tick on your plan stays; untick it there if you want.",
+      'It’s removed from your history and personal bests. The tick on your plan stays; untick it there if you want.',
       'Delete',
     );
     if (!sure) return;
@@ -89,7 +89,7 @@ export default function WorkoutLogScreen() {
       await deleteWorkoutLog(id);
       goBack('/workouts/history');
     } catch (e) {
-      setProblem(saveError(e, "That didn't delete. Check your connection and try again."));
+      setProblem(saveError(e, 'That didn’t delete. Check your connection and try again.'));
       setDeleting(false);
     }
   }
@@ -101,7 +101,7 @@ export default function WorkoutLogScreen() {
         {failed ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="Couldn't load this workout"
+            title="Couldn’t load this workout"
             message="Check your connection and try again."
             action={<Button title="Try again" variant="secondary" onPress={() => setAttempt((a) => a + 1)} />}
           />

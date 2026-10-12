@@ -118,7 +118,7 @@ export default function Progress() {
         if (p) setPhotos(p);
         if (signedLinks) setLinks(signedLinks);
         if (c) setCheckIns(c);
-        setError(w && m && p && c ? null : "Some of your progress didn't load. Check your connection and try again.");
+        setError(w && m && p && c ? null : 'Some of your progress didn’t load. Check your connection and try again.');
       }),
     [],
   );
@@ -235,7 +235,7 @@ function WeightSection({
       await deleteBodyWeight(w.day);
       onSaved();
     } catch (e) {
-      setProblem(saveError(e, "That didn't remove. Check your connection and try again."));
+      setProblem(saveError(e, 'That didn’t remove. Check your connection and try again.'));
     }
   }
 
@@ -665,7 +665,7 @@ function CheckInSection({ checkIns }: { checkIns: CheckIn[] }) {
             title="Edit"
             variant="ghost"
             size="small"
-            accessibilityLabel="Edit this week's check-in"
+            accessibilityLabel="Edit this week’s check-in"
             onPress={() => router.push('/progress/check-in')}
           />
         </View>

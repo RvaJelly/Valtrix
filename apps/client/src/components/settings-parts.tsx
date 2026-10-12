@@ -298,7 +298,7 @@ export function DeleteAccount({ userId, onDeleted }: { userId?: string; onDelete
       if (userId) await removeProgressPhotoFiles(userId);
     } catch {
       setBusy(false);
-      return setError("Your progress photos couldn't be removed. Check your connection and try again.");
+      return setError('Your progress photos couldn’t be removed. Check your connection and try again.');
     }
     await removeMyChatPhotos().catch(() => {});
     if (userId) await removeAllMyFiles(userId).catch(() => {});
@@ -342,7 +342,7 @@ export function BiometricRow() {
   async function toggle(on: boolean) {
     setError(null);
     if (on && !(await confirmIdentity(`Turn on ${name} for Voltrix`))) {
-      return setError(`${name} didn't work, so it is still off.`);
+      return setError(`${name} didn’t work, so it is still off.`);
     }
     setLocked(false);
     save({ biometric: on });

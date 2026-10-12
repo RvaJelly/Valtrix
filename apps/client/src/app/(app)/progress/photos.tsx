@@ -100,7 +100,7 @@ export default function ProgressPhotos() {
         }
         if (first) setFirsts(first);
         if (signed) setLinks((old) => new Map([...old, ...signed]));
-        setError(page ? null : "Couldn't load your photos. Check your connection and try again.");
+        setError(page ? null : 'Couldn’t load your photos. Check your connection and try again.');
       }),
     [],
   );
@@ -136,7 +136,7 @@ export default function ProgressPhotos() {
       setBefore(next);
       if (signed) setLinks((old) => new Map([...old, ...signed]));
     } catch {
-      setProblem("Couldn't load older photos. Check your connection and try again.");
+      setProblem('Couldn’t load older photos. Check your connection and try again.');
     }
     setLoadingOlder(false);
   }
@@ -170,7 +170,7 @@ export default function ProgressPhotos() {
         return [...old.filter((p) => p.pose !== saved.pose), saved];
       });
     } catch (e) {
-      setProblem(photoError(e, "The photo couldn't be added. Try another one."));
+      setProblem(photoError(e, 'The photo couldn’t be added. Try another one.'));
     } finally {
       setUploading(null);
     }
@@ -204,7 +204,7 @@ export default function ProgressPhotos() {
       }
     } catch {
       setViewing(null);
-      setProblem("That didn't delete. Check your connection and try again.");
+      setProblem('That didn’t delete. Check your connection and try again.');
     }
     setBusy(false);
   }

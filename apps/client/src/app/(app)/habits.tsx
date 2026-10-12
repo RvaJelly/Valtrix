@@ -131,7 +131,7 @@ export default function Habits() {
         if (!current()) return;
         if (found) merge(found);
         if (saved) setTargets(saved);
-        setError(found && saved ? null : "Couldn't load your habits. Check your connection and try again.");
+        setError(found && saved ? null : 'Couldn’t load your habits. Check your connection and try again.');
       }),
     [merge],
   );

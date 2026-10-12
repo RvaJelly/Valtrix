@@ -210,7 +210,7 @@ export default function TrainerProfile() {
 
   // A trainer adds clients by email in Voltrix Coach: hand the client's email over to send them.
   async function shareEmail() {
-    const message = `Hi ${firstName}, I'd like to train with you. Please add me in Voltrix Coach with ${email}.`;
+    const message = `Hi ${firstName}, I’d like to train with you. Please add me in Voltrix Coach with ${email}.`;
     if (Platform.OS !== 'web') {
       await Share.share({ message }).catch(() => {});
       return;

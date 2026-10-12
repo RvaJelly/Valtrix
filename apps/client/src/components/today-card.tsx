@@ -89,7 +89,7 @@ export function TodayCard({ today, userId, hasTrainers, onChanged }: TodayCardPr
         if (before < targets.water_ml && row.water_ml >= targets.water_ml) haptic.success();
         if (day !== today.day) onChanged();
       },
-      () => setWaterError("Couldn't add water. Check your connection."),
+      () => setWaterError('Couldn’t add water. Check your connection.'),
     );
   }
 
@@ -259,7 +259,7 @@ function ActiveWorkoutBlock({
   async function discard() {
     const sure = await confirm(
       'Discard workout?',
-      "It's too old to save, so it will be removed from this phone.",
+      'It’s too old to save, so it will be removed from this phone.',
       'Discard',
     );
     if (!sure) return;

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRef, type PropsWithChildren } from 'react';
-import { Linking, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 
 import { BUSINESS, LEGAL_DOCS, TERMS_VERSION, type LegalBlock, type LegalDoc } from '@/components/legal/legal-content';
 import { Card, Group, ListRow, Text } from '@/components/ui';
@@ -25,6 +25,16 @@ const PART = /^Part ([A-Z])\.\s+(.+)$/;
 const NUMBERED = /^(\d+)\.\s+(.+)$/;
 // The summary at the top of a document, when it isn't an Important box.
 const SUMMARY = /^(In short|The short version)$/;
+
+// The number of a document's section from its title without the number ('The Voltrix Coach subscription' is
+// 47 in the Terms), so a link opens the right section even if a new version numbers it differently.
+export function sectionNumber(doc: LegalDoc['id'], name: string): number | undefined {
+  for (const block of legalDoc(doc).blocks) {
+    const numbered = block.title.match(NUMBERED);
+    if (numbered && numbered[2] === name) return Number(numbered[1]);
+  }
+  return undefined;
+}
 
 // The amber of the warning tone on dark themes: the Important box is mixed from it on every theme, so it
 // stays warm on navy, Iron, white and Stone alike (a tint of the page colour turned grey on navy).
@@ -223,14 +233,20 @@ function PartTile({ letter }: { letter: string }) {
   );
 }
 
-// `part`: open the Terms at that part ('B' for the subscription terms).
-export function LegalDocument({ doc, part: startAt }: { doc: LegalDoc['id']; part?: string }) {
+// `section`: open the document at that numbered section (47, the subscription, from Subscribe).
+export function LegalDocument({ doc, section: startAt }: { doc: LegalDoc['id']; section?: number }) {
   const { appName } = useTerms();
   const d = legalDoc(doc);
   const scroller = useRef<ScrollView>(null);
   // Where each part starts on the page, for the part links.
   const partTops = useRef<Record<string, number>>({});
   const started = useRef(false);
+  // The section asked for, once laid out: the page opens with it at the top, once.
+  const startHere = (e: LayoutChangeEvent) => {
+    if (started.current) return;
+    started.current = true;
+    scroller.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - Spacing.three), animated: false });
+  };
   // The parts (Terms only) and the sections in each.
   const parts: { letter: string; name: string; first?: number; last?: number }[] = [];
   for (const b of d.blocks) {
@@ -269,13 +285,6 @@ export function LegalDocument({ doc, part: startAt }: { doc: LegalDoc['id']; par
                 style={styles.part}
                 onLayout={(e) => {
                   partTops.current[part[1]] = e.nativeEvent.layout.y;
-                  if (part[1] === startAt && !started.current) {
-                    started.current = true;
-                    scroller.current?.scrollTo({
-                      y: Math.max(0, e.nativeEvent.layout.y - Spacing.three),
-                      animated: false,
-                    });
-                  }
                 }}
                 testID={`legal-part-${part[1]}`}>
                 <Text variant="label" tone="tertiary">
@@ -285,6 +294,23 @@ export function LegalDocument({ doc, part: startAt }: { doc: LegalDoc['id']; par
                   {part[2]}
                 </Text>
                 <BlockBody block={block} appName={appName} />
+              </View>
+            );
+          }
+          const numbered = block.title.match(NUMBERED);
+          if (numbered && Number(numbered[1]) === startAt) {
+            // The section the page opens at.
+            return (
+              <View key={key} onLayout={startHere} testID={`legal-section-${numbered[1]}`}>
+                {block.important ? (
+                  <ImportantBox title={title}>
+                    <BlockBody block={block} appName={appName} />
+                  </ImportantBox>
+                ) : (
+                  <DocSection title={title}>
+                    <BlockBody block={block} appName={appName} />
+                  </DocSection>
+                )}
               </View>
             );
           }

@@ -18,14 +18,14 @@ export function readerTitle(doc: ReaderDoc) {
 // Subscribe): a sheet that rises on iPhone, a full page on Android and the web, with a close button.
 // A link to another document (at the end of the Privacy Policy) opens it in the same reader.
 // The same file in Voltrix and Voltrix Coach.
-// `part`: open the Terms at that part ('B' for the subscription terms).
+// `section`: open the document at that numbered section (47, the subscription terms, from Subscribe).
 export function LegalReader({
   doc: asked,
-  part,
+  section,
   onClose,
 }: {
   doc: ReaderDoc | null;
-  part?: string;
+  section?: number;
   onClose: () => void;
 }) {
   const sheet = Platform.OS === 'ios';
@@ -72,7 +72,7 @@ export function LegalReader({
           {doc === 'privacy' ? (
             <PrivacyPolicy onOpenDoc={setMoved} />
           ) : (
-            <LegalDocument key={doc} doc={doc} part={moved ? undefined : part} />
+            <LegalDocument key={doc} doc={doc} section={moved ? undefined : section} />
           )}
         </SafeAreaView>
       ) : null}

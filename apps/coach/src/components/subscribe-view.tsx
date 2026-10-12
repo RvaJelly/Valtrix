@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { DeleteAccountLink } from '@/components/delete-account';
 import { SUBSCRIPTION_LINES } from '@/components/legal/legal-content';
-import { Points } from '@/components/legal/legal-document';
+import { Points, sectionNumber } from '@/components/legal/legal-document';
 import { LegalReader, type ReaderDoc } from '@/components/legal/legal-reader';
 import { Logo } from '@/components/logo';
 import { StickyFooter } from '@/components/sticky-footer';
@@ -22,6 +22,9 @@ const BENEFITS: { icon: IconName; text: string }[] = [
   { icon: 'calendar-clear-outline', text: 'Bookings and a calendar that fills itself' },
   { icon: 'chatbubbles-outline', text: 'Chat and video calls with your clients' },
 ];
+
+// "Subscription terms" opens the Terms at the section on the subscription (47), not at the top of Part B.
+const SUBSCRIPTION_SECTION = sectionNumber('terms', 'The Voltrix Coach subscription');
 
 type Props = {
   // 'start' before the free trial, 'trial' while it runs, 'ended' once it has run out.
@@ -188,7 +191,11 @@ export function SubscribeView({ mode, daysLeft, name, trialEndsAt, standalone, o
           </Text>
         </StickyFooter>
       )}
-      <LegalReader doc={reading} part={reading === 'terms' ? 'B' : undefined} onClose={() => setReading(null)} />
+      <LegalReader
+        doc={reading}
+        section={reading === 'terms' ? SUBSCRIPTION_SECTION : undefined}
+        onClose={() => setReading(null)}
+      />
     </View>
   );
 }
